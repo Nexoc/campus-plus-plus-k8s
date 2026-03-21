@@ -11,18 +11,11 @@ jobs:
   # AUTH – UNIT TESTS + COVERAGE
   # ==================================================
   auth-tests:
-    name: Auth – Unit Tests & Coverage
+    name: Auth - Unit Tests & Coverage
     runs-on: ubuntu-latest
 
     env:
-      SPRING_PROFILES_ACTIVE: ${{ vars.AUTH_PROFILE_TEST }}
-      DB_HOST: ${{ secrets.DB_HOST }}
-      DB_PORT: ${{ secrets.DB_PORT }}
-      DB_NAME: ${{ secrets.DB_NAME }}
-      DB_USERNAME: ${{ secrets.DB_USERNAME }}
-      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-      JWT_SECRET: ${{ secrets.JWT_SECRET }}
-      JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION }}
+      SPRING_PROFILES_ACTIVE: test
 
     steps:
       - name: Checkout repository
@@ -43,13 +36,13 @@ jobs:
         working-directory: auth
         continue-on-error: true
         run: |
-          echo "## Auth module - test coverage" >> $GITHUB_STEP_SUMMARY
+          echo "## Auth module - test coverage" >> "$GITHUB_STEP_SUMMARY"
           if [ -f target/site/jacoco/index.html ]; then
             grep -A 1 "<tfoot>" target/site/jacoco/index.html \
               | sed -n 's/.*<td class="ctr2">\([0-9]*%\)<\/td>.*/Coverage: \1/p' \
-              >> $GITHUB_STEP_SUMMARY
+              >> "$GITHUB_STEP_SUMMARY"
           else
-            echo "JaCoCo report not found" >> $GITHUB_STEP_SUMMARY
+            echo "JaCoCo report not found" >> "$GITHUB_STEP_SUMMARY"
           fi
 
   # ==================================================
@@ -84,17 +77,17 @@ jobs:
     needs: backend-build
 
     env:
-      BACKEND_PROFILE: ${{ vars.BACKEND_PROFILE_DEV }}
-      AUTH_PROFILE: ${{ vars.AUTH_PROFILE_DEV }}
+      BACKEND_PROFILE: dev
+      AUTH_PROFILE: dev
 
       DB_HOST: postgres
       DB_PORT: "5432"
-      DB_NAME: ${{ secrets.DB_NAME }}
-      DB_USERNAME: ${{ secrets.DB_USERNAME }}
-      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      DB_NAME: campus
+      DB_USERNAME: campus
+      DB_PASSWORD: campus
 
-      JWT_SECRET: ${{ secrets.JWT_SECRET }}
-      JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION }}
+      JWT_SECRET: dGVzdC1zZWNyZXQtdGVzdC1zZWNyZXQtdGVzdC1zZWNyZXQ=
+      JWT_EXPIRATION: "60"
 
     steps:
       - name: Checkout repository
@@ -110,7 +103,7 @@ jobs:
         run: |
           echo "Waiting for auth container to be healthy..."
           for i in {1..30}; do
-            STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' campus-auth || echo "starting")
+            STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' campus-auth 2>/dev/null || echo "starting")
             echo "Auth status: $STATUS"
             if [ "$STATUS" = "healthy" ]; then
               echo "Auth container is healthy"
@@ -126,7 +119,7 @@ jobs:
         run: |
           echo "Waiting for backend container to be healthy..."
           for i in {1..30}; do
-            STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' campus-backend || echo "starting")
+            STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' campus-backend 2>/dev/null || echo "starting")
             echo "Backend status: $STATUS"
             if [ "$STATUS" = "healthy" ]; then
               echo "Backend container is healthy"
@@ -138,11 +131,40 @@ jobs:
           docker compose logs backend
           exit 1
 
+      - name: Wait for importer to finish successfully
+        run: |
+          echo "Waiting for importer container to finish..."
+          for i in {1..40}; do
+            STATUS=$(docker inspect --format='{{.State.Status}}' campus-importer 2>/dev/null || echo "missing")
+            EXIT_CODE=$(docker inspect --format='{{.State.ExitCode}}' campus-importer 2>/dev/null || echo "unknown")
+            echo "Importer status: $STATUS, exit code: $EXIT_CODE"
+
+            if [ "$STATUS" = "exited" ]; then
+              if [ "$EXIT_CODE" = "0" ]; then
+                echo "Importer finished successfully"
+                exit 0
+              fi
+              echo "Importer exited with non-zero status"
+              docker compose logs importer
+              exit 1
+            fi
+
+            sleep 3
+          done
+
+          echo "Importer did not finish in time"
+          docker compose logs importer
+          exit 1
+
       - name: Validate nginx config
         run: docker exec campus-nginx nginx -t
 
       - name: Smoke test via nginx
         run: curl -fsS http://localhost/ > /dev/null
+
+      - name: Show container status
+        if: always()
+        run: docker compose ps
 
       - name: Show all service logs (on failure)
         if: failure()

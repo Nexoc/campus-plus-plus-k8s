@@ -2,7 +2,7 @@
 Importer for Campus++.
 
 Logic:
-1. Connect to DB
+1. Wait until DB is reachable
 2. Wait until Flyway has created schema
 3. If DB already has data -> exit 0
 4. If DB empty:
@@ -12,8 +12,10 @@ Logic:
 
 import json
 import os
-import uuid
+import sys
 import time
+import uuid
+import re
 
 import psycopg2
 from psycopg2.extras import Json
@@ -23,17 +25,20 @@ from psycopg2.extras import Json
 # DB utils
 # =====================================================
 
-def build_db_config():
-    password = os.getenv("DB_PASSWORD")
-    if not password:
-        raise RuntimeError("DB_PASSWORD is not set")
+def require_env(name: str) -> str:
+    value = os.getenv(name)
+    if not value:
+        raise RuntimeError(f"{name} is not set")
+    return value
 
+
+def build_db_config():
     return {
-        "host": os.getenv("DB_HOST", "postgres"),
-        "port": int(os.getenv("DB_PORT", "5432")),
-        "database": os.getenv("DB_NAME", "campus"),
-        "user": os.getenv("DB_USER", os.getenv("DB_USERNAME", "auth_user")),
-        "password": password,
+        "host": require_env("DB_HOST"),
+        "port": int(require_env("DB_PORT")),
+        "database": require_env("DB_NAME"),
+        "user": require_env("DB_USERNAME"),
+        "password": require_env("DB_PASSWORD"),
     }
 
 
@@ -41,7 +46,25 @@ def connect_db():
     return psycopg2.connect(**build_db_config())
 
 
-def wait_for_schema(cur, timeout=60):
+def wait_for_database(timeout=60, interval=2):
+    print("⏳ Waiting for database connection...")
+    start = time.time()
+    last_error = None
+
+    while time.time() - start < timeout:
+        try:
+            conn = connect_db()
+            print("✅ Database connection is ready")
+            return conn
+        except Exception as e:
+            last_error = e
+            print(f"   ... DB not ready yet: {e}")
+            time.sleep(interval)
+
+    raise RuntimeError(f"Database not reachable after waiting: {last_error}")
+
+
+def wait_for_schema(cur, timeout=60, interval=2):
     print("⏳ Waiting for DB schema (Flyway)...")
     start = time.time()
 
@@ -58,7 +81,7 @@ def wait_for_schema(cur, timeout=60):
             print("✅ Schema is ready")
             return
 
-        time.sleep(2)
+        time.sleep(interval)
 
     raise RuntimeError("DB schema not ready after waiting")
 
@@ -75,10 +98,11 @@ def database_has_data(cur) -> bool:
 def extract_ects(value) -> int:
     if value is None:
         return 0
-    import re
+
     m = re.search(r"[\d,\.]+", str(value))
     if not m:
         return 0
+
     try:
         return int(float(m.group(0).replace(",", ".")))
     except ValueError:
@@ -230,7 +254,6 @@ def import_data(json_path: str):
                 if not module_id:
                     continue
 
-                # 🔥 КЛЮЧЕВО: UUID через module_id
                 course_id = str(
                     uuid.uuid5(
                         uuid.NAMESPACE_URL,
@@ -322,35 +345,38 @@ def import_data(json_path: str):
 
 if __name__ == "__main__":
     print("🚀 Importer started")
-    print("⏳ Waiting 20 seconds before import...")
-    time.sleep(20)
 
     DATA_FILE = os.getenv("DATA_FILE", "/data/hcw_courses.json")
 
     if not file_exists(DATA_FILE):
         print(f"❌ JSON file not found: {DATA_FILE}")
-        exit(1)
+        sys.exit(1)
 
-    conn = connect_db()
-    cur = conn.cursor()
+    conn = None
+    cur = None
 
     try:
-        wait_for_schema(cur)
+        conn = wait_for_database(timeout=60, interval=2)
+        cur = conn.cursor()
+
+        wait_for_schema(cur, timeout=60, interval=2)
 
         if database_has_data(cur):
             print("✅ Database already populated — skipping import")
-            exit(0)
+            sys.exit(0)
 
         print("🟡 Database is empty — starting import")
         import_data(DATA_FILE)
 
         print("✅ Import completed successfully")
-        exit(0)
+        sys.exit(0)
 
     except Exception as e:
         print("💥 Importer crashed:", e)
-        exit(1)
+        sys.exit(1)
 
     finally:
-        cur.close()
-        conn.close()
+        if cur is not None:
+            cur.close()
+        if conn is not None:
+            conn.close()
