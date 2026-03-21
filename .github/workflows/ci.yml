@@ -2,12 +2,11 @@ name: CI Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
-
   # ==================================================
   # AUTH – UNIT TESTS + COVERAGE
   # ==================================================
@@ -16,14 +15,14 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      SPRING_PROFILES_ACTIVE: test
+      SPRING_PROFILES_ACTIVE: ${{ vars.AUTH_PROFILE_TEST }}
       DB_HOST: ${{ secrets.DB_HOST }}
       DB_PORT: ${{ secrets.DB_PORT }}
       DB_NAME: ${{ secrets.DB_NAME }}
       DB_USERNAME: ${{ secrets.DB_USERNAME }}
       DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
-      JWT_EXPIRATION: 15
+      JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION }}
 
     steps:
       - name: Checkout repository
@@ -44,7 +43,7 @@ jobs:
         working-directory: auth
         continue-on-error: true
         run: |
-          echo "## Auth module – test coverage" >> $GITHUB_STEP_SUMMARY
+          echo "## Auth module - test coverage" >> $GITHUB_STEP_SUMMARY
           if [ -f target/site/jacoco/index.html ]; then
             grep -A 1 "<tfoot>" target/site/jacoco/index.html \
               | sed -n 's/.*<td class="ctr2">\([0-9]*%\)<\/td>.*/Coverage: \1/p' \
@@ -57,7 +56,7 @@ jobs:
   # BACKEND – BUILD ONLY
   # ==================================================
   backend-build:
-    name: Backend – Build
+    name: Backend - Build
     runs-on: ubuntu-latest
     needs: auth-tests
 
@@ -77,10 +76,10 @@ jobs:
         run: mvn -DskipTests package
 
   # ==================================================
-  # DOCKER COMPOSE – DEV (SMOKE TEST)
+  # DOCKER COMPOSE – SMOKE TEST
   # ==================================================
   docker-compose:
-    name: Docker Compose (DEV)
+    name: Docker Compose Smoke Test
     runs-on: ubuntu-latest
     needs: backend-build
 
@@ -91,29 +90,29 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # --------------------------------------------------
-      # !!! ВОТ ЗДЕСЬ env !!!
-      # --------------------------------------------------
       - name: Build and start containers
         env:
-          DB_HOST: ${{ secrets.DB_HOST }}
-          DB_PORT: ${{ secrets.DB_PORT }}
+          BACKEND_PROFILE: ${{ vars.BACKEND_PROFILE_TEST }}
+          AUTH_PROFILE: ${{ vars.AUTH_PROFILE_TEST }}
+
+          DB_HOST: postgres
+          DB_PORT: "5432"
           DB_NAME: ${{ secrets.DB_NAME }}
           DB_USERNAME: ${{ secrets.DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION }}
+
+          HOST: 127.0.0.1
         run: docker compose up -d --build
 
-      # ----------------------------------------------
-      # WAIT FOR AUTH CONTAINER (DOCKER HEALTHCHECK)
-      # ----------------------------------------------
       - name: Wait for auth service (docker health)
         run: |
           echo "Waiting for auth container to be healthy..."
-          for i in {1..20}; do
-            STATUS=$(docker inspect --format='{{.State.Health.Status}}' campus-auth || echo "starting")
-            echo "Current status: $STATUS"
+          for i in {1..30}; do
+            STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' campus-auth || echo "starting")
+            echo "Auth status: $STATUS"
             if [ "$STATUS" = "healthy" ]; then
               echo "Auth container is healthy"
               exit 0
@@ -124,23 +123,32 @@ jobs:
           docker compose logs auth
           exit 1
 
-      # ----------------------------------------------
-      # VALIDATE NGINX CONFIG
-      # ----------------------------------------------
+      - name: Wait for backend service (docker health)
+        run: |
+          echo "Waiting for backend container to be healthy..."
+          for i in {1..30}; do
+            STATUS=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}no-healthcheck{{end}}' campus-backend || echo "starting")
+            echo "Backend status: $STATUS"
+            if [ "$STATUS" = "healthy" ]; then
+              echo "Backend container is healthy"
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Backend container did not become healthy"
+          docker compose logs backend
+          exit 1
+
       - name: Validate nginx config
         run: docker exec campus-nginx nginx -t
 
+      - name: Smoke test via nginx
+        run: curl -fsS http://localhost/ > /dev/null
 
-      # ----------------------------------------------
-      # LOGS ON FAILURE
-      # ----------------------------------------------
       - name: Show all service logs (on failure)
         if: failure()
         run: docker compose logs
 
-      # ----------------------------------------------
-      # CLEANUP
-      # ----------------------------------------------
       - name: Stop containers
         if: always()
         run: docker compose down -v

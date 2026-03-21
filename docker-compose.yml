@@ -1,4 +1,3 @@
-version: "3.9"
 
 services:
   # ==================================================
@@ -9,19 +8,16 @@ services:
     container_name: campus-postgres
     restart: unless-stopped
 
-    # Database configuration
     environment:
-      POSTGRES_DB: campus
+      POSTGRES_DB: ${DB_NAME}
       POSTGRES_USER: ${DB_USERNAME}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
 
-    # Persistent storage for database data
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
-    # Health check to ensure DB is ready before other services start
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d campus"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME} -d ${DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -30,110 +26,91 @@ services:
     networks:
       - campus-net
 
-
   # ==================================================
-  # Backend service (Spring Boot, Flyway runs here)
+  # Backend service
   # ==================================================
   backend:
     build: ./backend
     container_name: campus-backend
 
-    # Spring Boot runtime configuration
     environment:
-      SPRING_PROFILES_ACTIVE: dev
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: campus
+      SPRING_PROFILES_ACTIVE: ${BACKEND_PROFILE}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
 
-    # Backend starts only after PostgreSQL is healthy
     depends_on:
       postgres:
         condition: service_healthy
 
-    # Expose internal port (used by NGINX)
     expose:
       - "8080"
 
-    # Persistent storage for uploaded course materials
-    # Files are written to /data/course-materials inside the container
     volumes:
       - course-materials:/data/course-materials
 
     networks:
       - campus-net
 
-
   # ==================================================
-  # Importer service (one-shot data import)
+  # Importer service (one-shot)
   # ==================================================
   importer:
     build: ./importer
     container_name: campus-importer
     restart: "no"
 
-    # Database connection for importing initial data
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: campus
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
-
-      # Path to import file inside container
       DATA_FILE: /data/hcw_courses.json
 
-    # Volume containing import data
     volumes:
       - importer-data:/data
 
-    # Importer waits for database and backend startup
     depends_on:
       postgres:
         condition: service_healthy
       backend:
-        condition: service_started
+        condition: service_healthy
 
     networks:
       - campus-net
 
-
   # ==================================================
-  # Authentication service (Spring Boot)
+  # Authentication service
   # ==================================================
   auth:
     build: ./auth
     container_name: campus-auth
 
-    # Auth service configuration
     environment:
-      SPRING_PROFILES_ACTIVE: prod
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_NAME: campus
+      SPRING_PROFILES_ACTIVE: ${AUTH_PROFILE}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
-
-      # JWT configuration
       JWT_SECRET: ${JWT_SECRET}
-      JWT_EXPIRATION_MINUTES: 15
+      JWT_EXPIRATION: ${JWT_EXPIRATION}
 
-    # Auth service starts only after DB is ready
     depends_on:
       postgres:
         condition: service_healthy
 
-    # Expose internal port (used by NGINX)
     expose:
       - "8080"
 
     networks:
       - campus-net
 
-
   # ==================================================
-  # Frontend (Vue / SPA build)
+  # Frontend
   # ==================================================
   frontend:
     build:
@@ -143,10 +120,8 @@ services:
 
     container_name: campus-frontend
 
-    # Frontend is served via NGINX
     networks:
       - campus-net
-
 
   # ==================================================
   # NGINX reverse proxy
@@ -155,19 +130,19 @@ services:
     build: ./nginx
     container_name: campus-nginx
 
-    # Public HTTP port
     ports:
       - "80:80"
 
-    # NGINX depends on frontend and backend services
     depends_on:
-      - frontend
-      - auth
-      - backend
+      frontend:
+        condition: service_started
+      auth:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
 
     networks:
       - campus-net
-
 
 # ==================================================
 # Shared Docker network
@@ -176,17 +151,10 @@ networks:
   campus-net:
     driver: bridge
 
-
 # ==================================================
-# Named volumes (persistent data)
+# Named volumes
 # ==================================================
 volumes:
-  # PostgreSQL database files
   postgres-data:
-
-  # Importer input data
   importer-data:
-
-  # Uploaded course materials (PDFs, images, etc.)
-  # Used by backend at /data/course-materials
   course-materials:
