@@ -140,7 +140,6 @@ campus-plus-plus-k8s/
 ├── nginx/
 ├── docs/
 ├── docker-compose.yml
-├── set-host-env.sh
 └── README.md
 ```
 
