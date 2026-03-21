@@ -44,7 +44,7 @@ Profiles are injected via environment variables and are not hardcoded in the run
 ```bash
 cd backend
 mvn clean package
-````
+```
 
 ## Local Run
 

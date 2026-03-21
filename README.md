@@ -47,7 +47,7 @@ For local development, create and use a local `.env.dev` file.
 
 ```bash
 docker compose --env-file .env.dev up -d --build
-````
+```
 
 Open:
 
