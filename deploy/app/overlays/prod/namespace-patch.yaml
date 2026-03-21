@@ -1,0 +1,8 @@
+- op: replace
+  path: /metadata/name
+  value: campus-prod
+
+- op: add
+  path: /metadata/labels
+  value:
+    environment: prod

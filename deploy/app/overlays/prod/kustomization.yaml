@@ -1,0 +1,59 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+
+namespace: campus-prod
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+configMapGenerator:
+  - name: auth-config
+    envs:
+      - config/auth-config.env
+
+  - name: backend-config
+    envs:
+      - config/backend-config.env
+
+  - name: importer-config
+    envs:
+      - config/importer-config.env
+
+secretGenerator:
+  - name: db-secrets
+    envs:
+      - secrets/db-secrets.env
+    type: Opaque
+
+  - name: auth-secrets
+    envs:
+      - secrets/auth-secrets.env
+    type: Opaque
+
+images:
+  - name: campus-frontend
+    newTag: prod
+
+  - name: campus-auth
+    newTag: prod
+
+  - name: campus-backend
+    newTag: prod
+
+  - name: campus-nginx
+    newTag: prod
+
+  - name: campus-importer
+    newTag: prod
+
+patches:
+  - path: replicas-patch.yaml
+  - path: ingress-patch.yaml
+  - path: namespace-patch.yaml
+    target:
+      version: v1
+      kind: Namespace
+      name: campus

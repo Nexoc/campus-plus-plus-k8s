@@ -1,0 +1,8 @@
+- op: replace
+  path: /metadata/name
+  value: campus-dev
+
+- op: add
+  path: /metadata/labels
+  value:
+    environment: dev
