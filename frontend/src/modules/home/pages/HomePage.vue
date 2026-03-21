@@ -6,7 +6,6 @@
   Responsibilities:
   - Entry point after login
   - Navigation only
-  - Temporary debug action
 -->
 
 <template>
@@ -30,7 +29,6 @@
         </p>
       </div>
 
-      <!-- MAIN NAVIGATION BUTTONS -->
       <div class="navigation-buttons">
         <RouterLink to="/programs">
           <button class="base-button">
@@ -44,50 +42,11 @@
           </button>
         </RouterLink>
       </div>
-
-      <div v-if="host" class="site-info">
-        <p>
-          Site available at:
-          <a :href="`http://${host}`" target="_blank" rel="noopener">
-            {{ host }}
-          </a>
-        </p>
-
-        <!-- QR CODE -->
-        <img
-          v-if="qrDataUrl"
-          :src="qrDataUrl"
-          alt="QR Code"
-          width="220"
-          height="220"
-        />
-      </div>
     </div>
-
   </div>
 </template>
 
 <script setup lang="ts">
-import QRCode from "qrcode";
-import { computed, ref, watchEffect } from "vue";
-
-const host = import.meta.env.VITE_HOST as string | undefined;
-const siteUrl = computed(() => (host ? `http://${host}` : ""));
-
-const qrDataUrl = ref<string>("");
-
-watchEffect(async () => {
-  if (!siteUrl.value) {
-    qrDataUrl.value = "";
-    return;
-  }
-
-  qrDataUrl.value = await QRCode.toDataURL(siteUrl.value, {
-    width: 220,
-    margin: 1,
-  });
-});
-
 </script>
 
 <style scoped>
@@ -165,7 +124,6 @@ watchEffect(async () => {
   justify-content: center;
   flex-wrap: wrap;
   margin-top: var(--space-2xl);
-  margin-bottom: var(--space-2xl);
 }
 
 .navigation-buttons a {
@@ -184,38 +142,5 @@ watchEffect(async () => {
 .navigation-buttons .base-button:hover {
   transform: translateY(-2px);
   box-shadow: var(--shadow-lg);
-}
-
-.site-info {
-  margin-top: var(--space-2xl);
-  padding-top: var(--space-xl);
-  border-top: 2px solid var(--color-border);
-  text-align: center;
-}
-
-.site-info p {
-  margin-bottom: var(--space-md);
-  color: var(--color-text-muted);
-  font-size: var(--font-sm);
-}
-
-.site-info a {
-  color: var(--color-primary);
-  text-decoration: none;
-  font-weight: 600;
-  transition: color 0.2s;
-}
-
-.site-info a:hover {
-  color: var(--color-primary-hover);
-  text-decoration: underline;
-}
-
-.site-info img {
-  margin-top: var(--space-lg);
-  border: 2px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: var(--space-md);
-  background: var(--color-surface);
 }
 </style>

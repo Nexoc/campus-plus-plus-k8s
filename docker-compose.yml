@@ -114,8 +114,6 @@ services:
   frontend:
     build:
       context: ./frontend
-      args:
-        HOST: ${HOST:?HOST is required}
 
     container_name: campus-frontend
 

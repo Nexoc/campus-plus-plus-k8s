@@ -6,15 +6,6 @@ spring:
   application:
     name: backend
 
-  # -------------------------------------------------
-  # Profile handling
-  # -------------------------------------------------
-  # Default profile is PROD.
-  # Development profile must be enabled explicitly
-  # via environment variable SPRING_PROFILES_ACTIVE.
-  profiles:
-    active: ${SPRING_PROFILES_ACTIVE:prod}
-
 # =========================
 # Logging configuration
 # =========================

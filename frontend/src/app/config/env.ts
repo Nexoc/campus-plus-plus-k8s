@@ -16,13 +16,8 @@
 // import.meta.env.DEV  -> true in development mode
 // import.meta.env.PROD -> true in production build
 //
-export const isDev = import.meta.env.DEV
-export const isProd = import.meta.env.PROD
-
-// docker-compose → build.args → ARG → ENV VITE_HOST → Vite build
-export const host = import.meta.env.VITE_HOST ?? "СУКА!!!";
-
-
+export const isDev = import.meta.env.DEV;
+export const isProd = import.meta.env.PROD;
 
 // --------------------------------------------------
 // Logging feature toggle
@@ -34,4 +29,4 @@ export const host = import.meta.env.VITE_HOST ?? "СУКА!!!";
 // - sensitive information must not be logged
 // - performance should not be affected
 //
-export const enableLogs = isDev
+export const enableLogs = isDev;

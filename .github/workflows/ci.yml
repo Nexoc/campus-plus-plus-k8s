@@ -96,8 +96,6 @@ jobs:
       JWT_SECRET: ${{ secrets.JWT_SECRET }}
       JWT_EXPIRATION: ${{ secrets.JWT_EXPIRATION }}
 
-      HOST: 127.0.0.1
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4

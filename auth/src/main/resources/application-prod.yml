@@ -1,68 +1,38 @@
-  # =========================
+# =========================
 # PRODUCTION CONFIGURATION
 # =========================
-# This configuration is used in real production environments.
-# All sensitive values MUST be injected via environment variables.
-# This file is SAFE to commit to version control.
+# Used in real production environments.
+# Sensitive values must be provided via environment variables.
 
 spring:
-  # -------------------------------------------------
-  # Profile activation
-  # -------------------------------------------------
   config:
     activate:
       on-profile: prod
 
-  # -------------------------------------------------
-  # Database migration (Flyway)
-  # -------------------------------------------------
   flyway:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
 
-  # -------------------------------------------------
-  # Database (PROD)
-  # -------------------------------------------------
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
 
-  # -------------------------------------------------
-  # JPA / Hibernate (PROD)
-  # -------------------------------------------------
   jpa:
     hibernate:
       ddl-auto: validate
-      # validate:
-      # - validates schema against entities
-      # - does NOT modify database
-      # - REQUIRED for production safety
-
     show-sql: false
     open-in-view: false
 
-# =========================
-# Server
-# =========================
 server:
   port: 8080
-  # Internal application port
-  # External access is handled by Nginx / Gateway
 
-# =========================
-# Security (PROD)
-# =========================
 security:
   jwt:
     secret: ${JWT_SECRET}
-    # MUST be injected via environment variable or secret manager
-
-    expiration-minutes: ${JWT_EXPIRATION:15}
-    # Short token lifetime
-    # Default: 15 minutes
+    expiration-minutes: ${JWT_EXPIRATION}
 
 management:
   endpoints:
@@ -70,10 +40,6 @@ management:
       exposure:
         include: health
 
-
-# =========================
-# Logging (PROD)
-# =========================
 logging:
   level:
     root: INFO
