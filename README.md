@@ -25,9 +25,10 @@ It consists of:
 - free port `80`
 
 ### Configuration
-The project uses one canonical `docker-compose.yml`.
 
-Configure the required environment variables, for example:
+The project uses one canonical `docker-compose.yml` for the local container runtime.
+
+Required environment variables:
 - `BACKEND_PROFILE`
 - `AUTH_PROFILE`
 - `DB_HOST`
@@ -37,23 +38,31 @@ Configure the required environment variables, for example:
 - `DB_PASSWORD`
 - `JWT_SECRET`
 - `JWT_EXPIRATION`
-- `HOST`
 
-`HOST` is currently used during frontend build in some local/WSL setups.
+Profiles and infrastructure-specific values are injected via environment variables.
+
+For local development, create and use a local `.env.dev` file.
 
 ### Start
+
 ```bash
-docker compose up -d --build
+docker compose --env-file .env.dev up -d --build
 ````
 
 Open:
 
 * `http://localhost`
 
+### Show container status
+
+```bash
+docker compose --env-file .env.dev ps -a
+```
+
 ### Stop
 
 ```bash
-docker compose down -v
+docker compose --env-file .env.dev down -v --remove-orphans
 ```
 
 ## Architecture
@@ -98,7 +107,7 @@ NGINX Gateway
 * Spring Boot
 * business logic only
 * protected behind NGINX
-* trusts forwarded headers
+* trusts forwarded identity headers
 
 ### Importer
 
@@ -118,7 +127,7 @@ Spring profiles:
 * `test`
 * `prod`
 
-Profiles are provided via environment variables, not hardcoded in the application runtime model.
+Profiles are provided via environment variables and are not hardcoded in the application runtime model.
 
 ## CI
 
@@ -147,10 +156,9 @@ campus-plus-plus-k8s/
 
 * backend does not parse JWT directly
 * NGINX is the central security gate
+* frontend image no longer depends on build-time `HOST`
 * importer is import-only, not scraping
-* scraper repo:
+* scraper repository:
 
   * [https://github.com/loonaarc/campuswiki_coursescraper](https://github.com/loonaarc/campuswiki_coursescraper)
-
-
 

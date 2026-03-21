@@ -1,154 +1,80 @@
-# Campus++
+# Campus++ Backend
 
-[![CI Pipeline](https://github.com/Nexoc/campus-plus-plus-k8s/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nexoc/campus-plus-plus-k8s/actions/workflows/ci.yml)
+Backend service of the Campus++ application.
 
-Campus++ is a containerized full-stack application for Hochschule Campus Wien.
+This service contains the core business logic and is deployed behind the internal NGINX gateway.
+Authentication is handled externally by the auth service and NGINX via forwarded trusted headers.
 
-## Services
+## Responsibilities
 
-- frontend
-- auth service
-- backend
-- importer
-- NGINX gateway
-- PostgreSQL
+- provide business logic for application features
+- expose public and protected API endpoints
+- use PostgreSQL as persistence layer
+- run Flyway migrations for the backend schema
+- trust forwarded identity headers from NGINX
+- not parse JWT tokens directly
 
-## Quick Start
+## Runtime
 
-### Prerequisites
+The backend is normally started through the root `docker-compose.yml` as part of the full stack.
 
-- Docker
-- Docker Compose v2
-- free port `80`
+Internal container port:
+- `8080`
 
-### Configuration
+## Required Environment Variables
 
-The project uses one canonical `docker-compose.yml`.
-
-Required environment variables:
-
-- `BACKEND_PROFILE`
-- `AUTH_PROFILE`
+- `SPRING_PROFILES_ACTIVE`
 - `DB_HOST`
 - `DB_PORT`
 - `DB_NAME`
 - `DB_USERNAME`
 - `DB_PASSWORD`
-- `JWT_SECRET`
-- `JWT_EXPIRATION`
-- `HOST`
-
-`HOST` is currently used during the frontend build in some local / WSL setups.
-
-### Start
-
-```bash
-docker compose up -d --build
-````
-
-Open:
-
-* `http://localhost`
-
-### Stop
-
-```bash
-docker compose down -v
-```
-
-## Architecture
-
-```text
-Client
-  ↓
-NGINX Gateway
-  ├── Frontend
-  ├── Auth Service
-  └── Backend API
-       ↓
-    PostgreSQL
-```
-
-## Responsibilities
-
-### Frontend
-
-* Vue 3 SPA
-* served as static files
-* sends JWT in `Authorization: Bearer <token>`
-
-### NGINX
-
-* single entry point
-* serves frontend
-* routes requests
-* validates protected requests via `auth_request`
-* forwards trusted identity headers to backend
-
-### Auth Service
-
-* Spring Boot
-* login / registration
-* password hashing
-* JWT issuing and validation
-* Flyway migrations
-
-### Backend
-
-* Spring Boot
-* business logic only
-* protected behind NGINX
-* trusts forwarded headers
-
-### Importer
-
-* one-shot import service for initial course data
-
-### PostgreSQL
-
-* shared relational database
-* used by auth and backend
-* schema managed by Flyway
 
 ## Profiles
 
-Spring profiles:
+Supported Spring profiles:
+- `dev`
+- `test`
+- `prod`
 
-* `dev`
-* `test`
-* `prod`
+Profiles are injected via environment variables and are not hardcoded in the runtime model.
 
-Profiles are provided via environment variables.
+## Local Build
 
-## CI
+```bash
+cd backend
+mvn clean package
+````
 
-GitHub Actions pipeline includes:
+## Local Run
 
-* auth unit tests + coverage
-* backend build
-* Docker Compose smoke test
-* NGINX config validation
+```bash
+cd backend
+mvn spring-boot:run
+```
 
-## Project Structure
+## Docker
+
+The backend image is built from:
 
 ```text
-campus-plus-plus-k8s/
-├── auth/
-├── backend/
-├── frontend/
-├── importer/
-├── nginx/
-├── docs/
-├── docker-compose.yml
-└── README.md
+backend/Dockerfile
+```
+
+The container exposes:
+
+* `8080`
+
+## Health Check
+
+The container health check uses:
+
+```text
+/actuator/health
 ```
 
 ## Notes
 
-* backend does not parse JWT directly
-* NGINX is the central security gate
-* importer only imports prepared JSON data
-* scraper repository:
-
-  * [https://github.com/loonaarc/campuswiki_coursescraper](https://github.com/loonaarc/campuswiki_coursescraper)
-
+* backend is not meant to be exposed directly to the public internet
+* authentication and request validation are enforced upstream
+* the canonical runtime reference is the root `docker-compose.yml`
