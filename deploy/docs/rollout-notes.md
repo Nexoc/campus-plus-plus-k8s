@@ -45,7 +45,8 @@ The current repo supports this deployment flow:
 1. Build and push images through GitHub Actions.
 2. Select the immutable release tag to deploy.
 3. Prepare environment-specific config and secret env files for the DEV overlay.
-4. Apply the DEV overlay to the `S5` cluster.
+4. Apply the DEV overlay to the `S5` cluster, either manually or through the
+   helper script under `deploy/scripts/`.
 5. Wait for deployments to become ready.
 6. Verify that the importer job completed successfully.
 7. Verify access through ingress and through the `GW` forwarding path.
@@ -85,6 +86,13 @@ Check importer logs:
 
 ```bash
 kubectl -n campus-dev logs job/campus-importer
+```
+
+Scripted alternatives:
+
+```bash
+bash deploy/scripts/apply-overlay.sh --environment dev --image-tag sha-676e768
+bash deploy/scripts/verify-overlay.sh --environment dev --smoke-url http://campus-dev.192-168-50-5.sslip.io
 ```
 
 Before apply, replace `sha-change-me` in:

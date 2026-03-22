@@ -49,6 +49,7 @@ deploy/
 │   └── overlays/
 │       ├── dev/
 │       └── prod/
+├── scripts/
 ├── templates/
 │   ├── config/
 │   └── secrets/
@@ -96,16 +97,16 @@ Current repo model:
 
 Prepare DEV secret files:
 
-```powershell
-Copy-Item deploy\templates\secrets\db-secrets.env.example deploy\app\overlays\dev\secrets\db-secrets.env
-Copy-Item deploy\templates\secrets\auth-secrets.env.example deploy\app\overlays\dev\secrets\auth-secrets.env
+```bash
+cp deploy/templates/secrets/db-secrets.env.example deploy/app/overlays/dev/secrets/db-secrets.env
+cp deploy/templates/secrets/auth-secrets.env.example deploy/app/overlays/dev/secrets/auth-secrets.env
 ```
 
 Prepare PROD secret files:
 
-```powershell
-Copy-Item deploy\templates\secrets\db-secrets.env.example deploy\app\overlays\prod\secrets\db-secrets.env
-Copy-Item deploy\templates\secrets\auth-secrets.env.example deploy\app\overlays\prod\secrets\auth-secrets.env
+```bash
+cp deploy/templates/secrets/db-secrets.env.example deploy/app/overlays/prod/secrets/db-secrets.env
+cp deploy/templates/secrets/auth-secrets.env.example deploy/app/overlays/prod/secrets/auth-secrets.env
 ```
 
 ## Install Or Update ingress-nginx
@@ -137,13 +138,39 @@ helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
 
 ## DEV Runbook
 
+### Scripted Shortcuts
+
+Render or apply with the helper script:
+
+```bash
+bash deploy/scripts/apply-overlay.sh --environment dev --image-tag sha-676e768 --render-only
+bash deploy/scripts/apply-overlay.sh --environment dev --image-tag sha-676e768
+```
+
+Verify the rollout:
+
+```bash
+bash deploy/scripts/verify-overlay.sh --environment dev --smoke-url http://campus-dev.192-168-50-5.sslip.io
+```
+
+The helper scripts do not replace operator judgment, but they reduce repeated
+manual command sequences.
+
+Helper script prerequisites on Debian-like hosts:
+
+- `bash`
+- `kubectl`
+- `mktemp`
+- `sed`
+- `curl` for smoke checks in `verify-overlay.sh`
+
 ### 1. Prepare DEV secret files
 
 Create local ignored secret files from the templates:
 
-```powershell
-Copy-Item deploy\templates\secrets\db-secrets.env.example deploy\app\overlays\dev\secrets\db-secrets.env
-Copy-Item deploy\templates\secrets\auth-secrets.env.example deploy\app\overlays\dev\secrets\auth-secrets.env
+```bash
+cp deploy/templates/secrets/db-secrets.env.example deploy/app/overlays/dev/secrets/db-secrets.env
+cp deploy/templates/secrets/auth-secrets.env.example deploy/app/overlays/dev/secrets/auth-secrets.env
 ```
 
 ### 2. Review DEV overlay inputs
@@ -276,6 +303,13 @@ Current behavior:
   such as `sha-676e768`
 
 This keeps PROD aligned with the tags already produced by CI.
+
+Helper examples:
+
+```bash
+bash deploy/scripts/apply-overlay.sh --environment prod --image-tag sha-676e768 --render-only
+bash deploy/scripts/verify-overlay.sh --environment prod --smoke-url http://campus.example.com
+```
 
 ## Operational Checks
 

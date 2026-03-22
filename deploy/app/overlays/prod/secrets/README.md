@@ -14,9 +14,9 @@ Create them from the canonical templates:
 
 Example:
 
-```powershell
-Copy-Item deploy\templates\secrets\db-secrets.env.example deploy\app\overlays\prod\secrets\db-secrets.env
-Copy-Item deploy\templates\secrets\auth-secrets.env.example deploy\app\overlays\prod\secrets\auth-secrets.env
+```bash
+cp deploy/templates/secrets/db-secrets.env.example deploy/app/overlays/prod/secrets/db-secrets.env
+cp deploy/templates/secrets/auth-secrets.env.example deploy/app/overlays/prod/secrets/auth-secrets.env
 ```
 
 These local files must not be committed to git.
