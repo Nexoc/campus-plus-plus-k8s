@@ -1,33 +1,19 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# ==================================================
-# Base application manifests
-# We reuse the common app layer from ../../base
-# and override only what is specific for DEV
-# ==================================================
+# Base application manifests shared across environments
 resources:
   - ../../base
 
-# ==================================================
-# All resources from this overlay will be placed
-# into the DEV namespace
-# ==================================================
+# All rendered resources from this overlay will be placed into the DEV namespace
 namespace: campus-dev
 
-# ==================================================
 # Keep generated ConfigMap/Secret names stable
-# Without hash suffixes, references remain predictable
-# This is useful for a simple controlled rollout path
-# ==================================================
+# so references do not get hash suffixes
 generatorOptions:
   disableNameSuffixHash: true
 
-# ==================================================
-# CONFIGMAPS
-# Non-sensitive runtime configuration for services
-# These values are safe application config, not secrets
-# ==================================================
+# Non-secret runtime configuration for services
 configMapGenerator:
   - name: auth-config
     envs:
@@ -41,11 +27,8 @@ configMapGenerator:
     envs:
       - config/importer-config.env
 
-# ==================================================
-# SECRETS
-# Sensitive values are generated from local env files
-# Do NOT store real production secrets in git
-# ==================================================
+# Secret values loaded from local env files
+# Real secret values must not be committed to git
 secretGenerator:
   - name: db-secrets
     envs:
@@ -57,22 +40,8 @@ secretGenerator:
       - secrets/auth-secrets.env
     type: Opaque
 
-# ==================================================
-# IMAGE OVERRIDES FOR DEV
-#
-# Base manifests currently use logical image names like:
-#   campus-frontend
-#   campus-auth
-#   campus-backend
-#   campus-nginx
-#   campus-importer
-#
-# Here we rewrite them to real GHCR image names
-# and point DEV to the moving tag dev-latest.
-#
-# Later, for stricter deployments, you can switch
-# from dev-latest to an immutable sha-... tag.
-# ==================================================
+# Rewrite logical image names from base manifests
+# to real GHCR images used by the DEV environment
 images:
   - name: campus-frontend
     newName: ghcr.io/nexoc/campus-frontend
@@ -94,19 +63,20 @@ images:
     newName: ghcr.io/nexoc/campus-importer
     newTag: dev-latest
 
-# ==================================================
-# PATCHES
-# DEV-specific overrides:
-# - lower replica counts
-# - dev ingress host/settings
-# - namespace metadata patch
-# ==================================================
-patches:
-  - path: replicas-patch.yaml
-  - path: ingress-patch.yaml
-  - path: namespace-patch.yaml
-  - path: image-pull-policy-patch.yaml
-    target:
+# Strategic merge patches for normal Kubernetes resources
+# - replicas-patch.yaml adjusts DEV replica counts
+# - ingress-patch.yaml overrides DEV ingress settings
+# - image-pull-policy-patch.yaml forces Always pull policy in DEV
+patchesStrategicMerge:
+  - replicas-patch.yaml
+  - ingress-patch.yaml
+  - image-pull-policy-patch.yaml
+
+# JSON 6902 patch for Namespace object
+# This is kept separate because namespace-patch.yaml uses JSON patch syntax
+patchesJson6902:
+  - target:
       version: v1
       kind: Namespace
       name: campus
+    path: namespace-patch.yaml
