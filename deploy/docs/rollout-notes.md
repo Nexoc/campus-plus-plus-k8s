@@ -88,6 +88,13 @@ Check importer logs:
 kubectl -n campus-dev logs job/campus-importer
 ```
 
+Note:
+
+- this check is time-sensitive
+- the importer Job is cleaned up automatically after completion
+- if the Job is already gone, that does not automatically mean the rollout failed
+- verify deployments, ingress, and smoke access first
+
 Scripted alternatives:
 
 ```bash
@@ -109,6 +116,8 @@ Important operational detail:
 
 - the importer code is safe to skip if the database is already populated
 - the Kubernetes Job object will not rerun automatically on every `apply`
+- the Kubernetes Job currently uses `ttlSecondsAfterFinished: 600`
+- after about 10 minutes, a completed importer Job may be removed automatically
 - if a fresh importer run is required, recreate the Job intentionally
 
 Example reset flow:

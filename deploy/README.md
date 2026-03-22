@@ -245,6 +245,14 @@ The importer is designed to:
 - wait for the database
 - wait for the schema
 - skip cleanly if data already exists
+- be garbage-collected after completion by Kubernetes Job TTL
+
+Important timing note:
+
+- `campus-importer` uses `ttlSecondsAfterFinished: 600`
+- after about 10 minutes, the completed Job may no longer exist
+- if that happens, `kubectl logs job/campus-importer` will no longer work
+- inspect importer logs shortly after apply if you need to confirm the exact run
 
 ### 9. Verify access
 
@@ -272,6 +280,9 @@ If a rerun is required:
 kubectl -n campus-dev delete job campus-importer --ignore-not-found
 kubectl apply -k deploy/app/overlays/dev
 ```
+
+If the Job has already been removed by TTL cleanup, the delete step is harmless
+and the apply step recreates it.
 
 ## PROD Runbook Status
 

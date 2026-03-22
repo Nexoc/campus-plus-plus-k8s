@@ -89,7 +89,13 @@ for deployment in "${deployments[@]}"; do
 done
 
 echo "Waiting for importer job completion..."
-kubectl -n "$namespace" wait --for=condition=complete job/campus-importer --timeout="${timeout_seconds}s"
+if kubectl -n "$namespace" get job campus-importer >/dev/null 2>&1; then
+  kubectl -n "$namespace" wait --for=condition=complete job/campus-importer --timeout="${timeout_seconds}s"
+else
+  echo "Importer job not found in namespace '$namespace'."
+  echo "Continuing verification because the Job may have been garbage-collected after completion."
+  echo "Campus++ importer currently uses ttlSecondsAfterFinished, so this is expected when verification runs later."
+fi
 
 echo "Checking ingress resource..."
 kubectl -n "$namespace" get ingress campus
