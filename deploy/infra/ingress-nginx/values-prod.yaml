@@ -1,0 +1,24 @@
+# Baseline ingress-nginx values for the target PROD model on S1/S2/S3.
+#
+# Intended behavior:
+# - dedicated ingress-nginx controller class `nginx`
+# - fixed NodePorts so GW can proxy to the PROD cluster consistently
+# - more than one controller replica for better availability than DEV
+#
+# Reconcile these values with the live cluster installation before treating
+# them as authoritative production truth.
+
+controller:
+  replicaCount: 2
+  watchIngressWithoutClass: false
+  ingressClass: nginx
+  ingressClassResource:
+    name: nginx
+    enabled: true
+    default: false
+  service:
+    type: NodePort
+    externalTrafficPolicy: Cluster
+    nodePorts:
+      http: 30080
+      https: 30443

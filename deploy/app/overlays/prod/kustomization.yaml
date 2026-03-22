@@ -22,6 +22,9 @@ configMapGenerator:
     envs:
       - config/importer-config.env
 
+# Secret values loaded from local env files.
+# Create these local files from deploy/templates/secrets/*.env.example.
+# Real secret values must not be committed to git.
 secretGenerator:
   - name: db-secrets
     envs:
@@ -33,21 +36,28 @@ secretGenerator:
       - secrets/auth-secrets.env
     type: Opaque
 
+# Production should deploy from GHCR using pinned immutable tags.
+# Replace `sha-change-me` with the selected release tag before applying PROD.
 images:
   - name: campus-frontend
-    newTag: prod
+    newName: ghcr.io/nexoc/campus-frontend
+    newTag: sha-change-me
 
   - name: campus-auth
-    newTag: prod
+    newName: ghcr.io/nexoc/campus-auth
+    newTag: sha-change-me
 
   - name: campus-backend
-    newTag: prod
+    newName: ghcr.io/nexoc/campus-backend
+    newTag: sha-change-me
 
   - name: campus-nginx
-    newTag: prod
+    newName: ghcr.io/nexoc/campus-nginx
+    newTag: sha-change-me
 
   - name: campus-importer
-    newTag: prod
+    newName: ghcr.io/nexoc/campus-importer
+    newTag: sha-change-me
 
 patches:
   - path: replicas-patch.yaml

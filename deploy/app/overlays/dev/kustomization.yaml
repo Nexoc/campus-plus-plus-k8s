@@ -28,7 +28,8 @@ configMapGenerator:
       - config/importer-config.env
 
 # Secret values loaded from local env files
-# Real secret values must not be committed to git
+# Create these local files from deploy/templates/secrets/*.env.example.
+# Real secret values must not be committed to git.
 secretGenerator:
   - name: db-secrets
     envs:
@@ -41,42 +42,38 @@ secretGenerator:
     type: Opaque
 
 # Rewrite logical image names from base manifests
-# to real GHCR images used by the DEV environment
+# to real GHCR images used by the DEV environment.
+# Replace `sha-change-me` with the selected DEV release tag before apply.
 images:
   - name: campus-frontend
     newName: ghcr.io/nexoc/campus-frontend
-    newTag: dev-latest
+    newTag: sha-change-me
 
   - name: campus-auth
     newName: ghcr.io/nexoc/campus-auth
-    newTag: dev-latest
+    newTag: sha-change-me
 
   - name: campus-backend
     newName: ghcr.io/nexoc/campus-backend
-    newTag: dev-latest
+    newTag: sha-change-me
 
   - name: campus-nginx
     newName: ghcr.io/nexoc/campus-nginx
-    newTag: dev-latest
+    newTag: sha-change-me
 
   - name: campus-importer
     newName: ghcr.io/nexoc/campus-importer
-    newTag: dev-latest
+    newTag: sha-change-me
 
-# Strategic merge patches for normal Kubernetes resources
+# Patches:
 # - replicas-patch.yaml adjusts DEV replica counts
 # - ingress-patch.yaml overrides DEV ingress settings
-# - image-pull-policy-patch.yaml forces Always pull policy in DEV
-patchesStrategicMerge:
-  - replicas-patch.yaml
-  - ingress-patch.yaml
-  - image-pull-policy-patch.yaml
-
-# JSON 6902 patch for Namespace object
-# This is kept separate because namespace-patch.yaml uses JSON patch syntax
-patchesJson6902:
-  - target:
+# - namespace-patch.yaml renames and labels the Namespace
+patches:
+  - path: replicas-patch.yaml
+  - path: ingress-patch.yaml
+  - path: namespace-patch.yaml
+    target:
       version: v1
       kind: Namespace
       name: campus
-    path: namespace-patch.yaml

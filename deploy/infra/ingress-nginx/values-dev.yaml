@@ -1,0 +1,26 @@
+# Baseline ingress-nginx values for the current DEV model on S5.
+#
+# These values reflect the confirmed setup we know today:
+# - k3s single-node DEV cluster
+# - Traefik disabled
+# - ingress-nginx controller class `nginx`
+# - fixed NodePorts used by GW forwarding: 30080 / 30443
+#
+# If the live cluster was installed manually before this file was created,
+# reconcile it against:
+#   helm get values -n ingress-nginx ingress-nginx
+
+controller:
+  replicaCount: 1
+  watchIngressWithoutClass: false
+  ingressClass: nginx
+  ingressClassResource:
+    name: nginx
+    enabled: true
+    default: false
+  service:
+    type: NodePort
+    externalTrafficPolicy: Cluster
+    nodePorts:
+      http: 30080
+      https: 30443

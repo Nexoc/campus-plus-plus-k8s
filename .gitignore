@@ -16,4 +16,7 @@ target/
 .env
 .env*
 
+# Local deployment secrets generated from templates
+deploy/app/overlays/*/secrets/*.env
+
 *.pdf
