@@ -1,14 +1,33 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
+# ==================================================
+# Base application manifests
+# We reuse the common app layer from ../../base
+# and override only what is specific for DEV
+# ==================================================
 resources:
   - ../../base
 
+# ==================================================
+# All resources from this overlay will be placed
+# into the DEV namespace
+# ==================================================
 namespace: campus-dev
 
+# ==================================================
+# Keep generated ConfigMap/Secret names stable
+# Without hash suffixes, references remain predictable
+# This is useful for a simple controlled rollout path
+# ==================================================
 generatorOptions:
   disableNameSuffixHash: true
 
+# ==================================================
+# CONFIGMAPS
+# Non-sensitive runtime configuration for services
+# These values are safe application config, not secrets
+# ==================================================
 configMapGenerator:
   - name: auth-config
     envs:
@@ -22,6 +41,11 @@ configMapGenerator:
     envs:
       - config/importer-config.env
 
+# ==================================================
+# SECRETS
+# Sensitive values are generated from local env files
+# Do NOT store real production secrets in git
+# ==================================================
 secretGenerator:
   - name: db-secrets
     envs:
@@ -33,22 +57,50 @@ secretGenerator:
       - secrets/auth-secrets.env
     type: Opaque
 
+# ==================================================
+# IMAGE OVERRIDES FOR DEV
+#
+# Base manifests currently use logical image names like:
+#   campus-frontend
+#   campus-auth
+#   campus-backend
+#   campus-nginx
+#   campus-importer
+#
+# Here we rewrite them to real GHCR image names
+# and point DEV to the moving tag dev-latest.
+#
+# Later, for stricter deployments, you can switch
+# from dev-latest to an immutable sha-... tag.
+# ==================================================
 images:
   - name: campus-frontend
-    newTag: dev
+    newName: ghcr.io/nexoc/campus-frontend
+    newTag: dev-latest
 
   - name: campus-auth
-    newTag: dev
+    newName: ghcr.io/nexoc/campus-auth
+    newTag: dev-latest
 
   - name: campus-backend
-    newTag: dev
+    newName: ghcr.io/nexoc/campus-backend
+    newTag: dev-latest
 
   - name: campus-nginx
-    newTag: dev
+    newName: ghcr.io/nexoc/campus-nginx
+    newTag: dev-latest
 
   - name: campus-importer
-    newTag: dev
+    newName: ghcr.io/nexoc/campus-importer
+    newTag: dev-latest
 
+# ==================================================
+# PATCHES
+# DEV-specific overrides:
+# - lower replica counts
+# - dev ingress host/settings
+# - namespace metadata patch
+# ==================================================
 patches:
   - path: replicas-patch.yaml
   - path: ingress-patch.yaml

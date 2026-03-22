@@ -6,9 +6,19 @@ on:
   pull_request:
     branches: ["main"]
 
+# ==================================================
+# REQUIRED FOR GHCR PUSH
+# contents: read   -> allows repository checkout/read
+# packages: write  -> allows pushing images to GHCR
+# ==================================================
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   # ==================================================
   # AUTH – UNIT TESTS + COVERAGE
+  # Runs auth module unit tests with test profile
   # ==================================================
   auth-tests:
     name: Auth - Unit Tests & Coverage
@@ -47,6 +57,7 @@ jobs:
 
   # ==================================================
   # BACKEND – BUILD ONLY
+  # Builds backend artifact after auth tests passed
   # ==================================================
   backend-build:
     name: Backend - Build
@@ -70,6 +81,12 @@ jobs:
 
   # ==================================================
   # DOCKER COMPOSE – SMOKE TEST
+  # Starts the full local stack in CI and checks:
+  # - auth becomes healthy
+  # - backend becomes healthy
+  # - importer finishes successfully
+  # - nginx config is valid
+  # - nginx answers on localhost
   # ==================================================
   docker-compose:
     name: Docker Compose Smoke Test
@@ -173,3 +190,114 @@ jobs:
       - name: Stop containers
         if: always()
         run: docker compose down -v
+
+  # ==================================================
+  # BUILD AND PUSH IMAGES TO GHCR
+  # Runs only on push to main, not on pull requests
+  #
+  # Result:
+  # - builds deployable images
+  # - pushes them to GHCR
+  # - tags each image with:
+  #   1) immutable sha-<shortsha>
+  #   2) moving dev-latest
+  #
+  # This is the first step toward:
+  # GitHub -> tests -> build -> GHCR -> deploy to S5
+  # ==================================================
+  build-and-push-images:
+    name: Build and Push Images to GHCR
+    runs-on: ubuntu-latest
+    needs: docker-compose
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Login to GitHub Container Registry using the workflow token
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+
+          # The username used to authenticate to GHCR.
+          # github.actor is the account that triggered the workflow
+          # (for example, the user who pushed the commit).
+          username: ${{ github.actor }}
+
+          # The password used to authenticate to GHCR.
+          # secrets.GITHUB_TOKEN is an automatically provided temporary token
+          # for this workflow run. It acts like the password here.
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+
+      # Compute immutable tag from current commit SHA
+      - name: Compute image tags
+        id: meta
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          echo "sha_tag=sha-$SHORT_SHA" >> "$GITHUB_OUTPUT"
+
+      # --------------------------------------------------
+      # FRONTEND IMAGE
+      # --------------------------------------------------
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: |
+            ghcr.io/nexoc/campus-frontend:${{ steps.meta.outputs.sha_tag }}
+            ghcr.io/nexoc/campus-frontend:dev-latest
+
+      # --------------------------------------------------
+      # AUTH IMAGE
+      # --------------------------------------------------
+      - name: Build and push auth
+        uses: docker/build-push-action@v6
+        with:
+          context: ./auth
+          push: true
+          tags: |
+            ghcr.io/nexoc/campus-auth:${{ steps.meta.outputs.sha_tag }}
+            ghcr.io/nexoc/campus-auth:dev-latest
+
+      # --------------------------------------------------
+      # BACKEND IMAGE
+      # --------------------------------------------------
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: |
+            ghcr.io/nexoc/campus-backend:${{ steps.meta.outputs.sha_tag }}
+            ghcr.io/nexoc/campus-backend:dev-latest
+
+      # --------------------------------------------------
+      # NGINX IMAGE
+      # --------------------------------------------------
+      - name: Build and push campus-nginx
+        uses: docker/build-push-action@v6
+        with:
+          context: ./nginx
+          push: true
+          tags: |
+            ghcr.io/nexoc/campus-nginx:${{ steps.meta.outputs.sha_tag }}
+            ghcr.io/nexoc/campus-nginx:dev-latest
+
+      # --------------------------------------------------
+      # IMPORTER IMAGE
+      # --------------------------------------------------
+      - name: Build and push importer
+        uses: docker/build-push-action@v6
+        with:
+          context: ./importer
+          push: true
+          tags: |
+            ghcr.io/nexoc/campus-importer:${{ steps.meta.outputs.sha_tag }}
+            ghcr.io/nexoc/campus-importer:dev-latest
