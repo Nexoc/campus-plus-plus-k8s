@@ -18,7 +18,7 @@ The current infrastructure model uses six hosts:
 - `S2` (`192.168.50.2`): planned PROD k3s node
 - `S3` (`192.168.50.3`): planned PROD k3s node
 - `S4` (`192.168.50.4`): PostgreSQL server outside Kubernetes
-- `S5` (`192.168.50.5`): DEV k3s single-node cluster, preferred future self-hosted runner host
+- `S5` (`192.168.50.5`): DEV k3s single-node cluster, intended self-hosted runner host for assisted DEV deploys, recommended runner label `campus-dev`
 
 ## Deployment Model
 
@@ -110,16 +110,16 @@ The repository already includes:
 - separate `dev` and `prod` overlays
 - a DEV image strategy based on GHCR images
 - versioned ingress-nginx values baselines in `deploy/infra/ingress-nginx`
+- a DEV deploy workflow for a Linux self-hosted runner on `S5`
+- an automatic `main -> CI -> DEV deploy` path for the `S5` runner
 
 ## What Is Still Outside Repo Or Incomplete
 
 The following are not yet fully captured in git:
 
 - the actual `GW` nginx configuration
-- live drift, if any, between the versioned ingress-nginx values and the
-  currently installed controller release
 - the final PROD delivery flow
-- a fully documented self-hosted runner deploy path
+- self-hosted runner registration and service management on `S5`
 
 Those gaps should be documented and then reduced over time so the repo becomes
 the main source of truth.

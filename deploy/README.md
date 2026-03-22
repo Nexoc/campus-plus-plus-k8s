@@ -150,11 +150,22 @@ bash deploy/scripts/apply-overlay.sh --environment dev --image-tag sha-676e768
 Verify the rollout:
 
 ```bash
-bash deploy/scripts/verify-overlay.sh --environment dev --smoke-url http://campus-dev.192-168-50-5.sslip.io
+bash deploy/scripts/verify-overlay.sh --environment dev --smoke-url http://127.0.0.1:30080/ --smoke-host-header campus-dev.192-168-50-5.sslip.io
 ```
 
 The helper scripts do not replace operator judgment, but they reduce repeated
 manual command sequences.
+
+GitHub-assisted alternative:
+
+- use `.github/workflows/deploy-dev.yml`
+- every successful `push` to `main` now triggers automatic DEV deploy after the CI pipeline finishes
+- the same workflow still supports manual `workflow_dispatch` for reruns or controlled rechecks
+- manual runs can provide an immutable image tag such as `sha-19a6a44`
+- if manual `image_tag` is left empty, the workflow falls back to the checked-out commit SHA
+- the workflow is intended for a Linux self-hosted runner on `S5`
+- the workflow expects a custom runner label `campus-dev`
+- expected workflow inputs are `image_tag`, `render_only`, `smoke_url`, `smoke_host_header`, and `timeout_seconds`
 
 Helper script prerequisites on Debian-like hosts:
 
@@ -163,6 +174,13 @@ Helper script prerequisites on Debian-like hosts:
 - `mktemp`
 - `sed`
 - `curl` for smoke checks in `verify-overlay.sh`
+
+Self-hosted runner notes:
+
+- the runner should have access to `/etc/rancher/k3s/k3s.yaml`
+- local ignored secret files must already exist under `deploy/app/overlays/dev/secrets/`
+- the deploy workflow uses `actions/checkout` with `clean: false` so those local secret files survive between runs
+- recommended custom runner labels are `campus-dev` and `s5`
 
 ### 1. Prepare DEV secret files
 
@@ -261,6 +279,12 @@ Check both:
 - ingress host from the DEV overlay
 - `GW` forwarding path to `S5:30080`
 
+From `S5` itself, the most reliable ingress smoke probe is:
+
+```bash
+curl -I -H 'Host: campus-dev.192-168-50-5.sslip.io' http://127.0.0.1:30080/
+```
+
 At the time of writing, the DEV ingress host in repo is:
 
 - `campus-dev.192-168-50-5.sslip.io`
@@ -342,9 +366,12 @@ Current repo behavior:
 - CI builds and pushes images to GHCR
 - CI produces immutable `sha-<shortsha>` tags
 - CI also publishes moving `dev-latest` tags as a convenience pointer
+- repo now also contains a DEV deploy workflow for a self-hosted Linux runner on `S5`
+- on successful `push` builds for `main`, that workflow deploys the matching immutable tag to DEV automatically
 
 Operational implication:
 
+- `main` now acts as the DEV auto-deploy branch
 - DEV and PROD deploys should use pinned immutable tags
 - `dev-latest` should not be treated as deployment truth
 

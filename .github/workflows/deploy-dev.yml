@@ -1,0 +1,204 @@
+name: Deploy DEV
+
+on:
+  # Automatic path:
+  # deploy to S5 only after the main CI pipeline has finished successfully.
+  workflow_run:
+    workflows: ["CI Pipeline"]
+    types:
+      - completed
+  # Manual path:
+  # keep a dispatch entry point for re-runs or render-only checks.
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: Immutable GHCR tag to deploy, for example sha-19a6a44
+        required: false
+        default: ""
+        type: string
+      render_only:
+        description: Render manifests only and skip kubectl apply
+        required: false
+        default: false
+        type: boolean
+      smoke_url:
+        description: Runner-local smoke URL for ingress-nginx
+        required: false
+        default: http://127.0.0.1:30080/
+        type: string
+      smoke_host_header:
+        description: Optional Host header for ingress smoke checks
+        required: false
+        default: campus-dev.192-168-50-5.sslip.io
+        type: string
+      timeout_seconds:
+        description: Rollout and smoke timeout in seconds
+        required: false
+        default: "300"
+        type: string
+
+permissions:
+  contents: read
+
+# Avoid overlapping deploys to the same DEV environment.
+concurrency:
+  group: campus-dev-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy-dev:
+    name: Deploy DEV on campus-dev runner
+    # For auto-deploy, accept only successful CI runs for push events on main.
+    # Manual workflow_dispatch remains allowed.
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        (
+          github.event_name == 'workflow_run' &&
+          github.event.workflow_run.conclusion == 'success' &&
+          github.event.workflow_run.event == 'push' &&
+          github.event.workflow_run.head_branch == 'main'
+        )
+      }}
+    runs-on:
+      - self-hosted
+      - linux
+      # Custom label that should point to S5, the DEV runner host.
+      - campus-dev
+    timeout-minutes: 30
+    environment: dev
+    env:
+      KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Keep local ignored secret files in the runner workspace.
+          clean: false
+          # On workflow_run, deploy the exact commit that passed CI.
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Resolve deployment parameters
+        id: params
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_IMAGE_TAG: ${{ inputs.image_tag }}
+          MANUAL_SMOKE_URL: ${{ inputs.smoke_url }}
+          MANUAL_SMOKE_HOST_HEADER: ${{ inputs.smoke_host_header }}
+          MANUAL_TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
+          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
+            # CI already built and pushed images for the triggering commit,
+            # so derive the immutable GHCR tag from that workflow_run SHA.
+            resolved_image_tag="sha-${WORKFLOW_RUN_SHA:0:7}"
+            resolved_render_only="false"
+            resolved_smoke_url="http://127.0.0.1:30080/"
+            resolved_smoke_host_header="campus-dev.192-168-50-5.sslip.io"
+            resolved_timeout_seconds="300"
+          else
+            resolved_image_tag="${MANUAL_IMAGE_TAG:-}"
+            if [[ -z "$resolved_image_tag" ]]; then
+              # Manual runs may omit image_tag and fall back to the checked-out SHA.
+              resolved_image_tag="sha-${GITHUB_SHA:0:7}"
+            fi
+            resolved_render_only="${{ inputs.render_only }}"
+            resolved_smoke_url="${MANUAL_SMOKE_URL:-http://127.0.0.1:30080/}"
+            resolved_smoke_host_header="${MANUAL_SMOKE_HOST_HEADER:-campus-dev.192-168-50-5.sslip.io}"
+            resolved_timeout_seconds="${MANUAL_TIMEOUT_SECONDS:-300}"
+          fi
+
+          if [[ -z "$resolved_image_tag" ]]; then
+            echo "Image tag resolved to an empty value." >&2
+            exit 1
+          fi
+
+          echo "image_tag=$resolved_image_tag" >> "$GITHUB_OUTPUT"
+          echo "render_only=$resolved_render_only" >> "$GITHUB_OUTPUT"
+          echo "smoke_url=$resolved_smoke_url" >> "$GITHUB_OUTPUT"
+          echo "smoke_host_header=$resolved_smoke_host_header" >> "$GITHUB_OUTPUT"
+          echo "timeout_seconds=$resolved_timeout_seconds" >> "$GITHUB_OUTPUT"
+
+      - name: Show deployment inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Workflow ref: $GITHUB_REF"
+          echo "Workflow SHA: $GITHUB_SHA"
+          echo "Event: ${{ github.event_name }}"
+          echo "Resolved image tag: ${{ steps.params.outputs.image_tag }}"
+          echo "Render only: ${{ steps.params.outputs.render_only }}"
+          echo "Smoke URL: ${{ steps.params.outputs.smoke_url }}"
+          echo "Smoke Host header: ${{ steps.params.outputs.smoke_host_header }}"
+          echo "Timeout seconds: ${{ steps.params.outputs.timeout_seconds }}"
+
+      - name: Verify runner prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          for cmd in bash kubectl curl mktemp sed; do
+            command -v "$cmd" >/dev/null 2>&1 || {
+              echo "Missing required command: $cmd" >&2
+              exit 1
+            }
+          done
+
+      - name: Verify cluster access
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl config current-context || true
+          kubectl get nodes
+
+      - name: Verify local ignored secret files
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Secrets stay outside git, so the runner workspace must already contain them.
+          required_files=(
+            "deploy/app/overlays/dev/secrets/db-secrets.env"
+            "deploy/app/overlays/dev/secrets/auth-secrets.env"
+          )
+
+          for path in "${required_files[@]}"; do
+            [[ -f "$path" ]] || {
+              echo "Missing required local secret file: $path" >&2
+              exit 1
+            }
+          done
+
+      - name: Render DEV overlay only
+        if: ${{ steps.params.outputs.render_only == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash deploy/scripts/apply-overlay.sh \
+            --environment dev \
+            --image-tag "${{ steps.params.outputs.image_tag }}" \
+            --render-only
+
+      - name: Apply DEV overlay
+        if: ${{ steps.params.outputs.render_only != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash deploy/scripts/apply-overlay.sh \
+            --environment dev \
+            --image-tag "${{ steps.params.outputs.image_tag }}"
+
+      - name: Verify DEV rollout
+        if: ${{ steps.params.outputs.render_only != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Smoke check targets the local ingress NodePort on S5 and uses the
+          # expected Ingress host via Host header.
+          bash deploy/scripts/verify-overlay.sh \
+            --environment dev \
+            --timeout-seconds "${{ steps.params.outputs.timeout_seconds }}" \
+            --smoke-url "${{ steps.params.outputs.smoke_url }}" \
+            --smoke-host-header "${{ steps.params.outputs.smoke_host_header }}"

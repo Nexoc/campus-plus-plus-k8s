@@ -1,5 +1,15 @@
 #!/usr/bin/env bash
 
+# apply-overlay.sh
+#
+# Purpose:
+# - render the selected Kustomize overlay with a concrete immutable image tag
+# - validate that required config and local secret files exist
+# - optionally apply the rendered manifest to the target Kubernetes namespace
+#
+# This script is used both for manual operator runs and for the self-hosted
+# DEV deploy workflow.
+
 set -euo pipefail
 
 usage() {

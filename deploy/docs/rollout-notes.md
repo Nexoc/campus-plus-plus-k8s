@@ -30,9 +30,10 @@ Primary app deployment files:
 - `deploy/app/overlays/dev/`
 - `deploy/app/overlays/prod/`
 
-Primary delivery file:
+Primary delivery files:
 
 - `.github/workflows/ci.yml`
+- `.github/workflows/deploy-dev.yml`
 
 Current DEV ingress host in repo:
 
@@ -45,11 +46,13 @@ The current repo supports this deployment flow:
 1. Build and push images through GitHub Actions.
 2. Select the immutable release tag to deploy.
 3. Prepare environment-specific config and secret env files for the DEV overlay.
-4. Apply the DEV overlay to the `S5` cluster, either manually or through the
-   helper script under `deploy/scripts/`.
-5. Wait for deployments to become ready.
-6. Verify that the importer job completed successfully.
-7. Verify access through ingress and through the `GW` forwarding path.
+4. On `push` to `main`, let the self-hosted DEV deploy workflow apply the
+   matching immutable image tag to `S5` automatically after CI succeeds.
+5. Manual reruns remain possible through the helper scripts under
+   `deploy/scripts/` or through manual workflow dispatch in GitHub Actions.
+6. Wait for deployments to become ready.
+7. Verify that the importer job completed successfully.
+8. Verify access through ingress and through the `GW` forwarding path.
 
 ## Suggested Manual DEV Commands
 
@@ -99,8 +102,17 @@ Scripted alternatives:
 
 ```bash
 bash deploy/scripts/apply-overlay.sh --environment dev --image-tag sha-676e768
-bash deploy/scripts/verify-overlay.sh --environment dev --smoke-url http://campus-dev.192-168-50-5.sslip.io
+bash deploy/scripts/verify-overlay.sh --environment dev --smoke-url http://127.0.0.1:30080/ --smoke-host-header campus-dev.192-168-50-5.sslip.io
 ```
+
+GitHub-assisted alternative:
+
+- `.github/workflows/deploy-dev.yml` now auto-runs after successful `CI Pipeline` completion for `push` events on `main`
+- it runs on the Linux self-hosted runner on `S5`
+- use the custom runner label `campus-dev`
+- keep local ignored secret files in the runner workspace
+- manual `workflow_dispatch` is still available for reruns and render-only checks
+- if manual `image_tag` is left empty, the workflow falls back to the checked-out commit SHA
 
 Before apply, replace `sha-change-me` in:
 
@@ -148,11 +160,9 @@ A DEV verification pass should confirm:
 
 The current working DEV rollout is real, but these items are still open:
 
-- deploy is still effectively manual
 - the repo does not yet store the actual `GW` config
-- ingress-nginx Helm values are now versioned as a baseline, but still need
-  reconciliation against the live Helm release
-- choosing and applying the DEV release tag is still manual
+- the auto-deploy path still depends on environment-side runner maintenance on `S5`
+- self-hosted runner registration and service management on `S5` are still environment-side tasks
 - PROD rollout should still be considered incomplete
 
 ## Exit Criteria For "DEV Verification Closed"

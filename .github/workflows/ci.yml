@@ -1,6 +1,10 @@
+# Keep this workflow name stable.
+# deploy-dev.yml listens to "CI Pipeline" via workflow_run.
 name: CI Pipeline
 
 on:
+  # main is the DEV auto-deploy branch:
+  # successful pushes publish images and then trigger the S5 deploy workflow.
   push:
     branches: ["main"]
   pull_request:
@@ -10,6 +14,8 @@ on:
 # REQUIRED FOR GHCR PUSH
 # contents: read   -> allows repository checkout/read
 # packages: write  -> allows pushing images to GHCR
+# packages: write is defined at workflow level because the image publish job
+# shares the same workflow file as the test/build jobs.
 # ==================================================
 permissions:
   contents: read
@@ -94,6 +100,8 @@ jobs:
     needs: backend-build
 
     env:
+      # CI-only deterministic runtime inputs for the smoke stack.
+      # These values are not the Kubernetes DEV secrets/config.
       BACKEND_PROFILE: dev
       AUTH_PROFILE: dev
 
@@ -209,6 +217,7 @@ jobs:
     name: Build and Push Images to GHCR
     runs-on: ubuntu-latest
     needs: docker-compose
+    # Image publication happens only for the branch that feeds DEV auto-deploy.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
     steps:
@@ -235,7 +244,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
 
-      # Compute immutable tag from current commit SHA
+      # Compute the immutable deployment tag from the current commit SHA.
+      # deploy-dev.yml derives the same sha-<shortsha> value for auto-deploy.
       - name: Compute image tags
         id: meta
         run: |
@@ -244,6 +254,8 @@ jobs:
 
       # --------------------------------------------------
       # FRONTEND IMAGE
+      # Every deployable image gets the same immutable commit tag
+      # so a rollout always uses one coherent build set.
       # --------------------------------------------------
       - name: Build and push frontend
         uses: docker/build-push-action@v6

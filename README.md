@@ -203,6 +203,7 @@ GitHub Actions currently includes:
 - Docker Compose smoke test
 - nginx config validation
 - image build and push to GHCR on `main`
+- automatic DEV deploy workflow on `S5` after successful CI on `main`
 
 CI publishes:
 
