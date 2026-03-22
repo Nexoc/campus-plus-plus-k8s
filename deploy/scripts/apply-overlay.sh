@@ -4,7 +4,8 @@
 #
 # Purpose:
 # - render the selected Kustomize overlay with a concrete immutable image tag
-# - validate that required config and local secret files exist
+# - validate that required config files exist and secret files are available
+#   either in the overlay or via a fixed host secret path
 # - optionally apply the rendered manifest to the target Kubernetes namespace
 #
 # This script is used both for manual operator runs and for the self-hosted
@@ -47,6 +48,7 @@ environment=""
 image_tag=""
 render_only="false"
 manifest_out=""
+host_secrets_root="${CAMPUS_SECRETS_ROOT:-}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -102,6 +104,28 @@ overlay_path="$repo_root/deploy/app/overlays/$environment"
 require_command kubectl
 require_command mktemp
 require_command sed
+require_command install
+
+stage_host_secret_file() {
+  local source_path="$1"
+  local target_path="$2"
+
+  [[ -f "$source_path" ]] || {
+    echo "Required host secret file not found: $source_path" >&2
+    exit 1
+  }
+
+  mkdir -p "$(dirname "$target_path")"
+  install -m 600 "$source_path" "$target_path"
+}
+
+if [[ -n "$host_secrets_root" ]]; then
+  host_secret_dir="$host_secrets_root/$environment"
+
+  echo "Staging secret files from host path '$host_secret_dir'..."
+  stage_host_secret_file "$host_secret_dir/db-secrets.env" "$overlay_path/secrets/db-secrets.env"
+  stage_host_secret_file "$host_secret_dir/auth-secrets.env" "$overlay_path/secrets/auth-secrets.env"
+fi
 
 required_files=(
   "$overlay_path/config/auth-config.env"

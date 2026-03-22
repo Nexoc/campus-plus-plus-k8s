@@ -110,7 +110,7 @@ GitHub-assisted alternative:
 - `.github/workflows/deploy-dev.yml` now auto-runs after successful `CI Pipeline` completion for `push` events on `main`
 - it runs on the Linux self-hosted runner on `S5`
 - use the custom runner label `campus-dev`
-- keep local ignored secret files in the runner workspace
+- use a fixed host secret path on `S5` and stage those files into the workspace during the deploy workflow
 - manual `workflow_dispatch` is still available for reruns and render-only checks
 - if manual `image_tag` is left empty, the workflow falls back to the checked-out commit SHA
 

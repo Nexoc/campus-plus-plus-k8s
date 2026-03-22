@@ -69,13 +69,13 @@ jobs:
     environment: dev
     env:
       KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      # Fixed host path on S5 for non-git secret material used by the DEV deploy.
+      CAMPUS_SECRETS_ROOT: /home/nexoc/campus-secrets
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # Keep local ignored secret files in the runner workspace.
-          clean: false
           # On workflow_run, deploy the exact commit that passed CI.
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
@@ -154,19 +154,19 @@ jobs:
           kubectl config current-context || true
           kubectl get nodes
 
-      - name: Verify local ignored secret files
+      - name: Verify DEV host secret files
         shell: bash
         run: |
           set -euo pipefail
-          # Secrets stay outside git, so the runner workspace must already contain them.
+          secret_dir="$CAMPUS_SECRETS_ROOT/dev"
           required_files=(
-            "deploy/app/overlays/dev/secrets/db-secrets.env"
-            "deploy/app/overlays/dev/secrets/auth-secrets.env"
+            "$secret_dir/db-secrets.env"
+            "$secret_dir/auth-secrets.env"
           )
 
           for path in "${required_files[@]}"; do
             [[ -f "$path" ]] || {
-              echo "Missing required local secret file: $path" >&2
+              echo "Missing required host secret file: $path" >&2
               exit 1
             }
           done

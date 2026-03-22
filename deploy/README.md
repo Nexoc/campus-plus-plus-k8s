@@ -94,6 +94,7 @@ Current repo model:
 - local secret env files are expected under each overlay `secrets/` directory
 - those files are ignored by git
 - create them from `deploy/templates/secrets/*.env.example`
+- self-hosted runner automation on `S5` can instead source secrets from a fixed host path under `/home/nexoc/campus-secrets/<env>/`
 
 Prepare DEV secret files:
 
@@ -178,18 +179,28 @@ Helper script prerequisites on Debian-like hosts:
 Self-hosted runner notes:
 
 - the runner should have access to `/etc/rancher/k3s/k3s.yaml`
-- local ignored secret files must already exist under `deploy/app/overlays/dev/secrets/`
-- the deploy workflow uses `actions/checkout` with `clean: false` so those local secret files survive between runs
+- DEV secret files should live on the runner host under `/home/nexoc/campus-secrets/dev/`
+- expected files there are `db-secrets.env` and `auth-secrets.env`
+- the deploy workflow verifies those host files and stages them into the checked-out overlay before `kubectl kustomize`
 - recommended custom runner labels are `campus-dev` and `s5`
+
+Prepare the fixed DEV host secret path on `S5`:
+
+```bash
+sudo mkdir -p /home/nexoc/campus-secrets/dev
+sudo cp deploy/templates/secrets/db-secrets.env.example /home/nexoc/campus-secrets/dev/db-secrets.env
+sudo cp deploy/templates/secrets/auth-secrets.env.example /home/nexoc/campus-secrets/dev/auth-secrets.env
+sudo chown -R nexoc:nexoc /home/nexoc/campus-secrets
+chmod 700 /home/nexoc/campus-secrets /home/nexoc/campus-secrets/dev
+chmod 600 /home/nexoc/campus-secrets/dev/*.env
+```
 
 ### 1. Prepare DEV secret files
 
-Create local ignored secret files from the templates:
+Choose one mode:
 
-```bash
-cp deploy/templates/secrets/db-secrets.env.example deploy/app/overlays/dev/secrets/db-secrets.env
-cp deploy/templates/secrets/auth-secrets.env.example deploy/app/overlays/dev/secrets/auth-secrets.env
-```
+- manual operator mode: create local ignored files under `deploy/app/overlays/dev/secrets/`
+- self-hosted runner mode on `S5`: maintain fixed host files under `/home/nexoc/campus-secrets/dev/`
 
 ### 2. Review DEV overlay inputs
 
@@ -198,8 +209,8 @@ Check:
 - `deploy/app/overlays/dev/config/auth-config.env`
 - `deploy/app/overlays/dev/config/backend-config.env`
 - `deploy/app/overlays/dev/config/importer-config.env`
-- `deploy/app/overlays/dev/secrets/db-secrets.env`
-- `deploy/app/overlays/dev/secrets/auth-secrets.env`
+- either local overlay secrets under `deploy/app/overlays/dev/secrets/`
+- or host-based runner secrets under `/home/nexoc/campus-secrets/dev/`
 
 ### 3. Select the DEV release tag
 
