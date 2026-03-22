@@ -11,6 +11,10 @@
 #   helm get values -n ingress-nginx ingress-nginx
 
 controller:
+  admissionWebhooks:
+    enabled: true
+  config:
+    use-forwarded-headers: "true"
   replicaCount: 1
   watchIngressWithoutClass: false
   ingressClass: nginx
