@@ -105,6 +105,7 @@ patches:
   - path: replicas-patch.yaml
   - path: ingress-patch.yaml
   - path: namespace-patch.yaml
+  - path: image-pull-policy-patch.yaml
     target:
       version: v1
       kind: Namespace
