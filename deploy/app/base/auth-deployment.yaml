@@ -36,14 +36,24 @@ spec:
             httpGet:
               path: /actuator/health
               port: http
-            initialDelaySeconds: 15
+            timeoutSeconds: 2
             periodSeconds: 10
+            failureThreshold: 6
           livenessProbe:
             httpGet:
               path: /actuator/health
               port: http
-            initialDelaySeconds: 30
+            timeoutSeconds: 2
             periodSeconds: 20
+          # Auth can take noticeably longer to boot on the small DEV node, so
+          # gate readiness/liveness with a startup probe and avoid restart loops.
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            timeoutSeconds: 2
+            periodSeconds: 10
+            failureThreshold: 18
           resources:
             requests:
               cpu: 100m

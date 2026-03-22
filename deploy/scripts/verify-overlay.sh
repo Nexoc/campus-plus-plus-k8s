@@ -94,6 +94,28 @@ fi
 
 deployments=(frontend auth backend campus-nginx)
 
+print_rollout_diagnostics() {
+  local deployment="$1"
+
+  echo "Rollout for deployment/$deployment failed. Collecting diagnostics..."
+  kubectl -n "$namespace" describe "deployment/$deployment" || true
+  kubectl -n "$namespace" get pods -l "app.kubernetes.io/name=$deployment" -o wide || true
+
+  local pod_names=()
+  while IFS= read -r pod_name; do
+    [[ -n "$pod_name" ]] || continue
+    pod_names+=("$pod_name")
+  done < <(
+    kubectl -n "$namespace" get pods -l "app.kubernetes.io/name=$deployment" \
+      -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true
+  )
+
+  for pod_name in "${pod_names[@]}"; do
+    echo "Describing pod/$pod_name ..."
+    kubectl -n "$namespace" describe "pod/$pod_name" || true
+  done
+}
+
 echo "Verifying namespace '$namespace'..."
 kubectl -n "$namespace" get pods
 kubectl -n "$namespace" get ingress
@@ -101,7 +123,10 @@ kubectl -n "$namespace" get jobs
 
 for deployment in "${deployments[@]}"; do
   echo "Waiting for deployment/$deployment rollout..."
-  kubectl -n "$namespace" rollout status "deployment/$deployment" --timeout="${timeout_seconds}s"
+  if ! kubectl -n "$namespace" rollout status "deployment/$deployment" --timeout="${timeout_seconds}s"; then
+    print_rollout_diagnostics "$deployment"
+    exit 1
+  fi
 done
 
 echo "Waiting for importer job completion..."
