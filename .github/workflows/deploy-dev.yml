@@ -187,6 +187,29 @@ jobs:
         run: |
           set -euo pipefail
 
+          retry_command() {
+            local max_attempts="$1"
+            local sleep_seconds="$2"
+            shift 2
+
+            local attempt=1
+            while true; do
+              if "$@"; then
+                return 0
+              fi
+
+              if (( attempt >= max_attempts )); then
+                echo "Command failed after ${attempt} attempts: $*" >&2
+                return 1
+              fi
+
+              echo "Attempt ${attempt} failed: $*" >&2
+              echo "Retrying in ${sleep_seconds}s..." >&2
+              sleep "$sleep_seconds"
+              attempt=$((attempt + 1))
+            done
+          }
+
           required_crds=(
             gateways.gateway.networking.k8s.io
             gatewayclasses.gateway.networking.k8s.io
@@ -203,29 +226,45 @@ jobs:
 
           # Always run helm upgrade so changes to values-dev.yaml are applied to
           # an already-installed controller as well.
+          retry_command 5 15 \
           helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
             --version v1.7.0 \
             --namespace envoy-gateway-system \
             --create-namespace \
             -f deploy/infra/envoy-gateway/values-dev.yaml
 
+          retry_command 5 10 \
           kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 
-          controller_deployment="$(
-            kubectl -n envoy-gateway-system get deployment \
-              -l app.kubernetes.io/instance=eg \
-              -o jsonpath='{.items[0].metadata.name}'
-          )"
+          controller_deployment=""
+          for attempt in 1 2 3 4 5; do
+            controller_deployment="$(
+              kubectl -n envoy-gateway-system get deployment \
+                -l app.kubernetes.io/instance=eg \
+                -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true
+            )"
+
+            if [[ -n "$controller_deployment" ]]; then
+              break
+            fi
+
+            echo "Envoy Gateway deployment not discoverable yet. Retrying in 10s..." >&2
+            sleep 10
+          done
 
           if [[ -z "$controller_deployment" ]]; then
             echo "Envoy Gateway deployment was not found after installation." >&2
             exit 1
           fi
 
+          retry_command 5 15 \
           kubectl -n envoy-gateway-system rollout status "deployment/$controller_deployment" --timeout=300s
+
+          retry_command 5 10 \
           kubectl get gatewayclass campus-envoy
 
           for crd in "${required_crds[@]}"; do
+            retry_command 5 10 \
             kubectl get crd "$crd" >/dev/null
           done
 
