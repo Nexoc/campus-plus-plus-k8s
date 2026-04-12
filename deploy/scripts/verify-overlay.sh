@@ -199,7 +199,18 @@ envoy_nodeport_is_published() {
 
   kubectl get svc -A \
     -o jsonpath='{range .items[*]}{.spec.type}{"|"}{range .spec.ports[*]}{.nodePort}{" "}{end}{"\n"}{end}' 2>/dev/null \
-    | grep -Eq "^NodePort\\|.*([^0-9]|^)${envoy_smoke_port}([^0-9]|$)"
+    | awk -F'|' -v port="$envoy_smoke_port" '
+        $1 == "NodePort" {
+          n = split($2, ports, " ")
+          for (i = 1; i <= n; i++) {
+            if (ports[i] == port) {
+              found = 1
+              exit
+            }
+          }
+        }
+        END { exit(found ? 0 : 1) }
+      '
 }
 
 run_smoke_check() {

@@ -161,8 +161,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          retry_command() {
+            local max_attempts="$1"
+            local sleep_seconds="$2"
+            shift 2
+
+            local attempt=1
+            while true; do
+              if "$@"; then
+                return 0
+              fi
+
+              if (( attempt >= max_attempts )); then
+                echo "Command failed after ${attempt} attempts: $*" >&2
+                return 1
+              fi
+
+              echo "Attempt ${attempt} failed: $*" >&2
+              echo "Retrying in ${sleep_seconds}s..." >&2
+              sleep "$sleep_seconds"
+              attempt=$((attempt + 1))
+            done
+          }
+
           kubectl config current-context || true
-          kubectl get nodes
+          retry_command 5 10 kubectl get nodes
 
       - name: Verify DEV host secret files
         shell: bash
