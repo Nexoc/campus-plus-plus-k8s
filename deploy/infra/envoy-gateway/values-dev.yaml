@@ -1,0 +1,22 @@
+# Baseline Envoy Gateway values for the current DEV model on S5.
+#
+# These values reflect the intended phase-1 setup:
+# - k3s single-node DEV cluster
+# - standard deployment mode in namespace `envoy-gateway-system`
+# - controller watches only the DEV application namespace
+# - one controller replica for DEV
+
+deployment:
+  replicas: 1
+
+config:
+  envoyGateway:
+    gateway:
+      controllerName: gateway.envoyproxy.io/gatewayclass-controller
+    provider:
+      type: Kubernetes
+      kubernetes:
+        watch:
+          type: Namespaces
+          namespaces:
+            - campus-dev

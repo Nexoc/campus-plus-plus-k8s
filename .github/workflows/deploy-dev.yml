@@ -22,14 +22,19 @@ on:
         default: false
         type: boolean
       smoke_url:
-        description: Runner-local smoke URL for ingress-nginx
+        description: Runner-local smoke URL for the legacy ingress path
         required: false
         default: http://127.0.0.1:30080/
         type: string
       smoke_host_header:
-        description: Optional Host header for ingress smoke checks
+        description: Optional Host header for the legacy ingress smoke check
         required: false
         default: campus-dev.192-168-50-5.sslip.io
+        type: string
+      envoy_smoke_url:
+        description: Runner-local smoke URL for the Envoy staging NodePort
+        required: false
+        default: http://127.0.0.1:31080/
         type: string
       timeout_seconds:
         description: Rollout and smoke timeout in seconds
@@ -87,6 +92,7 @@ jobs:
           MANUAL_IMAGE_TAG: ${{ inputs.image_tag }}
           MANUAL_SMOKE_URL: ${{ inputs.smoke_url }}
           MANUAL_SMOKE_HOST_HEADER: ${{ inputs.smoke_host_header }}
+          MANUAL_ENVOY_SMOKE_URL: ${{ inputs.envoy_smoke_url }}
           MANUAL_TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
           WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
@@ -99,6 +105,7 @@ jobs:
             resolved_render_only="false"
             resolved_smoke_url="http://127.0.0.1:30080/"
             resolved_smoke_host_header="campus-dev.192-168-50-5.sslip.io"
+            resolved_envoy_smoke_url="http://127.0.0.1:31080/"
             resolved_timeout_seconds="300"
           else
             resolved_image_tag="${MANUAL_IMAGE_TAG:-}"
@@ -109,6 +116,7 @@ jobs:
             resolved_render_only="${{ inputs.render_only }}"
             resolved_smoke_url="${MANUAL_SMOKE_URL:-http://127.0.0.1:30080/}"
             resolved_smoke_host_header="${MANUAL_SMOKE_HOST_HEADER:-campus-dev.192-168-50-5.sslip.io}"
+            resolved_envoy_smoke_url="${MANUAL_ENVOY_SMOKE_URL:-http://127.0.0.1:31080/}"
             resolved_timeout_seconds="${MANUAL_TIMEOUT_SECONDS:-300}"
           fi
 
@@ -121,6 +129,7 @@ jobs:
           echo "render_only=$resolved_render_only" >> "$GITHUB_OUTPUT"
           echo "smoke_url=$resolved_smoke_url" >> "$GITHUB_OUTPUT"
           echo "smoke_host_header=$resolved_smoke_host_header" >> "$GITHUB_OUTPUT"
+          echo "envoy_smoke_url=$resolved_envoy_smoke_url" >> "$GITHUB_OUTPUT"
           echo "timeout_seconds=$resolved_timeout_seconds" >> "$GITHUB_OUTPUT"
 
       - name: Show deployment inputs
@@ -134,6 +143,7 @@ jobs:
           echo "Render only: ${{ steps.params.outputs.render_only }}"
           echo "Smoke URL: ${{ steps.params.outputs.smoke_url }}"
           echo "Smoke Host header: ${{ steps.params.outputs.smoke_host_header }}"
+          echo "Envoy smoke URL: ${{ steps.params.outputs.envoy_smoke_url }}"
           echo "Timeout seconds: ${{ steps.params.outputs.timeout_seconds }}"
 
       - name: Verify runner prerequisites
@@ -171,6 +181,68 @@ jobs:
             }
           done
 
+      - name: Ensure Envoy Gateway for DEV
+        if: ${{ steps.params.outputs.render_only != 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_crds=(
+            gateways.gateway.networking.k8s.io
+            gatewayclasses.gateway.networking.k8s.io
+            httproutes.gateway.networking.k8s.io
+            envoyproxies.gateway.envoyproxy.io
+            clienttrafficpolicies.gateway.envoyproxy.io
+          )
+
+          envoy_missing="false"
+
+          kubectl get ns campus-dev >/dev/null 2>&1 || kubectl create ns campus-dev
+          kubectl get ns envoy-gateway-system >/dev/null 2>&1 || envoy_missing="true"
+
+          if ! kubectl -n envoy-gateway-system get deployment -l app.kubernetes.io/instance=eg -o name 2>/dev/null | grep -q .; then
+            envoy_missing="true"
+          fi
+
+          for crd in "${required_crds[@]}"; do
+            kubectl get crd "$crd" >/dev/null 2>&1 || envoy_missing="true"
+          done
+
+          if [[ "$envoy_missing" == "true" ]]; then
+            command -v helm >/dev/null 2>&1 || {
+              echo "Missing required command: helm" >&2
+              exit 1
+            }
+
+            helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
+              --version v1.7.0 \
+              --namespace envoy-gateway-system \
+              --create-namespace \
+              -f deploy/infra/envoy-gateway/values-dev.yaml
+          else
+            echo "Envoy Gateway controller and CRDs already present."
+          fi
+
+          kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
+
+          controller_deployment="$(
+            kubectl -n envoy-gateway-system get deployment \
+              -l app.kubernetes.io/instance=eg \
+              -o jsonpath='{.items[0].metadata.name}'
+          )"
+
+          if [[ -z "$controller_deployment" ]]; then
+            echo "Envoy Gateway deployment was not found after installation." >&2
+            exit 1
+          fi
+
+          kubectl -n envoy-gateway-system rollout status "deployment/$controller_deployment" --timeout=300s
+          kubectl get gatewayclass campus-envoy
+
+          for crd in "${required_crds[@]}"; do
+            kubectl get crd "$crd" >/dev/null
+          done
+
       - name: Render DEV overlay only
         if: ${{ steps.params.outputs.render_only == 'true' }}
         shell: bash
@@ -195,10 +267,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # Smoke check targets the local ingress NodePort on S5 and uses the
-          # expected Ingress host via Host header.
+          # Smoke check targets the local legacy ingress NodePort on S5 and uses
+          # the expected host via Host header. During phase 1 we also
+          # probe the Envoy staging NodePort separately.
           bash deploy/scripts/verify-overlay.sh \
             --environment dev \
             --timeout-seconds "${{ steps.params.outputs.timeout_seconds }}" \
             --smoke-url "${{ steps.params.outputs.smoke_url }}" \
-            --smoke-host-header "${{ steps.params.outputs.smoke_host_header }}"
+            --smoke-host-header "${{ steps.params.outputs.smoke_host_header }}" \
+            --envoy-smoke-url "${{ steps.params.outputs.envoy_smoke_url }}"

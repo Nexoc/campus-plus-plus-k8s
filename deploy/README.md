@@ -27,6 +27,10 @@ Current target request path:
 
 `Client -> GW -> ingress-nginx -> campus-nginx -> services`
 
+Current phase-1 staging path:
+
+`Client -> GW -> Envoy Gateway -> campus-nginx -> services`
+
 Current confirmed DEV path:
 
 `GitHub -> GHCR -> S5 k3s -> ingress-nginx -> campus-nginx -> app -> PostgreSQL on S4`
@@ -36,6 +40,7 @@ Key points:
 - Kubernetes distro is `k3s`
 - app manifests are managed with Kustomize
 - shared infrastructure such as `ingress-nginx` is managed with Helm values
+- phase 1 also introduces `Envoy Gateway` as a parallel staging entry path
 - PostgreSQL stays outside Kubernetes on `S4`
 - `campus-nginx` keeps the application-specific routing and `auth_request`
   behavior
@@ -54,6 +59,7 @@ deploy/
 │   ├── config/
 │   └── secrets/
 ├── infra/
+│   ├── envoy-gateway/
 │   └── ingress-nginx/
 └── docs/
 ```
@@ -64,6 +70,8 @@ Before applying any overlay, make sure:
 
 - your `kubectl` context points to the intended cluster
 - `ingress-nginx` is installed for that cluster
+- `Envoy Gateway` is installed for that cluster, or the DEV deploy workflow is
+  allowed to install it automatically
 - the target cluster can pull images from GHCR
 - the cluster can reach PostgreSQL on `S4`
 - overlay config and secret env files are populated with environment-specific
@@ -137,6 +145,30 @@ helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
   -f deploy/infra/ingress-nginx/values-prod.yaml
 ```
 
+## Install Or Update Envoy Gateway
+
+Install or upgrade DEV controller:
+
+```bash
+helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
+  --version v1.7.0 \
+  --namespace envoy-gateway-system \
+  --create-namespace \
+  -f deploy/infra/envoy-gateway/values-dev.yaml
+kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
+```
+
+Install or upgrade PROD controller:
+
+```bash
+helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
+  --version v1.7.0 \
+  --namespace envoy-gateway-system \
+  --create-namespace \
+  -f deploy/infra/envoy-gateway/values-prod.yaml
+kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
+```
+
 ## DEV Runbook
 
 ### Scripted Shortcuts
@@ -151,7 +183,7 @@ bash deploy/scripts/apply-overlay.sh --environment dev --image-tag sha-676e768
 Verify the rollout:
 
 ```bash
-bash deploy/scripts/verify-overlay.sh --environment dev --smoke-url http://127.0.0.1:30080/ --smoke-host-header campus-dev.192-168-50-5.sslip.io
+bash deploy/scripts/verify-overlay.sh --environment dev --smoke-url http://127.0.0.1:30080/ --smoke-host-header campus-dev.192-168-50-5.sslip.io --envoy-smoke-url http://127.0.0.1:31080/
 ```
 
 The helper scripts do not replace operator judgment, but they reduce repeated
@@ -166,12 +198,13 @@ GitHub-assisted alternative:
 - if manual `image_tag` is left empty, the workflow falls back to the checked-out commit SHA
 - the workflow is intended for a Linux self-hosted runner on `S5`
 - the workflow expects a custom runner label `campus-dev`
-- expected workflow inputs are `image_tag`, `render_only`, `smoke_url`, `smoke_host_header`, and `timeout_seconds`
+- expected workflow inputs are `image_tag`, `render_only`, `smoke_url`, `smoke_host_header`, `envoy_smoke_url`, and `timeout_seconds`
 
 Helper script prerequisites on Debian-like hosts:
 
 - `bash`
 - `kubectl`
+- `helm` when the workflow needs to install `Envoy Gateway`
 - `mktemp`
 - `sed`
 - `curl` for smoke checks in `verify-overlay.sh`
@@ -254,6 +287,10 @@ kubectl -n campus-dev rollout status deployment/campus-nginx
 ```bash
 kubectl -n campus-dev get all
 kubectl -n campus-dev get ingress
+kubectl -n campus-dev get gateway
+kubectl -n campus-dev get httproute
+kubectl -n campus-dev get envoyproxy
+kubectl -n campus-dev get clienttrafficpolicy
 kubectl -n campus-dev get jobs
 ```
 
@@ -262,6 +299,7 @@ Expected high-level result:
 - `frontend`, `auth`, `backend`, and `campus-nginx` deployments are ready
 - `campus-importer` completes successfully
 - the `campus` ingress exists in namespace `campus-dev`
+- the `campus` gateway and route resources exist in namespace `campus-dev`
 
 ### 8. Verify importer result
 
@@ -289,11 +327,18 @@ Check both:
 
 - ingress host from the DEV overlay
 - `GW` forwarding path to `S5:30080`
+- Envoy staging path on `S5:31080`
 
 From `S5` itself, the most reliable ingress smoke probe is:
 
 ```bash
 curl -I -H 'Host: campus-dev.192-168-50-5.sslip.io' http://127.0.0.1:30080/
+```
+
+The phase-1 Envoy staging smoke probe is:
+
+```bash
+curl -I -H 'Host: campus-dev.192-168-50-5.sslip.io' http://127.0.0.1:31080/
 ```
 
 At the time of writing, the DEV ingress host in repo is:
@@ -363,6 +408,8 @@ Useful commands during rollout:
 
 ```bash
 kubectl -n campus-dev describe ingress campus
+kubectl -n campus-dev describe gateway campus
+kubectl -n campus-dev describe httproute campus
 kubectl -n campus-dev describe job campus-importer
 kubectl -n campus-dev get pods -o wide
 kubectl -n campus-dev logs deployment/auth
@@ -391,4 +438,5 @@ Operational implication:
 - `deploy/docs/environments.md`
 - `deploy/docs/naming-convention.md`
 - `deploy/docs/rollout-notes.md`
+- `deploy/infra/envoy-gateway/README.md`
 - `deploy/infra/ingress-nginx/README.md`

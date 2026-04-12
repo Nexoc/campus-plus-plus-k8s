@@ -12,6 +12,10 @@ Current confirmed working path:
 
 `GitHub -> GHCR -> S5 k3s -> ingress-nginx -> campus-nginx -> app services -> PostgreSQL on S4`
 
+Current phase-1 staging path in repo:
+
+`GitHub -> GHCR -> S5 k3s -> Envoy Gateway -> campus-nginx -> app services -> PostgreSQL on S4`
+
 Current confirmed DEV characteristics:
 
 - GitHub Actions builds and pushes images to GHCR
@@ -19,6 +23,7 @@ Current confirmed DEV characteristics:
 - the DEV overlay is intended to deploy from pinned immutable image tags
 - application manifests are applied with Kustomize
 - auth, backend, frontend, campus-nginx, and importer are present in the app model
+- phase-1 manifests also include `Gateway`, `HTTPRoute`, `EnvoyProxy`, and `ClientTrafficPolicy`
 - the application uses PostgreSQL on `S4`, outside Kubernetes
 - `GW` provides the practical external access path to DEV
 
@@ -52,7 +57,7 @@ The current repo supports this deployment flow:
    `deploy/scripts/` or through manual workflow dispatch in GitHub Actions.
 6. Wait for deployments to become ready.
 7. Verify that the importer job completed successfully.
-8. Verify access through ingress and through the `GW` forwarding path.
+8. Verify access through the legacy ingress path and through the Envoy staging path.
 
 ## Suggested Manual DEV Commands
 
@@ -73,6 +78,10 @@ Inspect resources:
 ```bash
 kubectl -n campus-dev get all
 kubectl -n campus-dev get ingress
+kubectl -n campus-dev get gateway
+kubectl -n campus-dev get httproute
+kubectl -n campus-dev get envoyproxy
+kubectl -n campus-dev get clienttrafficpolicy
 kubectl -n campus-dev get jobs
 ```
 
@@ -102,7 +111,7 @@ Scripted alternatives:
 
 ```bash
 bash deploy/scripts/apply-overlay.sh --environment dev --image-tag sha-676e768
-bash deploy/scripts/verify-overlay.sh --environment dev --smoke-url http://127.0.0.1:30080/ --smoke-host-header campus-dev.192-168-50-5.sslip.io
+bash deploy/scripts/verify-overlay.sh --environment dev --smoke-url http://127.0.0.1:30080/ --smoke-host-header campus-dev.192-168-50-5.sslip.io --envoy-smoke-url http://127.0.0.1:31080/
 ```
 
 GitHub-assisted alternative:
@@ -151,7 +160,9 @@ A DEV verification pass should confirm:
 - `campus-nginx` pod is `Ready`
 - `campus-importer` job completed with exit code `0`
 - `Ingress` exists in namespace `campus-dev`
+- `Gateway`, `HTTPRoute`, `EnvoyProxy`, and `ClientTrafficPolicy` exist in namespace `campus-dev`
 - app is reachable via the DEV ingress host
+- app is reachable via the Envoy staging NodePort on `31080`
 - app is reachable through the `GW` reverse-proxy path
 - auth-protected requests work through `campus-nginx`
 - backend is using the external PostgreSQL instance on `S4`
@@ -174,4 +185,5 @@ DEV can be treated as formally closed when all of the following are true:
 - importer rerun behavior is documented
 - `GW` access path is documented
 - the repo documents the current ingress-nginx setup
+- the repo documents the phase-1 Envoy Gateway staging setup
 - delivery moves toward immutable image references for actual deployments

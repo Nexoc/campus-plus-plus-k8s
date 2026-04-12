@@ -1,0 +1,16 @@
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: campus-edge
+  labels:
+    app.kubernetes.io/name: campus-edge
+    app.kubernetes.io/component: gateway-data-plane
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyDeployment:
+        replicas: 1
+      envoyService:
+        type: NodePort
+        externalTrafficPolicy: Cluster

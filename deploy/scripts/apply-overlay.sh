@@ -7,6 +7,8 @@
 # - validate that required config files exist and secret files are available
 #   either in the overlay or via a fixed host secret path
 # - optionally apply the rendered manifest to the target Kubernetes namespace
+# - show phase-1 rollout resources for both the legacy ingress path and the
+#   Envoy Gateway staging path
 #
 # This script is used both for manual operator runs and for the self-hosted
 # DEV deploy workflow.
@@ -179,4 +181,8 @@ kubectl apply -f "$rendered_manifest_path"
 echo "Current resource overview:"
 kubectl -n "$namespace" get pods
 kubectl -n "$namespace" get ingress
+kubectl -n "$namespace" get gateway
+kubectl -n "$namespace" get httproute
+kubectl -n "$namespace" get envoyproxy
+kubectl -n "$namespace" get clienttrafficpolicy
 kubectl -n "$namespace" get jobs

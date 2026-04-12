@@ -61,6 +61,8 @@ images:
 
 patches:
   - path: replicas-patch.yaml
+  - path: httproute-patch.yaml
+  - path: envoyproxy-patch.yaml
   - path: ingress-patch.yaml
   - path: namespace-patch.yaml
     target:

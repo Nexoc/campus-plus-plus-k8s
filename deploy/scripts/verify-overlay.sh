@@ -5,7 +5,7 @@
 # Purpose:
 # - verify rollout status for the main application deployments in a target namespace
 # - confirm importer completion when the Job still exists
-# - check the ingress resource and optionally run an HTTP smoke test
+# - check the ingress resource and optionally run one or more HTTP smoke tests
 #
 # This script is used both for manual verification and for the self-hosted
 # DEV deploy workflow after apply has finished.
@@ -15,15 +15,17 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  deploy/scripts/verify-overlay.sh --environment <dev|prod> [--smoke-url <url>] [--smoke-host-header <host>] [--timeout-seconds <seconds>]
+  deploy/scripts/verify-overlay.sh --environment <dev|prod> [--smoke-url <url>] [--smoke-host-header <host>] [--envoy-smoke-url <url>] [--envoy-smoke-host-header <host>] [--timeout-seconds <seconds>]
 
 Required:
   --environment     Target namespace selector: dev or prod
 
 Optional:
-  --smoke-url       HTTP endpoint to probe after rollout checks
-  --smoke-host-header Optional Host header for ingress smoke checks
-  --timeout-seconds Timeout used for rollout and job completion checks
+  --smoke-url               HTTP endpoint to probe after rollout checks
+  --smoke-host-header       Optional Host header for the primary ingress smoke check
+  --envoy-smoke-url         Optional HTTP endpoint for the Envoy staging smoke check
+  --envoy-smoke-host-header Optional Host header for the Envoy staging smoke check
+  --timeout-seconds         Timeout used for rollout and job completion checks
 EOF
 }
 
@@ -38,6 +40,8 @@ require_command() {
 environment=""
 smoke_url=""
 smoke_host_header=""
+envoy_smoke_url=""
+envoy_smoke_host_header=""
 timeout_seconds="180"
 
 while [[ $# -gt 0 ]]; do
@@ -52,6 +56,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --smoke-host-header)
       smoke_host_header="${2:-}"
+      shift 2
+      ;;
+    --envoy-smoke-url)
+      envoy_smoke_url="${2:-}"
+      shift 2
+      ;;
+    --envoy-smoke-host-header)
+      envoy_smoke_host_header="${2:-}"
       shift 2
       ;;
     --timeout-seconds)
@@ -88,7 +100,7 @@ case "$environment" in
 esac
 
 require_command kubectl
-if [[ -n "$smoke_url" ]]; then
+if [[ -n "$smoke_url" || -n "$envoy_smoke_url" ]]; then
   require_command curl
 fi
 
@@ -116,6 +128,38 @@ print_rollout_diagnostics() {
   done
 }
 
+run_smoke_check() {
+  local label="$1"
+  local url="$2"
+  local host_header="$3"
+
+  [[ -n "$url" ]] || return 0
+
+  echo "Running $label smoke check against $url ..."
+
+  local -a curl_args=(
+    -sS
+    -o /dev/null
+    -w '%{http_code}'
+    --max-time "$timeout_seconds"
+  )
+
+  if [[ -n "$host_header" ]]; then
+    echo "Using Host header for $label smoke check: $host_header"
+    curl_args+=(-H "Host: $host_header")
+  fi
+
+  local http_code
+  http_code="$(curl "${curl_args[@]}" "$url")"
+
+  if [[ "$http_code" -lt 200 || "$http_code" -ge 400 ]]; then
+    echo "$label smoke check returned HTTP $http_code for '$url'" >&2
+    exit 1
+  fi
+
+  echo "$label smoke check succeeded with HTTP $http_code."
+}
+
 echo "Verifying namespace '$namespace'..."
 kubectl -n "$namespace" get pods
 kubectl -n "$namespace" get ingress
@@ -141,31 +185,24 @@ fi
 echo "Checking ingress resource..."
 kubectl -n "$namespace" get ingress campus
 
-if [[ -n "$smoke_url" ]]; then
-  echo "Running smoke check against $smoke_url ..."
+if [[ -n "$envoy_smoke_url" ]]; then
+  echo "Checking Gateway API resources..."
+  kubectl -n "$namespace" get gateway campus
+  kubectl -n "$namespace" get httproute campus
+  kubectl -n "$namespace" get envoyproxy campus-edge
+  kubectl -n "$namespace" get clienttrafficpolicy campus-edge
+fi
 
-  curl_args=(
-    -sS
-    -o /dev/null
-    -w '%{http_code}'
-    --max-time "$timeout_seconds"
-  )
+run_smoke_check "Primary ingress" "$smoke_url" "$smoke_host_header"
 
-  if [[ -n "$smoke_host_header" ]]; then
-    echo "Using Host header: $smoke_host_header"
-    curl_args+=(-H "Host: $smoke_host_header")
-  fi
+if [[ -z "$smoke_url" ]]; then
+  echo "Primary smoke URL not provided. Skipping primary ingress smoke check."
+fi
 
-  http_code="$(curl "${curl_args[@]}" "$smoke_url")"
+run_smoke_check "Envoy staging" "$envoy_smoke_url" "${envoy_smoke_host_header:-$smoke_host_header}"
 
-  if [[ "$http_code" -lt 200 || "$http_code" -ge 400 ]]; then
-    echo "Smoke check returned HTTP $http_code for '$smoke_url'" >&2
-    exit 1
-  fi
-
-  echo "Smoke check succeeded with HTTP $http_code."
-else
-  echo "Smoke URL not provided. Skipping HTTP smoke check."
+if [[ -z "$envoy_smoke_url" ]]; then
+  echo "Envoy staging smoke URL not provided. Skipping Envoy staging smoke check."
 fi
 
 echo "Verification completed successfully for '$environment'."

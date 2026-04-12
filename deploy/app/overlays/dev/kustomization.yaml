@@ -67,10 +67,14 @@ images:
 
 # Patches:
 # - replicas-patch.yaml adjusts DEV replica counts
+# - httproute-patch.yaml overrides DEV Gateway API hostnames
+# - envoyproxy-patch.yaml assigns the DEV staging NodePort for Envoy
 # - ingress-patch.yaml overrides DEV ingress settings
 # - namespace-patch.yaml renames and labels the Namespace
 patches:
   - path: replicas-patch.yaml
+  - path: httproute-patch.yaml
+  - path: envoyproxy-patch.yaml
   - path: ingress-patch.yaml
   - path: namespace-patch.yaml
     target:

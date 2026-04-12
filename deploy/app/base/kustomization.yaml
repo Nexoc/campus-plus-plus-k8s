@@ -12,6 +12,10 @@ resources:
   - nginx-deployment.yaml
   - nginx-service.yaml
   - importer-job.yaml
+  - envoyproxy.yaml
+  - gateway.yaml
+  - httproute.yaml
+  - clienttrafficpolicy.yaml
   - ingress.yaml
 
 transformers:

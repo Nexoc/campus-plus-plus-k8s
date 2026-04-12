@@ -1,0 +1,21 @@
+# Baseline Envoy Gateway values for the target PROD model on S1/S2/S3.
+#
+# Intended behavior:
+# - standard deployment mode in namespace `envoy-gateway-system`
+# - controller watches only the PROD application namespace
+# - more than one controller replica for better availability than DEV
+
+deployment:
+  replicas: 2
+
+config:
+  envoyGateway:
+    gateway:
+      controllerName: gateway.envoyproxy.io/gatewayclass-controller
+    provider:
+      type: Kubernetes
+      kubernetes:
+        watch:
+          type: Namespaces
+          namespaces:
+            - campus-prod

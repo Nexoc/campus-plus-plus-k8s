@@ -49,6 +49,10 @@ The current working DEV vertical slice is:
 
 `Client -> GW -> S5 NodePort -> ingress-nginx -> campus-nginx -> services -> PostgreSQL on S4`
 
+Current phase-1 staging slice in repo is:
+
+`Client -> GW -> S5 NodePort -> Envoy Gateway -> campus-nginx -> services -> PostgreSQL on S4`
+
 Confirmed characteristics:
 
 - `S5` runs k3s
@@ -56,8 +60,12 @@ Confirmed characteristics:
 - `ingress-nginx` is installed and active
 - the controller is reachable through NodePort `30080/30443`
 - `IngressClass` is `nginx`
+- Envoy Gateway is introduced as a parallel phase-1 staging entry path
+- the staging Envoy HTTP NodePort in repo is `31080`
 - the DEV overlay pulls application images from GHCR
 - application traffic enters Kubernetes through an Ingress and then reaches `campus-nginx`
+- the phase-1 staging path enters Kubernetes through `Gateway` and `HTTPRoute`
+- both paths still converge on `campus-nginx`
 - `campus-nginx` keeps the app-level routing and `auth_request` logic
 - PostgreSQL stays outside Kubernetes on `S4`
 
@@ -70,6 +78,7 @@ The intended model is:
 
 - k3s cluster on `S1`, `S2`, `S3`
 - ingress-nginx as the cluster ingress layer
+- Envoy Gateway as the Gateway API-based replacement path
 - `campus-nginx` as the internal application gateway
 - PostgreSQL still external on `S4`
 - external entry through `GW`
@@ -93,6 +102,7 @@ Application deployment uses:
 
 - Kustomize for app manifests under `deploy/app/`
 - Helm only for shared infrastructure such as `ingress-nginx`
+- Helm also for shared infrastructure such as `Envoy Gateway`
 - environment-specific `ConfigMap` generation from env files
 - environment-specific `Secret` generation from env files
 
@@ -110,6 +120,7 @@ The repository already includes:
 - separate `dev` and `prod` overlays
 - a DEV image strategy based on GHCR images
 - versioned ingress-nginx values baselines in `deploy/infra/ingress-nginx`
+- phase-1 Envoy Gateway baselines in `deploy/infra/envoy-gateway`
 - a DEV deploy workflow for a Linux self-hosted runner on `S5`
 - an automatic `main -> CI -> DEV deploy` path for the `S5` runner
 
