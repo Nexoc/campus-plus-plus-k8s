@@ -195,33 +195,19 @@ jobs:
             clienttrafficpolicies.gateway.envoyproxy.io
           )
 
-          envoy_missing="false"
-
           kubectl get ns campus-dev >/dev/null 2>&1 || kubectl create ns campus-dev
-          kubectl get ns envoy-gateway-system >/dev/null 2>&1 || envoy_missing="true"
+          command -v helm >/dev/null 2>&1 || {
+            echo "Missing required command: helm" >&2
+            exit 1
+          }
 
-          if ! kubectl -n envoy-gateway-system get deployment -l app.kubernetes.io/instance=eg -o name 2>/dev/null | grep -q .; then
-            envoy_missing="true"
-          fi
-
-          for crd in "${required_crds[@]}"; do
-            kubectl get crd "$crd" >/dev/null 2>&1 || envoy_missing="true"
-          done
-
-          if [[ "$envoy_missing" == "true" ]]; then
-            command -v helm >/dev/null 2>&1 || {
-              echo "Missing required command: helm" >&2
-              exit 1
-            }
-
-            helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
-              --version v1.7.0 \
-              --namespace envoy-gateway-system \
-              --create-namespace \
-              -f deploy/infra/envoy-gateway/values-dev.yaml
-          else
-            echo "Envoy Gateway controller and CRDs already present."
-          fi
+          # Always run helm upgrade so changes to values-dev.yaml are applied to
+          # an already-installed controller as well.
+          helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
+            --version v1.7.0 \
+            --namespace envoy-gateway-system \
+            --create-namespace \
+            -f deploy/infra/envoy-gateway/values-dev.yaml
 
           kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 

@@ -37,6 +37,10 @@ require_command() {
   }
 }
 
+current_epoch_seconds() {
+  date +%s
+}
+
 environment=""
 smoke_url=""
 smoke_host_header=""
@@ -102,6 +106,7 @@ esac
 require_command kubectl
 if [[ -n "$smoke_url" || -n "$envoy_smoke_url" ]]; then
   require_command curl
+  require_command mktemp
 fi
 
 deployments=(frontend auth backend campus-nginx)
@@ -128,6 +133,75 @@ print_rollout_diagnostics() {
   done
 }
 
+print_gateway_diagnostics() {
+  echo "Gateway API diagnostics for namespace '$namespace'..."
+  kubectl -n "$namespace" get gateway,httproute,envoyproxy,clienttrafficpolicy || true
+  kubectl -n "$namespace" describe gateway campus || true
+  kubectl -n "$namespace" describe httproute campus || true
+  kubectl -n "$namespace" get envoyproxy campus-edge -o yaml || true
+  kubectl -n "$namespace" get clienttrafficpolicy campus-edge -o yaml || true
+  kubectl -n envoy-gateway-system get pods,svc || true
+  kubectl -n envoy-gateway-system logs deployment/envoy-gateway --tail=100 || true
+}
+
+wait_until() {
+  local description="$1"
+  local timeout="$2"
+  shift 2
+  local deadline=$(( $(current_epoch_seconds) + timeout ))
+
+  echo "Waiting for $description ..."
+  while true; do
+    if "$@"; then
+      echo "$description is ready."
+      return 0
+    fi
+
+    if (( $(current_epoch_seconds) >= deadline )); then
+      echo "Timed out waiting for $description." >&2
+      return 1
+    fi
+
+    sleep 5
+  done
+}
+
+gateway_has_condition() {
+  local type="$1"
+  local expected_status="$2"
+
+  kubectl -n "$namespace" get gateway campus \
+    -o jsonpath='{range .status.conditions[*]}{.type}{"="}{.status}{"\n"}{end}' 2>/dev/null \
+    | grep -q "^${type}=${expected_status}$"
+}
+
+httproute_has_condition() {
+  local type="$1"
+  local expected_status="$2"
+
+  kubectl -n "$namespace" get httproute campus \
+    -o jsonpath='{range .status.parents[*].conditions[*]}{.type}{"="}{.status}{"\n"}{end}' 2>/dev/null \
+    | grep -q "^${type}=${expected_status}$"
+}
+
+envoyproxy_exists() {
+  kubectl -n "$namespace" get envoyproxy campus-edge >/dev/null 2>&1
+}
+
+clienttrafficpolicy_exists() {
+  kubectl -n "$namespace" get clienttrafficpolicy campus-edge >/dev/null 2>&1
+}
+
+envoy_nodeport_is_published() {
+  local envoy_smoke_port="${1:-}"
+
+  [[ -n "$envoy_smoke_port" ]] || return 0
+
+  kubectl get svc -A \
+    -o jsonpath='{range .items[*]}{.spec.type}{"|"}{range .spec.ports[*]}{.nodePort}{" "}{end}{"\n"}{end}' 2>/dev/null \
+    | grep -Eq "^NodePort\\|.*([^0-9]|^)${envoy_smoke_port}([^0-9]|$)"
+}
+
 run_smoke_check() {
   local label="$1"
   local url="$2"
@@ -149,15 +223,43 @@ run_smoke_check() {
     curl_args+=(-H "Host: $host_header")
   fi
 
-  local http_code
-  http_code="$(curl "${curl_args[@]}" "$url")"
+  local deadline=$(( $(current_epoch_seconds) + timeout_seconds ))
+  local attempt=1
 
-  if [[ "$http_code" -lt 200 || "$http_code" -ge 400 ]]; then
-    echo "$label smoke check returned HTTP $http_code for '$url'" >&2
-    exit 1
-  fi
+  while true; do
+    local curl_stderr
+    curl_stderr="$(mktemp)"
 
-  echo "$label smoke check succeeded with HTTP $http_code."
+    local http_code=""
+    local curl_exit_code=0
+
+    set +e
+    http_code="$(curl "${curl_args[@]}" "$url" 2>"$curl_stderr")"
+    curl_exit_code=$?
+    set -e
+
+    if [[ "$curl_exit_code" -eq 0 && "$http_code" =~ ^[0-9]+$ && "$http_code" -ge 200 && "$http_code" -lt 400 ]]; then
+      rm -f "$curl_stderr"
+      echo "$label smoke check succeeded with HTTP $http_code."
+      return 0
+    fi
+
+    if (( $(current_epoch_seconds) >= deadline )); then
+      if [[ -s "$curl_stderr" ]]; then
+        cat "$curl_stderr" >&2
+      fi
+      rm -f "$curl_stderr"
+      echo "$label smoke check failed after ${attempt} attempts for '$url'." >&2
+      if [[ -n "$http_code" ]]; then
+        echo "$label smoke check last HTTP code: $http_code" >&2
+      fi
+      return 1
+    fi
+
+    rm -f "$curl_stderr"
+    attempt=$(( attempt + 1 ))
+    sleep 5
+  done
 }
 
 echo "Verifying namespace '$namespace'..."
@@ -189,17 +291,62 @@ if [[ -n "$envoy_smoke_url" ]]; then
   echo "Checking Gateway API resources..."
   kubectl -n "$namespace" get gateway campus
   kubectl -n "$namespace" get httproute campus
-  kubectl -n "$namespace" get envoyproxy campus-edge
-  kubectl -n "$namespace" get clienttrafficpolicy campus-edge
+
+  if ! wait_until "EnvoyProxy/campus-edge" "$timeout_seconds" envoyproxy_exists; then
+    print_gateway_diagnostics
+    exit 1
+  fi
+
+  if ! wait_until "ClientTrafficPolicy/campus-edge" "$timeout_seconds" clienttrafficpolicy_exists; then
+    print_gateway_diagnostics
+    exit 1
+  fi
+
+  if ! wait_until "Gateway/campus Accepted=True" "$timeout_seconds" gateway_has_condition Accepted True; then
+    print_gateway_diagnostics
+    exit 1
+  fi
+
+  if ! wait_until "HTTPRoute/campus Accepted=True" "$timeout_seconds" httproute_has_condition Accepted True; then
+    print_gateway_diagnostics
+    exit 1
+  fi
+
+  if ! wait_until "HTTPRoute/campus ResolvedRefs=True" "$timeout_seconds" httproute_has_condition ResolvedRefs True; then
+    print_gateway_diagnostics
+    exit 1
+  fi
+
+  if ! wait_until "Gateway/campus Programmed=True" "$timeout_seconds" gateway_has_condition Programmed True; then
+    print_gateway_diagnostics
+    exit 1
+  fi
+
+  envoy_smoke_port=""
+  if [[ "$envoy_smoke_url" =~ :([0-9]+)/?$ ]]; then
+    envoy_smoke_port="${BASH_REMATCH[1]}"
+  fi
+
+  if [[ -n "$envoy_smoke_port" ]]; then
+    if ! wait_until "Envoy NodePort ${envoy_smoke_port}" "$timeout_seconds" envoy_nodeport_is_published "${envoy_smoke_port}"; then
+      print_gateway_diagnostics
+      exit 1
+    fi
+  fi
 fi
 
-run_smoke_check "Primary ingress" "$smoke_url" "$smoke_host_header"
+if ! run_smoke_check "Primary ingress" "$smoke_url" "$smoke_host_header"; then
+  exit 1
+fi
 
 if [[ -z "$smoke_url" ]]; then
   echo "Primary smoke URL not provided. Skipping primary ingress smoke check."
 fi
 
-run_smoke_check "Envoy staging" "$envoy_smoke_url" "${envoy_smoke_host_header:-$smoke_host_header}"
+if ! run_smoke_check "Envoy staging" "$envoy_smoke_url" "${envoy_smoke_host_header:-$smoke_host_header}"; then
+  print_gateway_diagnostics
+  exit 1
+fi
 
 if [[ -z "$envoy_smoke_url" ]]; then
   echo "Envoy staging smoke URL not provided. Skipping Envoy staging smoke check."

@@ -22,6 +22,18 @@ spec:
         - name: campus-nginx
           image: campus-nginx:latest
           imagePullPolicy: IfNotPresent
+          command:
+            - /bin/sh
+            - -ec
+          args:
+            - |
+              for service_name in frontend auth backend; do
+                until nslookup "$service_name" >/dev/null 2>&1; do
+                  echo "Waiting for DNS entry: $service_name" >&2
+                  sleep 2
+                done
+              done
+              exec nginx -g 'daemon off;'
           ports:
             - name: http
               containerPort: 80
@@ -37,6 +49,13 @@ spec:
               port: http
             initialDelaySeconds: 15
             periodSeconds: 20
+          startupProbe:
+            httpGet:
+              path: /
+              port: http
+            timeoutSeconds: 2
+            periodSeconds: 5
+            failureThreshold: 30
           resources:
             requests:
               cpu: 50m

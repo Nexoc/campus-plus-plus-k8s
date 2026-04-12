@@ -2,7 +2,7 @@
 #
 # Intended behavior:
 # - standard deployment mode in namespace `envoy-gateway-system`
-# - controller watches only the PROD application namespace
+# - controller watches the PROD application namespace and its own system namespace
 # - more than one controller replica for better availability than DEV
 
 deployment:
@@ -19,3 +19,4 @@ config:
           type: Namespaces
           namespaces:
             - campus-prod
+            - envoy-gateway-system

@@ -4,6 +4,11 @@ metadata:
   name: frontend
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -11,6 +16,26 @@ metadata:
   name: auth
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  template:
+    spec:
+      containers:
+        - name: auth
+          readinessProbe:
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            timeoutSeconds: 5
+            periodSeconds: 20
+          startupProbe:
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 36
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -18,6 +43,32 @@ metadata:
   name: backend
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  template:
+    spec:
+      containers:
+        - name: backend
+          readinessProbe:
+            timeoutSeconds: 5
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            timeoutSeconds: 5
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            timeoutSeconds: 5
+            periodSeconds: 10
+            failureThreshold: 36
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -25,3 +76,8 @@ metadata:
   name: campus-nginx
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1

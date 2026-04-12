@@ -3,7 +3,7 @@
 # These values reflect the intended phase-1 setup:
 # - k3s single-node DEV cluster
 # - standard deployment mode in namespace `envoy-gateway-system`
-# - controller watches only the DEV application namespace
+# - controller watches the DEV application namespace and its own system namespace
 # - one controller replica for DEV
 
 deployment:
@@ -20,3 +20,4 @@ config:
           type: Namespaces
           namespaces:
             - campus-dev
+            - envoy-gateway-system
