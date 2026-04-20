@@ -1,46 +1,30 @@
-# Comments Module
+# Module: comments
 
-This module manages comments on posts in discussion threads.
+## Current Role
 
-## Database Schema
+Handles comments for discussion posts.
 
-```sql
-CREATE TABLE app.comments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    post_id UUID NOT NULL REFERENCES app.posts(id) ON DELETE CASCADE,
-    user_id UUID NOT NULL REFERENCES app.accounts(id) ON DELETE CASCADE,
-    content TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
+In the current DEV runtime, this module is part of the `backend` service in
+`campus-dev` and is reached only through `campus-nginx`.
 
-## API Endpoints
+## Public API
 
-### Public Endpoints (Read-Only)
+- `GET /api/public/posts/{postId}/comments`
+- `GET /api/public/comments/{commentId}`
 
-- `GET /api/public/posts/{postId}/comments` - Get all comments for a post
-- `GET /api/public/comments/{commentId}` - Get a specific comment
+## Authenticated API
 
-### Protected Endpoints (Authenticated Users)
+- `POST /api/posts/{postId}/comments`
+- `PUT /api/comments/{commentId}`
+- `DELETE /api/comments/{commentId}`
 
-- `POST /api/posts/{postId}/comments` - Create a new comment
-- `PUT /api/comments/{commentId}` - Update a comment (author or moderator only)
-- `DELETE /api/comments/{commentId}` - Delete a comment (author or moderator only)
+## Ownership Rules
 
-## Model
+- authenticated users can create comments
+- authors can update or delete their own comments
+- moderation rules are enforced in the service layer
 
-- **Comment**: Represents a comment on a post
-  - `id`: UUID - Unique identifier
-  - `postId`: UUID - Reference to the post
-  - `userId`: UUID - User who created the comment
-  - `content`: String - Comment text
-  - `createdAt`: LocalDateTime - Creation timestamp
-  - `updatedAt`: LocalDateTime - Last update timestamp
+## Notes
 
-## Authorization Rules
-
-- **Create**: Authenticated users only
-- **Update**: Only the author or moderators can update
-- **Delete**: Only the author or moderators can delete
-- **Read**: All users (authenticated and anonymous)
+- comments are attached to posts, not directly to threads or courses
+- backend authentication context is supplied by the upstream gateway

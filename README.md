@@ -2,46 +2,63 @@
 
 [![CI Pipeline](https://github.com/Nexoc/campus-plus-plus-k8s/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nexoc/campus-plus-plus-k8s/actions/workflows/ci.yml)
 
-Campus++ is a containerized full-stack application for Hochschule Campus Wien.
+Campus++ is a full-stack Hochschule Campus Wien application with a local Docker
+runtime and a Kubernetes-based DEV deployment.
 
-Main components:
+Main runtime components:
 
-- frontend
-- auth service
-- backend
-- importer
-- campus-nginx
+- `frontend`
+- `auth`
+- `backend`
+- `campus-nginx`
+- `campus-importer`
 - PostgreSQL
+- Envoy Gateway
+
+## Current Status
+
+The current working DEV entry path is:
+
+`Internet -> davl.at (nginx + TLS) -> private/VPN path -> DEV 192.168.56.40:31080 -> Envoy Gateway -> campus-nginx -> frontend/auth/backend -> PostgreSQL 192.168.56.20`
+
+Confirmed today:
+
+- `campus-dev` namespace is deployed on k3s
+- `frontend`, `auth`, `backend`, `campus-nginx`, and `campus-importer` run in Kubernetes
+- `campus-importer` completed and populated the database
+- Envoy Gateway exposes the app through `NodePort 31080`
+- `campus.davl.at` is served through the public VPS with HTTPS
+
+Known gap:
+
+- the single-node DEV cluster is still operationally unstable and shows restarts
+  around Envoy and other control-plane components
 
 ## Runtime Modes
 
-This repository currently supports two practical runtime paths.
+### 1. Local Docker Runtime
 
-### 1. Local Container Runtime
-
-Use the root `docker-compose.yml` when you want a self-contained local stack for
-development or smoke testing.
+Use the root `docker-compose.yml` for local development and smoke testing.
 
 This path includes:
 
-- local container builds
-- local `campus-nginx`
+- local image builds
 - bundled PostgreSQL container
+- local `campus-nginx`
 
-### 2. Kubernetes Deployment Layer
+### 2. Kubernetes DEV Runtime
 
-Use `deploy/` when you want the Kubernetes-oriented deployment path.
+Use `deploy/dev/` and the GitHub Actions workflows for the active DEV path.
 
 This path includes:
 
-- Kustomize application manifests in `deploy/app/`
-- infrastructure-side Helm values in `deploy/infra/`
-- environment docs and rollout notes in `deploy/docs/`
-- DEV and PROD overlay separation
+- Kustomize manifests in `deploy/dev/`
+- Envoy Gateway controller baselines in `deploy/infra/envoy-gateway/`
+- self-hosted GitHub Actions deploy on the DEV node
+- GHCR-backed image delivery
 
-The current deployment direction is:
-
-`Client -> GW -> ingress-nginx -> campus-nginx -> services`
+The older `deploy/app/` overlay tree is still in the repository, but it is not
+the active DEV rollout path anymore.
 
 ## Documentation
 
@@ -67,9 +84,10 @@ Deployment docs:
 
 ### Configuration
 
-The local runtime uses the canonical root `docker-compose.yml`.
+The local runtime uses the root `docker-compose.yml` and a local `.env.dev`
+file.
 
-Required environment variables:
+Required variables:
 
 - `BACKEND_PROFILE`
 - `AUTH_PROFILE`
@@ -80,11 +98,6 @@ Required environment variables:
 - `DB_PASSWORD`
 - `JWT_SECRET`
 - `JWT_EXPIRATION`
-
-Profiles and infrastructure-specific values are injected via environment
-variables.
-
-For local development, create and use a local `.env.dev` file.
 
 ### Start
 
@@ -108,38 +121,25 @@ docker compose --env-file .env.dev ps -a
 docker compose --env-file .env.dev down -v --remove-orphans
 ```
 
-## Kubernetes Path
-
-The Kubernetes deployment layer is intentionally kept next to the application
-code instead of reshaping the app directories.
-
-High-level rules:
-
-- application source stays in `frontend/`, `auth/`, `backend/`, `importer/`,
-  `nginx/`
-- Kubernetes application resources live under `deploy/app/`
-- ingress-nginx values live under `deploy/infra/ingress-nginx/`
-- secrets are expected as local ignored files generated from templates
-
-Start with:
-
-- [deploy/README.md](deploy/README.md)
-
 ## Architecture
 
 ```text
-Client
+Internet
   ↓
-GW / Edge Reverse Proxy
+davl.at / Public VPS
   ↓
-ingress-nginx
+Private path / VPN
+  ↓
+DEV NodePort 31080
+  ↓
+Envoy Gateway
   ↓
 campus-nginx
-  ├── Frontend
-  ├── Auth Service
-  └── Backend API
+  ├── frontend
+  ├── auth
+  └── backend
        ↓
-    PostgreSQL
+    PostgreSQL 192.168.56.20
 ```
 
 ## Services
@@ -147,41 +147,36 @@ campus-nginx
 ### Frontend
 
 - Vue 3 SPA
-- served as static files
-- sends JWT in `Authorization: Bearer <token>`
+- served behind `campus-nginx`
+- API calls use same-origin paths such as `/api/*` and `/auth/*`
 
 ### campus-nginx
 
-- single application entry point
-- serves frontend
-- routes requests
-- validates protected requests via `auth_request`
-- forwards trusted identity headers to backend
+- internal application gateway
+- serves frontend assets
+- routes `/auth/*`, `/api/*`, `/account/*`, `/admin/*`
+- enforces auth via `auth_request`
+- forwards trusted identity headers to backend services
 
 ### Auth Service
 
 - Spring Boot
-- login / registration
-- password hashing
+- login, registration, account operations
 - JWT issuing and validation
-- Flyway migrations
+- Flyway-managed auth schema
 
 ### Backend
 
 - Spring Boot
-- business logic only
-- protected behind nginx
-- trusts forwarded identity headers
+- public and protected REST API
+- Flyway-managed app schema
+- trusts upstream identity headers from `campus-nginx`
 
 ### Importer
 
-- one-shot import service for initial course data
-
-### PostgreSQL
-
-- shared relational database
-- used by auth and backend
-- schema managed by Flyway
+- one-shot Kubernetes Job
+- waits for DB connectivity and schema readiness
+- imports HCW study programs and courses into PostgreSQL
 
 ## Profiles
 
@@ -191,32 +186,29 @@ Supported Spring profiles:
 - `test`
 - `prod`
 
-Profiles are injected via environment variables and are not hardcoded in the
-runtime model.
+## CI/CD
 
-## CI And Images
+Current GitHub Actions behavior:
 
-GitHub Actions currently includes:
-
-- auth unit tests and coverage
-- backend build
-- Docker Compose smoke test
-- nginx config validation
-- image build and push to GHCR on `main`
-- automatic DEV deploy workflow on `S5` after successful CI on `main`
-
-CI publishes:
-
-- immutable tags in the form `sha-<shortsha>`
-- moving `dev-latest` tags as a convenience pointer
+- `CI Pipeline` runs auth tests and backend build
+- on `push` to `main`, CI builds and pushes images to GHCR
+- images are published as both `sha-<shortsha>` and `dev-latest`
+- `Deploy DEV` runs on the self-hosted DEV runner
+- the deploy workflow stages secrets, creates the GHCR pull secret, applies
+  `deploy/dev`, restarts deployments for `dev-latest`, and waits for importer
+  completion
 
 ## Project Structure
 
 ```text
-campus-plus-plus-k8s/
+campus-plus-plus/
 ├── auth/
 ├── backend/
 ├── deploy/
+│   ├── dev/
+│   ├── docs/
+│   ├── infra/
+│   └── templates/
 ├── docs/
 ├── frontend/
 ├── importer/
@@ -227,10 +219,8 @@ campus-plus-plus-k8s/
 
 ## Notes
 
+- `campus-nginx` is the application security boundary
 - backend does not parse JWT directly
-- `campus-nginx` is the central application security gate
-- frontend image no longer depends on build-time `HOST`
-- importer is import-only, not scraping
-- scraper repository:
-  https://github.com/loonaarc/campuswiki_coursescraper
+- the public DEV hostname currently terminates on `davl.at`
+- the active DEV deployment path is Envoy-based, not ingress-nginx-based
 

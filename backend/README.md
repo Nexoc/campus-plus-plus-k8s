@@ -1,25 +1,29 @@
 # Campus++ Backend
 
-Backend service of the Campus++ application.
+Spring Boot backend service for Campus++.
 
-This service contains the core business logic and is deployed behind the internal NGINX gateway.
-Authentication is handled externally by the auth service and NGINX via forwarded trusted headers.
+## Current Runtime Role
+
+In the active DEV deployment, the backend:
+
+- runs in Kubernetes in namespace `campus-dev`
+- is reached only through `campus-nginx`
+- connects to PostgreSQL on `192.168.56.20`
+- runs Flyway migrations for the app schema
+
+It is not intended to be exposed directly to the public internet.
 
 ## Responsibilities
 
-- provide business logic for application features
-- expose public and protected API endpoints
-- use PostgreSQL as persistence layer
-- run Flyway migrations for the backend schema
-- trust forwarded identity headers from NGINX
-- not parse JWT tokens directly
+- application business logic
+- public and protected REST endpoints
+- PostgreSQL persistence
+- Flyway schema migration
+- trust upstream identity headers instead of parsing JWT directly
 
-## Runtime
+## Port
 
-The backend is normally started through the root `docker-compose.yml` as part of the full stack.
-
-Internal container port:
-- `8080`
+- internal container port: `8080`
 
 ## Required Environment Variables
 
@@ -32,12 +36,9 @@ Internal container port:
 
 ## Profiles
 
-Supported Spring profiles:
 - `dev`
 - `test`
 - `prod`
-
-Profiles are injected via environment variables and are not hardcoded in the runtime model.
 
 ## Local Build
 
@@ -55,26 +56,19 @@ mvn spring-boot:run
 
 ## Docker
 
-The backend image is built from:
+The backend image is built from `backend/Dockerfile`.
 
-```text
-backend/Dockerfile
-```
+Active Kubernetes image name:
 
-The container exposes:
-
-* `8080`
+- `ghcr.io/nexoc/campus-backend`
 
 ## Health Check
 
-The container health check uses:
+Health endpoint:
 
-```text
-/actuator/health
-```
+- `/actuator/health`
 
 ## Notes
 
-* backend is not meant to be exposed directly to the public internet
-* authentication and request validation are enforced upstream
-* the canonical runtime reference is the root `docker-compose.yml`
+- the backend trusts `campus-nginx` as the upstream security boundary
+- current DEV rollout uses `deploy/dev/`, not the older overlay path

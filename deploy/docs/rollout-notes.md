@@ -1,97 +1,105 @@
 # Rollout Notes
 
-This document captures the current rollout behavior for Campus++ and the checks
-used to verify the working DEV slice.
+This document captures the current working DEV rollout.
 
-It is not a full CD guide yet. It documents the current manual-or-assisted
-deployment path so it can be repeated consistently.
+It reflects the setup that was actually verified:
+
+- GitHub Actions on `main`
+- GHCR image publishing
+- self-hosted deploy on the DEV node
+- Envoy Gateway entry on `31080`
+- external access through `davl.at`
 
 ## Current Status Summary
 
-Current confirmed working path:
+Current confirmed path:
 
-`GitHub -> GHCR -> S5 k3s -> ingress-nginx -> campus-nginx -> app services -> PostgreSQL on S4`
+`GitHub -> GHCR -> DEV k3s -> Envoy Gateway -> campus-nginx -> frontend/auth/backend -> PostgreSQL`
 
-Current phase-1 staging path in repo:
+Current confirmed external path:
 
-`GitHub -> GHCR -> S5 k3s -> Envoy Gateway -> campus-nginx -> app services -> PostgreSQL on S4`
+`Internet -> davl.at -> private/VPN path -> DEV 192.168.56.40:31080 -> Envoy Gateway -> app`
 
-Current confirmed DEV characteristics:
+Confirmed DEV characteristics:
 
-- GitHub Actions builds and pushes images to GHCR
-- the DEV overlay rewrites image references to GHCR
-- the DEV overlay is intended to deploy from pinned immutable image tags
-- application manifests are applied with Kustomize
-- auth, backend, frontend, campus-nginx, and importer are present in the app model
-- phase-1 manifests also include `Gateway`, `HTTPRoute`, `EnvoyProxy`, and `ClientTrafficPolicy`
-- the application uses PostgreSQL on `S4`, outside Kubernetes
-- `GW` provides the practical external access path to DEV
+- images are published to GHCR on `push` to `main`
+- active manifests live under `deploy/dev/`
+- `frontend`, `auth`, `backend`, `campus-nginx`, and `campus-importer` run in `campus-dev`
+- importer completed successfully and populated the database
+- Gateway API objects `GatewayClass`, `Gateway`, `HTTPRoute`, and `EnvoyProxy` are active
+- the app responds through `192.168.56.40:31080`
+- the public hostname is fronted by the `davl.at` VPS
 
 ## Relevant Repo Files
 
-Primary app deployment files:
+Active DEV files:
 
-- `deploy/app/base/`
-- `deploy/app/overlays/dev/`
-- `deploy/app/overlays/prod/`
-
-Primary delivery files:
-
+- `deploy/dev/`
+- `deploy/infra/envoy-gateway/`
 - `.github/workflows/ci.yml`
 - `.github/workflows/deploy-dev.yml`
 
-Current DEV ingress host in repo:
+Legacy/reference files:
 
-- `campus-dev.192-168-50-5.sslip.io`
+- `deploy/app/`
+- `deploy/infra/ingress-nginx/`
 
 ## DEV Rollout Workflow
 
-The current repo supports this deployment flow:
+The current repo supports this flow:
 
-1. Build and push images through GitHub Actions.
-2. Select the immutable release tag to deploy.
-3. Prepare environment-specific config and secret env files for the DEV overlay.
-4. On `push` to `main`, let the self-hosted DEV deploy workflow apply the
-   matching immutable image tag to `S5` automatically after CI succeeds.
-5. Manual reruns remain possible through the helper scripts under
-   `deploy/scripts/` or through manual workflow dispatch in GitHub Actions.
-6. Wait for deployments to become ready.
-7. Verify that the importer job completed successfully.
-8. Verify access through the legacy ingress path and through the Envoy staging path.
+1. Push to `main`.
+2. `CI Pipeline` runs auth tests and backend build.
+3. CI builds and pushes images to GHCR.
+4. CI publishes both `sha-<shortsha>` and `dev-latest`.
+5. `Deploy DEV` runs on the self-hosted DEV runner.
+6. The deploy workflow stages secrets, creates `ghcr-pull`, applies `deploy/dev`, and restarts app deployments for `dev-latest`.
+7. The workflow waits for `frontend`, `auth`, `backend`, and `campus-nginx`.
+8. The workflow waits for `campus-importer` completion.
+9. Envoy serves the app through `31080`.
 
 ## Suggested Manual DEV Commands
 
 Render manifests:
 
 ```bash
-kubectl kustomize deploy/app/overlays/dev
+kubectl kustomize deploy/dev
 ```
 
 Apply manifests:
 
 ```bash
-kubectl apply -k deploy/app/overlays/dev
+kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
+kubectl delete job campus-importer -n campus-dev --ignore-not-found
+kubectl apply -k deploy/dev
+```
+
+Force refresh when using `dev-latest`:
+
+```bash
+kubectl rollout restart deployment/frontend -n campus-dev
+kubectl rollout restart deployment/auth -n campus-dev
+kubectl rollout restart deployment/backend -n campus-dev
+kubectl rollout restart deployment/campus-nginx -n campus-dev
 ```
 
 Inspect resources:
 
 ```bash
-kubectl -n campus-dev get all
-kubectl -n campus-dev get ingress
-kubectl -n campus-dev get gateway
-kubectl -n campus-dev get httproute
-kubectl -n campus-dev get envoyproxy
-kubectl -n campus-dev get clienttrafficpolicy
-kubectl -n campus-dev get jobs
+kubectl -n campus-dev get all -o wide
+kubectl -n campus-dev get gateway,httproute,envoyproxy -o wide
+kubectl get gatewayclass
+kubectl -n envoy-gateway-system get all -o wide
 ```
 
 Check rollout status:
 
 ```bash
-kubectl -n campus-dev rollout status deployment/frontend
-kubectl -n campus-dev rollout status deployment/auth
-kubectl -n campus-dev rollout status deployment/backend
-kubectl -n campus-dev rollout status deployment/campus-nginx
+kubectl -n campus-dev rollout status deployment/frontend --timeout=300s
+kubectl -n campus-dev rollout status deployment/auth --timeout=300s
+kubectl -n campus-dev rollout status deployment/backend --timeout=300s
+kubectl -n campus-dev rollout status deployment/campus-nginx --timeout=300s
+kubectl -n campus-dev wait --for=condition=complete job/campus-importer --timeout=600s
 ```
 
 Check importer logs:
@@ -100,90 +108,42 @@ Check importer logs:
 kubectl -n campus-dev logs job/campus-importer
 ```
 
-Note:
+## Importer Notes
 
-- this check is time-sensitive
-- the importer Job is cleaned up automatically after completion
-- if the Job is already gone, that does not automatically mean the rollout failed
-- verify deployments, ingress, and smoke access first
+Important current behavior:
 
-Scripted alternatives:
+- the importer is a Kubernetes Job
+- it waits for DB connectivity and schema readiness
+- it skips cleanly when the database is already populated
+- it uses `ttlSecondsAfterFinished: 600`
 
-```bash
-bash deploy/scripts/apply-overlay.sh --environment dev --image-tag sha-676e768
-bash deploy/scripts/verify-overlay.sh --environment dev --smoke-url http://127.0.0.1:30080/ --smoke-host-header campus-dev.192-168-50-5.sslip.io --envoy-smoke-url http://127.0.0.1:31080/
-```
-
-GitHub-assisted alternative:
-
-- `.github/workflows/deploy-dev.yml` now auto-runs after successful `CI Pipeline` completion for `push` events on `main`
-- it runs on the Linux self-hosted runner on `S5`
-- use the custom runner label `campus-dev`
-- use a fixed host secret path on `S5` and stage those files into the workspace during the deploy workflow
-- manual `workflow_dispatch` is still available for reruns and render-only checks
-- if manual `image_tag` is left empty, the workflow falls back to the checked-out commit SHA
-
-Before apply, replace `sha-change-me` in:
-
-```text
-deploy/app/overlays/dev/kustomization.yaml
-```
-
-with the selected immutable tag such as `sha-676e768`.
-
-## Importer Behavior Notes
-
-Important operational detail:
-
-- the importer code is safe to skip if the database is already populated
-- the Kubernetes Job object will not rerun automatically on every `apply`
-- the Kubernetes Job currently uses `ttlSecondsAfterFinished: 600`
-- after about 10 minutes, a completed importer Job may be removed automatically
-- if a fresh importer run is required, recreate the Job intentionally
-
-Example reset flow:
+Rerun flow:
 
 ```bash
 kubectl -n campus-dev delete job campus-importer --ignore-not-found
-kubectl apply -k deploy/app/overlays/dev
+kubectl apply -k deploy/dev
 ```
-
-Use this only when a rerun is actually desired.
 
 ## DEV Verification Checklist
 
-A DEV verification pass should confirm:
+A successful verification pass should confirm:
 
 - `frontend` pod is `Ready`
 - `auth` pod is `Ready`
 - `backend` pod is `Ready`
 - `campus-nginx` pod is `Ready`
-- `campus-importer` job completed with exit code `0`
-- `Ingress` exists in namespace `campus-dev`
-- `Gateway`, `HTTPRoute`, `EnvoyProxy`, and `ClientTrafficPolicy` exist in namespace `campus-dev`
-- app is reachable via the DEV ingress host
-- app is reachable via the Envoy staging NodePort on `31080`
-- app is reachable through the `GW` reverse-proxy path
-- auth-protected requests work through `campus-nginx`
-- backend is using the external PostgreSQL instance on `S4`
+- `campus-importer` is `Complete`
+- `gateway/campus-dev` is `Programmed=True`
+- `httproute/campus` is accepted
+- `curl http://192.168.56.40:31080/` returns `200`
+- public API requests work through Envoy
+- `https://campus.davl.at/` works through the public VPS
 
 ## Known Open Gaps
 
-The current working DEV rollout is real, but these items are still open:
+Current open issues:
 
-- the repo does not yet store the actual `GW` config
-- the auto-deploy path still depends on environment-side runner maintenance on `S5`
-- self-hosted runner registration and service management on `S5` are still environment-side tasks
-- PROD rollout should still be considered incomplete
-
-## Exit Criteria For "DEV Verification Closed"
-
-DEV can be treated as formally closed when all of the following are true:
-
-- the rollout steps are documented and repeatable
-- config and secret handling is documented clearly
-- importer rerun behavior is documented
-- `GW` access path is documented
-- the repo documents the current ingress-nginx setup
-- the repo documents the phase-1 Envoy Gateway staging setup
-- delivery moves toward immutable image references for actual deployments
+- the single-node DEV cluster is still unstable at times
+- Envoy-related components have shown probe failures and restarts during node/API hiccups
+- the repo still lacks the exact public VPS nginx config
+- PROD rollout remains incomplete

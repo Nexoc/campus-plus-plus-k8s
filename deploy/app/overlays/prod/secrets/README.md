@@ -1,22 +1,11 @@
 # PROD Secrets
 
-This directory is for local, ignored secret env files used by the PROD overlay.
+This directory belongs to the older `deploy/app/overlays/prod` structure.
 
-Expected local files:
+PROD is not the active rollout path today, so this folder should be treated as
+reference material until the PROD delivery model is finalized.
+
+If the old PROD overlay is used, the expected files remain:
 
 - `db-secrets.env`
 - `auth-secrets.env`
-
-Create them from the canonical templates:
-
-- `deploy/templates/secrets/db-secrets.env.example`
-- `deploy/templates/secrets/auth-secrets.env.example`
-
-Example:
-
-```bash
-cp deploy/templates/secrets/db-secrets.env.example deploy/app/overlays/prod/secrets/db-secrets.env
-cp deploy/templates/secrets/auth-secrets.env.example deploy/app/overlays/prod/secrets/auth-secrets.env
-```
-
-These local files must not be committed to git.

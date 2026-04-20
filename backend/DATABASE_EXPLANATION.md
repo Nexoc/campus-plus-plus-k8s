@@ -1,219 +1,192 @@
 # Database Explanation — Campus++ Backend
 
-## 1. Purpose of This Document
+## Purpose
 
-This document explains the database design of the Campus++ backend service.
-It serves as a helper document to understand how the relational database
-schema corresponds to the UML/domain model and architectural decisions.
+This document explains the current PostgreSQL schema used by the Campus++
+backend.
 
-The focus is on clarity, normalization and responsibility boundaries,
-not on ORM or implementation details.
+It reflects the Flyway migrations that exist today, not an early design draft.
 
----
+## Database Role
 
-## 2. General Database Principles
+The backend stores its domain data in PostgreSQL on the dedicated DB host:
 
-The database follows these core principles:
+- host: `192.168.56.20`
+- port: `5432`
+- database: `campus`
+- schema: `app`
 
-- PostgreSQL is used as the relational database
-- Flyway migrations are the single source of truth
-- SQL schema is defined explicitly (no auto-generation)
-- UUIDs are used as primary keys
-- The backend database is independent from the Auth Service
-- User data is not stored locally (only user_id references)
+The backend runs Flyway on startup and treats the migration set as the schema
+source of truth.
 
----
+## Core Principles
 
-## 3. Separation from Auth Service
+- PostgreSQL is the relational system of record
+- Flyway migrations define the schema contract
+- backend data lives in schema `app`
+- UUIDs are used for identifiers
+- user identity comes from the external auth domain
+- no foreign keys point to auth-service-owned user tables
 
-Although the UML model contains a `User` class, the backend database does
-**not** contain a `users` table.
+## Current Migration Set
 
-Reason:
-- Authentication and user management are handled by a separate Auth Service
-- The backend only stores references to users using `user_id (UUID)`
-- This avoids tight coupling between services
+Current migration chain:
 
-As a result:
-- No foreign keys reference a users table
-- User identity is treated as external input
+- `V1__init_schema_clean.sql`
+- `V2__study_programs.sql`
+- `V3__courses.sql`
+- `V4__reviews.sql`
+- `V5__favourites.sql`
+- `V6__threads.sql`
+- `V7__posts.sql`
+- `V8__comments.sql`
+- `V9__reports.sql`
+- `V10__reactions.sql`
+- `V11__watch_subscriptions.sql`
 
----
+## Current Tables By Area
 
-## 4. Database Schema Overview
+Study program and course catalog:
 
-All backend tables are stored inside a dedicated schema:
-
-```
-
-app
-
-```
-
-This schema isolates backend data and avoids name conflicts.
-
----
-
-## 5. Table Overview and Responsibilities
-
-### 5.1 study_programs
-
-Stores study programs offered by the campus.
-
-- One study program can contain many courses
-- A course can belong to multiple study programs
-
-Tables:
 - `study_programs`
-- `study_program_courses` (join table)
+- `modules`
+- `courses`
+- `study_program_courses`
 
----
+User bookmarks and content:
 
-### 5.2 courses
+- `study_program_favourites`
+- `favourites`
+- `reviews`
+- `threads`
+- `posts`
+- `comments`
+- `course_materials`
 
-Stores courses offered by the campus.
+Moderation and engagement:
 
-Courses are global entities and form the core of the system.
-They are referenced by most other tables.
+- `reports`
+- `reactions`
+- `watch_subscriptions`
 
-Key characteristics:
-- No ownership by users
-- Referenced by reviews, threads and favourites
+Reserved / partially implemented:
 
----
+- `course_suggestions`
 
-### 5.3 reviews
+## Important Design Notes
 
-Stores reviews written by users for courses.
+### Study Programs
 
-Each review:
-- belongs to exactly one course
-- is authored by exactly one user (via user_id)
+`study_programs` stores imported HCW study program metadata.
 
-User ownership is enforced at the application level, not by database constraints.
+`modules` stores module-level information per study program.
 
----
+`study_program_favourites` stores user bookmarks for study programs.
 
-### 5.4 threads
+### Courses
 
-Stores discussion threads related to courses.
+`courses` stores imported course metadata, including structured HTML/JSON
+content from the importer pipeline.
 
-Each thread:
-- belongs to one course
-- acts as a container for posts
+`study_program_courses` models the many-to-many relation between programs and
+courses.
 
----
+`course_suggestions` exists in the schema, but there is currently no active API
+module using it.
 
-### 5.5 posts
+`course_materials` stores file metadata only. File bytes are stored on disk by
+the backend under `/data/course-materials`.
 
-Stores posts inside discussion threads.
+### Reviews
 
-Each post:
-- belongs to one thread
-- is authored by one user
-- can be reported
+`reviews` stores user reviews for courses, including moderation flags and
+rating-related fields.
 
----
+### Favourites
 
-### 5.6 favourites
+There are two favourites concepts in the current schema:
 
-Stores user favourite courses.
+- `favourites` for course favourites
+- `study_program_favourites` for study program favourites
 
-This is a pure relation table:
-- one user can favourite many courses
-- one course can be favourited by many users
+### Discussion
 
-The composite primary key prevents duplicate favourites.
+Discussion is split across:
 
----
+- `threads`
+- `posts`
+- `comments`
 
-### 5.7 reports
+This keeps thread containers, post bodies, and comment bodies separate.
 
-Stores reports created by users to flag inappropriate content.
+### Moderation
 
-Reports use a polymorphic reference:
-- `target_type` defines what is being reported
-- `target_id` references the reported entity
+`reports` stores user-generated moderation reports with polymorphic targets.
 
-This avoids multiple report tables and keeps the schema flexible.
+Important columns:
 
----
+- `target_type`
+- `target_id`
+- `status`
+- `comment`
 
-### 5.8 course_suggestions
+### Engagement
 
-Stores course suggestions submitted by users.
+`reactions` stores simple reactions against supported target types.
 
-Each suggestion:
-- is created by a user
-- has a status lifecycle (PENDING, APPROVED, REJECTED)
+`watch_subscriptions` stores watch/subscription state for supported target
+types.
 
-Moderation is handled at the application level.
+## User Identity Strategy
 
----
-
-## 6. Enum Handling Strategy
-
-PostgreSQL ENUM types are intentionally avoided.
+The backend does not own a local users table.
 
 Instead:
-- VARCHAR columns are used
-- CHECK constraints enforce valid values
 
-Reasons:
-- easier migrations
-- safer schema evolution
-- no enum locking during changes
+- auth/account data is managed by the separate auth service
+- backend tables keep `user_id` references as UUIDs
+- user authorization is enforced in application logic using trusted request
+  context
 
----
+This is intentional and matches the service boundary.
 
-## 7. Foreign Keys Strategy
+## Foreign Key Strategy
 
-Foreign keys are used **only** for internal domain relations:
+Foreign keys are used for internal domain integrity only.
 
-- courses ↔ study_programs
-- threads → courses
-- posts → threads
-- reviews → courses
+Examples:
 
-No foreign keys reference external services (e.g. users).
+- `modules.study_program_id -> study_programs.id`
+- `courses.module_id -> modules.id`
+- `study_program_courses.* -> study_programs / courses`
+- `reviews.course_id -> courses.id`
+- `threads.course_id -> courses.id`
+- `posts.thread_id -> threads.id`
+- `comments.post_id -> posts.id`
+- `course_materials.course_id -> courses.id`
 
----
+There are no foreign keys to external auth-owned user records.
 
-## 8. Auditing Columns
+## Index Strategy
 
-Most tables contain:
-- `created_at`
-- `updated_at`
+The schema uses ordinary and GIN indexes where needed.
 
-These fields support:
-- sorting
-- auditing
-- future analytics
+Notable current patterns:
 
----
+- search/filter indexes on catalog fields
+- GIN indexes on JSONB content blocks
+- lookup indexes on target-based moderation and engagement tables
+- time-based indexes for ordered content retrieval
 
-## 9. Why This Design Was Chosen
+## Current Implementation Status
 
-This database design was chosen to:
+This schema is actively used by the running backend.
 
-- match the UML/domain model logically
-- avoid service coupling
-- keep the schema normalized
-- support long-term maintainability
-- allow future extensions without breaking existing data
+Confirmed from the current codebase:
 
-The database is treated as a stable contract rather than a side effect
-of application code.
+- Flyway migrates the schema on startup
+- importer populates study programs, modules, and courses
+- backend APIs use reviews, favourites, threads, posts, comments, reports,
+  reactions, watch subscriptions, and course materials
 
----
-
-## 10. Current Scope
-
-At the current stage:
-- the schema is finalized
-- migrations define the full structure
-- no ORM mapping is required yet
-
-This allows safe progression to API and business logic layers.
-
-
+The schema is no longer only a design draft.

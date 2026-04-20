@@ -1,42 +1,28 @@
 # Module: courses
 
-## Responsibility
-Provides access to course data, including listing, filtering, retrieving, creating, updating, and deleting courses. Handles both public and admin endpoints for course management.
+## Current Role
 
-## Core concepts
-- Course: Represents a university course with attributes such as name, ECTS, study program, etc.
-- CourseDto: Data transfer object for course data.
+Serves the course catalog and admin course management endpoints.
 
-## API Endpoints
-### Public (CoursePublicController)
-- `GET /api/public/courses` — List all courses (optionally filter by `studyProgramId`, `ects`)
-- `GET /api/public/courses/{id}` — Get course details by ID
+In the active deployment, public requests come through:
 
-### Private (CourseController)
-- `POST /api/courses` — Create a new course (admin only)
-- `PUT /api/courses/{id}` — Update an existing course (admin only)
-- `DELETE /api/courses/{id}` — Delete a course (admin only)
+`Envoy Gateway -> campus-nginx -> backend -> courses module`
 
-## Security
-- Public endpoints are accessible to all users.
-- Admin endpoints require authentication and appropriate admin privileges.
-- Authentication is enforced by NGINX; identity is provided via headers.
-- No JWT handling inside the module itself.
+## Public API
 
-## Data ownership
-- Owns and manages course data.
-- Does not modify user or review data.
+- `GET /api/public/courses`
+- `GET /api/public/courses/{id}`
 
-## Table description
-**courses**
-| Column         | Type    | Description                       |
-| -------------- | ------- | --------------------------------- |
-| id             | UUID    | Primary key                       |
-| name           | String  | Course name                       |
-| ects           | Int     | ECTS credits                      |
-| study_program  | UUID    | Linked study program              |
-| ...            | ...     | Other course attributes           |
+The public list endpoint supports filtering and pagination in the controller.
+
+## Admin API
+
+- `POST /api/courses`
+- `PUT /api/courses/{id}`
+- `DELETE /api/courses/{id}`
 
 ## Notes
-- SQL-first design for persistence.
-- No JPA entities; uses repository abstraction for future flexibility.
+
+- this module owns course-facing backend APIs
+- study program relations are handled together with course data
+- auth is enforced upstream and the backend trusts forwarded identity headers

@@ -1,10 +1,6 @@
 # Deployment Layer
 
-This directory contains the Kubernetes and deployment-side artifacts for
-Campus++.
-
-The goal is to keep deployment concerns next to the application repository
-without forcing a reorganization of the application source itself.
+This directory contains the Kubernetes-side delivery artifacts for Campus++.
 
 Application code remains in:
 
@@ -16,44 +12,38 @@ Application code remains in:
 
 Deployment code lives in:
 
-- `deploy/app/` for Kubernetes application manifests
-- `deploy/infra/` for infrastructure-side Helm values and notes
-- `deploy/templates/` for config and secret examples
-- `deploy/docs/` for operational documentation
+- `deploy/dev/` for the active DEV manifests
+- `deploy/infra/` for shared infrastructure baselines
+- `deploy/templates/` for example config and secret inputs
+- `deploy/docs/` for operational notes
 
-## Current Architecture
+## Current Active Architecture
 
-Current target request path:
+The current working request path is:
 
-`Client -> GW -> ingress-nginx -> campus-nginx -> services`
-
-Current phase-1 staging path:
-
-`Client -> GW -> Envoy Gateway -> campus-nginx -> services`
-
-Current confirmed DEV path:
-
-`GitHub -> GHCR -> S5 k3s -> ingress-nginx -> campus-nginx -> app -> PostgreSQL on S4`
+`Internet -> davl.at -> private/VPN path -> DEV 192.168.56.40:31080 -> Envoy Gateway -> campus-nginx -> frontend/auth/backend -> PostgreSQL 192.168.56.20`
 
 Key points:
 
 - Kubernetes distro is `k3s`
-- app manifests are managed with Kustomize
-- shared infrastructure such as `ingress-nginx` is managed with Helm values
-- phase 1 also introduces `Envoy Gateway` as a parallel staging entry path
-- PostgreSQL stays outside Kubernetes on `S4`
-- `campus-nginx` keeps the application-specific routing and `auth_request`
-  behavior
+- `campus-dev` is the active namespace
+- app manifests are managed with Kustomize from `deploy/dev/`
+- Envoy Gateway is the active DEV entry layer
+- `campus-nginx` remains the internal app gateway and auth boundary
+- PostgreSQL stays outside Kubernetes
+
+The older `deploy/app/` overlay tree and `ingress-nginx` baselines are kept in
+the repo as legacy/reference material and are not the current DEV rollout path.
 
 ## Structure
 
 ```text
 deploy/
+├── dev/
+│   ├── config/
+│   └── secrets/
 ├── app/
-│   ├── base/
-│   └── overlays/
-│       ├── dev/
-│       └── prod/
+│   └── ...
 ├── scripts/
 ├── templates/
 │   ├── config/
@@ -66,88 +56,54 @@ deploy/
 
 ## Prerequisites
 
-Before applying any overlay, make sure:
+Before applying the active DEV manifests, make sure:
 
-- your `kubectl` context points to the intended cluster
-- `ingress-nginx` is installed for that cluster
-- `Envoy Gateway` is installed for that cluster, or the DEV deploy workflow is
-  allowed to install it automatically
-- the target cluster can pull images from GHCR
-- the cluster can reach PostgreSQL on `S4`
-- overlay config and secret env files are populated with environment-specific
-  values
+- your `kubectl` context points to the DEV k3s cluster
+- Envoy Gateway is installed in `envoy-gateway-system`
+- the cluster can pull images from GHCR
+- the cluster can reach PostgreSQL at `192.168.56.20:5432`
+- DEV secret env files are available either locally or on the runner host
 
-## Config And Secrets Inputs
+## Config And Secrets
 
-Application overlays load runtime settings from env files:
+Active DEV runtime inputs:
 
-- `deploy/app/overlays/dev/config/`
-- `deploy/app/overlays/dev/secrets/`
-- `deploy/app/overlays/prod/config/`
-- `deploy/app/overlays/prod/secrets/`
+- `deploy/dev/config/auth-config.env`
+- `deploy/dev/config/backend-config.env`
+- `deploy/dev/config/importer-config.env`
+- `deploy/dev/secrets/db-secrets.env`
+- `deploy/dev/secrets/auth-secrets.env`
 
 Reference templates live in:
 
 - `deploy/templates/config/`
 - `deploy/templates/secrets/`
 
-Important rule:
+Rules:
 
-- config inputs may be versioned
-- secret templates and docs may be versioned
-- real secret values must stay out of git
+- config files may be versioned
+- secret templates may be versioned
+- real secrets must stay out of git
 
-Current repo model:
+For the self-hosted runner, the deploy workflow stages secrets from:
 
-- local secret env files are expected under each overlay `secrets/` directory
-- those files are ignored by git
-- create them from `deploy/templates/secrets/*.env.example`
-- self-hosted runner automation on `S5` can instead source secrets from a fixed host path under `/home/nexoc/campus-secrets/<env>/`
+- `/home/nexoc/campus-secrets/dev/db-secrets.env`
+- `/home/nexoc/campus-secrets/dev/auth-secrets.env`
 
-Prepare DEV secret files:
+Prepare the fixed host path:
 
 ```bash
-cp deploy/templates/secrets/db-secrets.env.example deploy/app/overlays/dev/secrets/db-secrets.env
-cp deploy/templates/secrets/auth-secrets.env.example deploy/app/overlays/dev/secrets/auth-secrets.env
-```
-
-Prepare PROD secret files:
-
-```bash
-cp deploy/templates/secrets/db-secrets.env.example deploy/app/overlays/prod/secrets/db-secrets.env
-cp deploy/templates/secrets/auth-secrets.env.example deploy/app/overlays/prod/secrets/auth-secrets.env
-```
-
-## Install Or Update ingress-nginx
-
-Add the Helm repo once:
-
-```bash
-helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
-helm repo update
-```
-
-Install or upgrade DEV controller:
-
-```bash
-helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
-  --namespace ingress-nginx \
-  --create-namespace \
-  -f deploy/infra/ingress-nginx/values-dev.yaml
-```
-
-Install or upgrade PROD controller:
-
-```bash
-helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
-  --namespace ingress-nginx \
-  --create-namespace \
-  -f deploy/infra/ingress-nginx/values-prod.yaml
+mkdir -p /home/nexoc/campus-secrets/dev
+cp deploy/templates/secrets/db-secrets.env.example /home/nexoc/campus-secrets/dev/db-secrets.env
+cp deploy/templates/secrets/auth-secrets.env.example /home/nexoc/campus-secrets/dev/auth-secrets.env
+chown -R nexoc:nexoc /home/nexoc/campus-secrets
+chmod 700 /home/nexoc/campus-secrets /home/nexoc/campus-secrets/dev
+chmod 600 /home/nexoc/campus-secrets/dev/*.env
 ```
 
 ## Install Or Update Envoy Gateway
 
-Install or upgrade DEV controller:
+Install or upgrade the controller:
 
 ```bash
 helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
@@ -155,288 +111,123 @@ helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
   --namespace envoy-gateway-system \
   --create-namespace \
   -f deploy/infra/envoy-gateway/values-dev.yaml
+
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 ```
 
-Install or upgrade PROD controller:
+## Manual DEV Apply
+
+Render the manifests:
 
 ```bash
-helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
-  --version v1.7.0 \
-  --namespace envoy-gateway-system \
-  --create-namespace \
-  -f deploy/infra/envoy-gateway/values-prod.yaml
+kubectl kustomize deploy/dev
+```
+
+Create or update the GHCR pull secret:
+
+```bash
+kubectl apply -f deploy/dev/namespace.yaml
+
+kubectl create secret docker-registry ghcr-pull \
+  --namespace campus-dev \
+  --docker-server ghcr.io \
+  --docker-username YOUR_GITHUB_USER \
+  --docker-password YOUR_GHCR_TOKEN \
+  --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Apply the shared GatewayClass and the DEV stack:
+
+```bash
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
+kubectl delete job campus-importer -n campus-dev --ignore-not-found
+kubectl apply -k deploy/dev
 ```
 
-## DEV Runbook
-
-### Scripted Shortcuts
-
-Render or apply with the helper script:
+If the manifests still point to `dev-latest`, force a restart so the node pulls
+the latest published images:
 
 ```bash
-bash deploy/scripts/apply-overlay.sh --environment dev --image-tag sha-676e768 --render-only
-bash deploy/scripts/apply-overlay.sh --environment dev --image-tag sha-676e768
+kubectl rollout restart deployment/frontend -n campus-dev
+kubectl rollout restart deployment/auth -n campus-dev
+kubectl rollout restart deployment/backend -n campus-dev
+kubectl rollout restart deployment/campus-nginx -n campus-dev
 ```
 
-Verify the rollout:
+Wait for the stack:
 
 ```bash
-bash deploy/scripts/verify-overlay.sh --environment dev --smoke-url http://127.0.0.1:30080/ --smoke-host-header campus-dev.192-168-50-5.sslip.io --envoy-smoke-url http://127.0.0.1:31080/
+kubectl rollout status deployment/frontend -n campus-dev --timeout=300s
+kubectl rollout status deployment/auth -n campus-dev --timeout=300s
+kubectl rollout status deployment/backend -n campus-dev --timeout=300s
+kubectl rollout status deployment/campus-nginx -n campus-dev --timeout=300s
+kubectl wait --for=condition=complete job/campus-importer -n campus-dev --timeout=600s
 ```
 
-The helper scripts do not replace operator judgment, but they reduce repeated
-manual command sequences.
+## GitHub-Assisted DEV Deploy
 
-GitHub-assisted alternative:
+Current workflow behavior:
 
-- use `.github/workflows/deploy-dev.yml`
-- every successful `push` to `main` now triggers automatic DEV deploy after the CI pipeline finishes
-- the same workflow still supports manual `workflow_dispatch` for reruns or controlled rechecks
-- manual runs can provide an immutable image tag such as `sha-19a6a44`
-- if manual `image_tag` is left empty, the workflow falls back to the checked-out commit SHA
-- the workflow is intended for a Linux self-hosted runner on `S5`
-- the workflow expects a custom runner label `campus-dev`
-- expected workflow inputs are `image_tag`, `render_only`, `smoke_url`, `smoke_host_header`, `envoy_smoke_url`, and `timeout_seconds`
-
-Helper script prerequisites on Debian-like hosts:
-
-- `bash`
-- `kubectl`
-- `helm` when the workflow needs to install `Envoy Gateway`
-- `mktemp`
-- `sed`
-- `curl` for smoke checks in `verify-overlay.sh`
-
-Self-hosted runner notes:
-
-- the runner should have access to `/etc/rancher/k3s/k3s.yaml`
-- DEV secret files should live on the runner host under `/home/nexoc/campus-secrets/dev/`
-- expected files there are `db-secrets.env` and `auth-secrets.env`
-- the deploy workflow verifies those host files and stages them into the checked-out overlay before `kubectl kustomize`
-- recommended custom runner labels are `campus-dev` and `s5`
-
-Prepare the fixed DEV host secret path on `S5`:
-
-```bash
-sudo mkdir -p /home/nexoc/campus-secrets/dev
-sudo cp deploy/templates/secrets/db-secrets.env.example /home/nexoc/campus-secrets/dev/db-secrets.env
-sudo cp deploy/templates/secrets/auth-secrets.env.example /home/nexoc/campus-secrets/dev/auth-secrets.env
-sudo chown -R nexoc:nexoc /home/nexoc/campus-secrets
-chmod 700 /home/nexoc/campus-secrets /home/nexoc/campus-secrets/dev
-chmod 600 /home/nexoc/campus-secrets/dev/*.env
-```
-
-### 1. Prepare DEV secret files
-
-Choose one mode:
-
-- manual operator mode: create local ignored files under `deploy/app/overlays/dev/secrets/`
-- self-hosted runner mode on `S5`: maintain fixed host files under `/home/nexoc/campus-secrets/dev/`
-
-### 2. Review DEV overlay inputs
-
-Check:
-
-- `deploy/app/overlays/dev/config/auth-config.env`
-- `deploy/app/overlays/dev/config/backend-config.env`
-- `deploy/app/overlays/dev/config/importer-config.env`
-- either local overlay secrets under `deploy/app/overlays/dev/secrets/`
-- or host-based runner secrets under `/home/nexoc/campus-secrets/dev/`
-
-### 3. Select the DEV release tag
-
-The DEV overlay uses immutable tags.
-
-- CI still publishes `dev-latest` as a convenience pointer
-- deploys should pin a concrete `sha-<shortsha>` tag
-- replace `sha-change-me` in `deploy/app/overlays/dev/kustomization.yaml`
-  before apply
-
-### 4. Render manifests before apply
-
-```bash
-kubectl kustomize deploy/app/overlays/dev
-```
-
-Use this to verify:
-
-- namespace is `campus-dev`
-- image names resolve to `ghcr.io/nexoc/...`
-- current DEV host is rendered correctly
-- the selected DEV tag is rendered instead of `sha-change-me`
-
-### 5. Apply the DEV overlay
-
-```bash
-kubectl apply -k deploy/app/overlays/dev
-```
-
-### 6. Wait for workloads
-
-```bash
-kubectl -n campus-dev rollout status deployment/frontend
-kubectl -n campus-dev rollout status deployment/auth
-kubectl -n campus-dev rollout status deployment/backend
-kubectl -n campus-dev rollout status deployment/campus-nginx
-```
-
-### 7. Inspect resources
-
-```bash
-kubectl -n campus-dev get all
-kubectl -n campus-dev get ingress
-kubectl -n campus-dev get gateway
-kubectl -n campus-dev get httproute
-kubectl -n campus-dev get envoyproxy
-kubectl -n campus-dev get clienttrafficpolicy
-kubectl -n campus-dev get jobs
-```
-
-Expected high-level result:
-
-- `frontend`, `auth`, `backend`, and `campus-nginx` deployments are ready
-- `campus-importer` completes successfully
-- the `campus` ingress exists in namespace `campus-dev`
-- the `campus` gateway and route resources exist in namespace `campus-dev`
-
-### 8. Verify importer result
-
-```bash
-kubectl -n campus-dev logs job/campus-importer
-```
-
-The importer is designed to:
-
-- wait for the database
-- wait for the schema
-- skip cleanly if data already exists
-- be garbage-collected after completion by Kubernetes Job TTL
-
-Important timing note:
-
-- `campus-importer` uses `ttlSecondsAfterFinished: 600`
-- after about 10 minutes, the completed Job may no longer exist
-- if that happens, `kubectl logs job/campus-importer` will no longer work
-- inspect importer logs shortly after apply if you need to confirm the exact run
-
-### 9. Verify access
-
-Check both:
-
-- ingress host from the DEV overlay
-- `GW` forwarding path to `S5:30080`
-- Envoy staging path on `S5:31080`
-
-From `S5` itself, the most reliable ingress smoke probe is:
-
-```bash
-curl -I -H 'Host: campus-dev.192-168-50-5.sslip.io' http://127.0.0.1:30080/
-```
-
-The phase-1 Envoy staging smoke probe is:
-
-```bash
-curl -I -H 'Host: campus-dev.192-168-50-5.sslip.io' http://127.0.0.1:31080/
-```
-
-At the time of writing, the DEV ingress host in repo is:
-
-- `campus-dev.192-168-50-5.sslip.io`
-
-## Re-running The Importer
-
-The importer is a Kubernetes `Job`, not a long-running deployment.
-
-That means:
-
-- it will not rerun automatically on every `kubectl apply`
-- reruns should be intentional
-
-If a rerun is required:
-
-```bash
-kubectl -n campus-dev delete job campus-importer --ignore-not-found
-kubectl apply -k deploy/app/overlays/dev
-```
-
-If the Job has already been removed by TTL cleanup, the delete step is harmless
-and the apply step recreates it.
-
-## PROD Runbook Status
-
-The repository already contains:
-
-- `deploy/app/overlays/prod/`
-- `deploy/infra/ingress-nginx/values-prod.yaml`
-
-But PROD should still be treated as a target path, not a completed rollout.
-
-Current caveats:
-
-- the PROD delivery process is not automated yet
-- final `GW` production hostnames are not yet fully documented
-- the PROD overlay now points to GHCR, but release tags must be pinned
-  intentionally before apply
-
-Use the PROD overlay only after those items are closed.
-
-## Selecting A PROD Release Tag
-
-The PROD overlay is designed to use immutable GHCR tags, not moving tags.
-
-Current behavior:
-
-- image names already point to `ghcr.io/nexoc/...`
-- the tag placeholder is `sha-change-me`
-- before a PROD rollout, replace that placeholder with the chosen release tag
-  such as `sha-676e768`
-
-This keeps PROD aligned with the tags already produced by CI.
-
-Helper examples:
-
-```bash
-bash deploy/scripts/apply-overlay.sh --environment prod --image-tag sha-676e768 --render-only
-bash deploy/scripts/verify-overlay.sh --environment prod --smoke-url http://campus.example.com
-```
-
-## Operational Checks
-
-Useful commands during rollout:
-
-```bash
-kubectl -n campus-dev describe ingress campus
-kubectl -n campus-dev describe gateway campus
-kubectl -n campus-dev describe httproute campus
-kubectl -n campus-dev describe job campus-importer
-kubectl -n campus-dev get pods -o wide
-kubectl -n campus-dev logs deployment/auth
-kubectl -n campus-dev logs deployment/backend
-kubectl -n campus-dev logs deployment/campus-nginx
-```
-
-## Delivery Notes
-
-Current repo behavior:
-
+- `.github/workflows/ci.yml` runs on `main`
 - CI builds and pushes images to GHCR
-- CI produces immutable `sha-<shortsha>` tags
-- CI also publishes moving `dev-latest` tags as a convenience pointer
-- repo now also contains a DEV deploy workflow for a self-hosted Linux runner on `S5`
-- on successful `push` builds for `main`, that workflow deploys the matching immutable tag to DEV automatically
+- CI publishes both `sha-<shortsha>` and `dev-latest`
+- `.github/workflows/deploy-dev.yml` runs on the self-hosted DEV runner after a
+  successful CI run
+- the deploy workflow stages secrets, creates `ghcr-pull`, applies
+  `deploy/dev`, restarts the app deployments for `dev-latest`, and waits for
+  importer completion
 
-Operational implication:
+This means the active DEV branch is:
 
-- `main` now acts as the DEV auto-deploy branch
-- DEV and PROD deploys should use pinned immutable tags
-- `dev-latest` should not be treated as deployment truth
+- `main`
+
+## Verification
+
+Inspect the active stack:
+
+```bash
+kubectl get all -n campus-dev -o wide
+kubectl get gateway,httproute,envoyproxy -n campus-dev -o wide
+kubectl logs job/campus-importer -n campus-dev
+```
+
+Check the internal Envoy entry:
+
+```bash
+curl -I http://192.168.56.40:31080/
+curl http://192.168.56.40:31080/api/public/study-programs | head -c 500
+curl http://192.168.56.40:31080/api/public/courses | head -c 500
+```
+
+Check the external public entry:
+
+```bash
+curl -I https://campus.davl.at/
+```
+
+Expected result:
+
+- `frontend`, `auth`, `backend`, and `campus-nginx` are `Ready`
+- `campus-importer` is `Complete`
+- `gateway/campus-dev` is `Programmed=True`
+- `httproute/campus` is accepted
+- public API paths respond through Envoy
+
+## Known Gaps
+
+Current open issues:
+
+- the single-node DEV cluster still shows intermittent instability
+- Envoy-related components have had probe failures and restarts during host/API
+  hiccups
+- the repo does not yet contain the exact public VPS nginx configuration
+- PROD delivery is still not the active rollout path
 
 ## Related Docs
 
 - `deploy/docs/environments.md`
 - `deploy/docs/naming-convention.md`
 - `deploy/docs/rollout-notes.md`
+- `deploy/docs/structure.md`
 - `deploy/infra/envoy-gateway/README.md`
 - `deploy/infra/ingress-nginx/README.md`

@@ -6,6 +6,18 @@ Document history:
 | --- | --- | --- | --- | --- |
 | 1.2 |  | 6.12.2025 | Tatiana Shvareva | updated the SRS due to stakeholders’ feedback  |
 
+## Status Note
+
+This file is the product-level requirements baseline.
+
+It is intentionally different from the operational runtime documentation. For
+the currently deployed architecture and rollout path as of April 20, 2026, use:
+
+- `README.md`
+- `deploy/README.md`
+- `deploy/docs/*`
+- `backend/ARCHITECTURE.md`
+
 # 1. Introduction
 
 ## **1.1 Purpose**
@@ -73,7 +85,7 @@ The technical architecture is defined in the HLD document.
 
 - **Hochschule Campus Wien – Official Website**
 
-  [https://www.hcw.ac.at](https://www.fh-campuswien.ac.at/)
+  [https://www.hcw.ac.at](https://www.hcw.ac.at)
 
   (Source for official course and study program descriptions.)
 

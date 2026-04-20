@@ -1,41 +1,26 @@
 # Module: studyprograms
 
-## Responsibility
-Manages study programs and their relationship to courses. Provides endpoints for listing, retrieving, creating, updating, and deleting study programs.
+## Current Role
 
-## Core concepts
-- StudyProgram: Represents a degree or study track.
-- Name: The name of the study program.
-- Description: Details about the program.
+Serves study program catalog data and admin CRUD endpoints.
 
-## API Endpoints
-### Public (StudyProgramPublicController)
-- `GET /api/public/study-programs` — List all study programs
-- `GET /api/public/study-programs/{id}` — Get study program by ID
-- `GET /api/public/study-programs/{id}/details` — Get detailed info for a study program
+This module is one of the main public data entry points for the frontend.
 
-### Private (StudyProgramController)
-- `POST /api/study-programs` — Create a new study program (admin only)
-- `PUT /api/study-programs/{id}` — Edit a study program (admin only)
-- `DELETE /api/study-programs/{id}` — Delete a study program (admin only)
+## Public API
 
-## Ownership rules
-- Study programs are global entities.
-- Only moderators/admins can create, modify, or delete study programs.
+- `GET /api/public/study-programs`
+- `GET /api/public/study-programs/{id}`
+- `GET /api/public/study-programs/{id}/details`
 
-## Related modules
-- courses: Study programs are linked to courses.
+The list endpoint supports filtering and pagination in the controller.
 
-## Table description
-**study_programs**
-| Column         | Type    | Description                       |
-| -------------- | ------- | --------------------------------- |
-| id             | UUID    | Primary key                       |
-| name           | String  | Name of the study program         |
-| description    | String  | Description of the program        |
+## Admin API
 
-**study_program_courses**
-| Column             | Type    | Description                       |
-| ------------------ | ------- | --------------------------------- |
-| study_program_id   | UUID    | Linked study program              |
-| course_id          | UUID    | Linked course                     |
+- `POST /api/study-programs`
+- `PUT /api/study-programs/{id}`
+- `DELETE /api/study-programs/{id}`
+
+## Notes
+
+- importer-populated study program data is exposed through this module
+- course relations are resolved together with study program data

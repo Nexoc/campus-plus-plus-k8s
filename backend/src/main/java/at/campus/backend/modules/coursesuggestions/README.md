@@ -1,42 +1,18 @@
+# Module: coursesuggestions
 
-## Responsibility
-Manages user-submitted suggestions for new courses.
+## Current Status
 
-## Core concepts
+This module is not implemented in backend code yet.
 
-## Ownership rules
-Course suggestions are created by users.
-Only moderators can approve or reject suggestions.
+Current state:
 
-## Related modules
+- the database schema contains `app.course_suggestions`
+- there are no controllers, services, or repositories for this feature in the
+  backend codebase
 
-## Database tables
-# Module: CourseSuggestions
+## Implication
 
-## Responsibility
-Manages user-submitted suggestions for new courses.
-
-# Module: CourseSuggestions
-
-## Responsibility
-Manages user-submitted suggestions for new courses.
-
-## Core concepts
-- CourseSuggestion
-- Status
-- Submission date
-
-## API Endpoints
-- `GET /api/coursesuggestions` — List all suggestions (moderator only)
-- `POST /api/coursesuggestions` — Submit a suggestion (auth required)
-- `PUT /api/coursesuggestions/{id}` — Approve/reject a suggestion (moderator only)
-
-## Ownership rules
-Course suggestions are created by users.
-Only moderators can approve or reject suggestions.
-
-## Related modules
-- courses
-
-## Database tables
-- course_suggestions
+- no course suggestion API is currently exposed by the backend
+- the feature exists only at schema level right now
+- if this feature is added later, this README should be rewritten together with
+  the implementation

@@ -1,22 +1,15 @@
 # DEV Secrets
 
-This directory is for local, ignored secret env files used by the DEV overlay.
+This directory belongs to the legacy `deploy/app/overlays/dev` flow.
 
-Expected local files:
+It is kept for reference only.
+
+The active DEV rollout now uses:
+
+- `deploy/dev/secrets/`
+- or `/home/nexoc/campus-secrets/dev/` on the self-hosted runner
+
+If you work on the old overlay tree anyway, the expected files remain:
 
 - `db-secrets.env`
 - `auth-secrets.env`
-
-Create them from the canonical templates:
-
-- `deploy/templates/secrets/db-secrets.env.example`
-- `deploy/templates/secrets/auth-secrets.env.example`
-
-Example:
-
-```bash
-cp deploy/templates/secrets/db-secrets.env.example deploy/app/overlays/dev/secrets/db-secrets.env
-cp deploy/templates/secrets/auth-secrets.env.example deploy/app/overlays/dev/secrets/auth-secrets.env
-```
-
-These local files must not be committed to git.

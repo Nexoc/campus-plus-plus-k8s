@@ -1,170 +1,107 @@
 # Deployment Structure
 
-This document describes how the deployment layer of Campus++ is organized.
+This document describes the current layout of the deployment layer.
 
-The deployment layer is separated from the application source code so that Kubernetes and infrastructure artifacts can evolve without forcing a repository reorganization of the services themselves.
+The active DEV path was simplified and now uses a dedicated `deploy/dev/`
+directory instead of the older `deploy/app/overlays/dev` flow.
 
 ## High-Level Layout
 
 ```text
 deploy/
+├── dev/
+│   ├── config/
+│   └── secrets/
 ├── app/
 │   ├── base/
 │   └── overlays/
-│       ├── dev/
-│       └── prod/
 ├── templates/
 │   ├── config/
 │   └── secrets/
 ├── infra/
+│   ├── envoy-gateway/
 │   └── ingress-nginx/
 └── docs/
-````
+```
+
+## `dev/`
+
+This is the active DEV manifest set.
+
+Contents:
+
+- namespace
+- frontend, auth, backend, and `campus-nginx` deployments/services
+- importer job
+- Envoy Gateway resources: `EnvoyProxy`, `Gateway`, `HTTPRoute`
+- versioned config inputs
+- ignored local secret inputs
+
+This is the directory used by:
+
+- manual `kubectl apply -k deploy/dev`
+- `.github/workflows/deploy-dev.yml`
 
 ## `app/`
 
-This directory contains Kubernetes manifests for the application itself.
+This is the older Kustomize base/overlay tree.
 
-It is intentionally separate from infrastructure configuration.
+Current status:
 
-### `app/base/`
-
-This directory contains the common Kubernetes resources shared by all environments.
-
-Typical contents:
-
-* Namespace
-* Deployments
-* Services
-* Ingress
-* Importer Job
-* common metadata and labels
-
-Rules:
-
-* keep files environment-agnostic where possible
-* do not place dev/prod-specific values directly in base
-* use base as the reusable foundation for all overlays
-
-### `app/overlays/dev/`
-
-This directory contains the development overlay.
-
-Typical contents:
-
-* image overrides for dev
-* replica overrides for dev
-* ingress overrides for dev
-* config generation inputs for dev
-* secret generation inputs for dev
-
-Rules:
-
-* only place development-specific changes here
-* do not duplicate the whole base
-* do not place production settings here
-
-### `app/overlays/prod/`
-
-This directory contains the production overlay.
-
-Typical contents:
-
-* image overrides for prod
-* replica overrides for prod
-* ingress overrides for prod
-* config generation inputs for prod
-* secret generation inputs for prod
-
-Rules:
-
-* only place production-specific changes here
-* keep production isolated from development
-* avoid hidden coupling between overlays
+- retained for reference and possible future reuse
+- not the active DEV rollout path
+- still useful as a source of historical manifests and PROD-oriented ideas
 
 ## `templates/`
 
-This directory contains example input files and reference templates for configuration and secrets.
-
-These are not meant to hold live environment values.
-
-### `templates/config/`
-
-Non-secret example configuration files.
+This directory contains example config and secret inputs.
 
 Purpose:
 
-* document expected config inputs
-* support ConfigMap generation
-* make env requirements explicit
-
-Examples:
-
-* profile selection
-* database host/port/name
-* ingress host
-* service-specific non-secret settings
-
-### `templates/secrets/`
-
-Secret example files.
-
-Purpose:
-
-* document required secret keys
-* support Secret generation workflows
-* keep real secret values out of git
-
-Rules:
-
-* examples only
-* never commit real credentials or production values
+- document required keys
+- provide safe starter files
+- keep live secrets out of git
 
 ## `infra/`
 
-This directory contains infrastructure-related deployment files.
+This directory contains infrastructure-side baselines.
 
-This is separate from app manifests on purpose.
+### `infra/envoy-gateway/`
+
+Current active infra baseline for DEV:
+
+- Helm values for the controller
+- shared `GatewayClass`
+- controller-level notes
 
 ### `infra/ingress-nginx/`
 
-This directory is intended for ingress-nginx Helm values and related notes.
+Legacy/reference baseline:
 
-Purpose:
-
-* keep controller configuration outside app manifests
-* keep Helm values isolated from Kustomize application resources
-* support future environment-specific infra tuning
+- old ingress-nginx Helm values
+- retained for history and comparison
+- not the active DEV entry layer today
 
 ## `docs/`
 
-This directory contains short operational documentation for the deployment layer.
+Operational documentation for the deployment layer.
 
-Typical contents:
+Key files:
 
-* structure overview
-* naming convention
-* environment separation notes
-* rollout notes
+- `environments.md`
+- `naming-convention.md`
+- `rollout-notes.md`
+- this file
 
 ## Separation Principle
 
-The repository follows this rule:
+The repository still follows the same rule:
 
-* application code stays in service directories
-* deployment artifacts stay in `deploy/`
+- application code stays in service directories
+- deployment artifacts stay under `deploy/`
 
-That means:
+That keeps:
 
-* no movement of backend/frontend/auth/importer/nginx source files
-* no business-logic changes caused by Kubernetes layout
-* no mixing of infra Helm values with app manifests
-
-## Outcome
-
-This structure prepares the repository for:
-
-* Kustomize-based application deployment
-* separate dev/prod overlays
-* explicit config and secret handling
-* future infrastructure growth without chaotic reorganization
+- source layout stable
+- business logic separate from cluster plumbing
+- infrastructure notes separate from application manifests

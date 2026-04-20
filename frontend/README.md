@@ -1,43 +1,53 @@
 # Campus++ Frontend
 
-This is the frontend for the Campus++ platform, built as a modern Vue 3 Single Page Application (SPA).
+Vue 3 SPA for Campus++.
+
+## Current Runtime Role
+
+In the active DEV deployment, the frontend is:
+
+- built into a static image
+- served inside Kubernetes
+- reached through `campus-nginx`
+- exposed externally through Envoy Gateway and `campus.davl.at`
+
+The frontend does not talk to raw backend service URLs. It uses same-origin
+paths such as:
+
+- `/auth/*`
+- `/api/*`
 
 ## Features
-- Vue 3 + Vite for fast development and builds
-- TypeScript support
-- Modular structure (modules for courses, study programs, reviews, etc.)
-- Communicates with backend via REST API
-- Stateless: all authentication is handled by the NGINX gateway and Auth Service
-- Responsive, accessible UI
+
+- Vue 3 + Vite
+- TypeScript
+- modular domain structure
+- same-origin API access through the gateway
+- stateless client-side auth handling
 
 ## Project Structure
-- `src/` — Main source code
-  - `modules/` — Feature modules (courses, study programs, etc.)
-  - `app/` — App-wide config, API, router, security, styles
-  - `shared/` — Shared components, composables, theme, utils
-  - `assets/` — Static assets
-- `public/` — Static files served as-is
-- `index.html` — Main HTML entry point
+
+- `src/`
+- `public/`
+- `index.html`
+- `nginx.conf`
+- `Dockerfile`
 
 ## Development
-To start the frontend in development mode:
 
-```
+```bash
 npm install
 npm run dev
 ```
 
-## Build for Production
-```
+## Build
+
+```bash
 npm run build
 ```
 
-## Deployment
-The built static files are served by the NGINX gateway in production.
+## Deployment Notes
 
-## Environment
-- All API requests are routed through the gateway
-- No authentication logic in the frontend; JWT is sent in the `Authorization` header automatically
-
-## Contact
-For questions or contributions, see the main Campus++ repository.
+- production-style traffic goes through `campus-nginx`
+- frontend itself is not the public edge service
+- the active Kubernetes image is `ghcr.io/nexoc/campus-frontend`

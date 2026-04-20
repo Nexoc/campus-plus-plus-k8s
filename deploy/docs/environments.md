@@ -1,136 +1,97 @@
 # Environments
 
-This document describes the current environment model for Campus++ and maps it
-to the repository structure under `deploy/`.
+This document describes the current environment model for Campus++.
 
-It is intentionally split into:
-
-- current confirmed state
-- target state that is already reflected by the repo layout
-- known gaps that are not yet fully encoded in git
+It reflects the active DEV setup that is working today, not the older
+bootstrap state.
 
 ## Infrastructure Roles
 
-The current infrastructure model uses six hosts:
+Current confirmed hosts:
 
-- `GW` (`192.168.50.1`): edge reverse proxy, SSH jump host, external entry path, not part of k3s
-- `S1` (`192.168.50.10`): planned PROD k3s node
-- `S2` (`192.168.50.2`): planned PROD k3s node
-- `S3` (`192.168.50.3`): planned PROD k3s node
-- `S4` (`192.168.50.4`): PostgreSQL server outside Kubernetes
-- `S5` (`192.168.50.5`): DEV k3s single-node cluster, intended self-hosted runner host for assisted DEV deploys, recommended runner label `campus-dev`
+- `davl` / `davl.at`: public VPS, nginx reverse proxy, TLS termination
+- `GW`: private gateway / NAT / VPN hop used to reach the lab network
+- `DEV` (`192.168.56.40`): single-node k3s cluster and self-hosted GitHub runner
+- `DB` (`192.168.56.20`): PostgreSQL server outside Kubernetes
+- `MON` (`192.168.56.30`): monitoring and security tooling host
 
 ## Deployment Model
 
 Campus++ keeps application code and deployment code separate:
 
 - application code stays in `frontend/`, `auth/`, `backend/`, `importer/`, `nginx/`
-- Kubernetes application manifests live under `deploy/app/`
-- infrastructure-related Helm values and notes live under `deploy/infra/`
-- templates for env-based config and secrets live under `deploy/templates/`
+- active DEV manifests live under `deploy/dev/`
+- infrastructure baselines live under `deploy/infra/`
+- example config and secret templates live under `deploy/templates/`
 
-This separation is already reflected in the repo and should be preserved.
+The older `deploy/app/` hierarchy is still in git but is not the active DEV
+rollout path anymore.
 
 ## Runtime Environments
 
-Two Kubernetes environments are planned:
+Current active environment:
 
-- `DEV`: namespace `campus-dev`, currently deployed to `S5`
-- `PROD`: namespace `campus-prod`, target deployment on the `S1` + `S2` + `S3` k3s cluster
+- `DEV`: namespace `campus-dev` on the `DEV` k3s node
 
-The namespace mapping is already encoded in:
+Planned but not active:
 
-- `deploy/app/overlays/dev/kustomization.yaml`
-- `deploy/app/overlays/prod/kustomization.yaml`
+- `PROD`: future multi-node or separate-cluster rollout path
 
 ## Current Confirmed DEV State
 
-The current working DEV vertical slice is:
+Current working request path:
 
-`Client -> GW -> S5 NodePort -> ingress-nginx -> campus-nginx -> services -> PostgreSQL on S4`
-
-Current phase-1 staging slice in repo is:
-
-`Client -> GW -> S5 NodePort -> Envoy Gateway -> campus-nginx -> services -> PostgreSQL on S4`
+`Internet -> davl.at -> private/VPN path -> DEV 192.168.56.40:31080 -> Envoy Gateway -> campus-nginx -> services -> PostgreSQL 192.168.56.20`
 
 Confirmed characteristics:
 
-- `S5` runs k3s
-- bundled Traefik is disabled
-- `ingress-nginx` is installed and active
-- the controller is reachable through NodePort `30080/30443`
-- `IngressClass` is `nginx`
-- Envoy Gateway is introduced as a parallel phase-1 staging entry path
-- the staging Envoy HTTP NodePort in repo is `31080`
-- the DEV overlay pulls application images from GHCR
-- application traffic enters Kubernetes through an Ingress and then reaches `campus-nginx`
-- the phase-1 staging path enters Kubernetes through `Gateway` and `HTTPRoute`
-- both paths still converge on `campus-nginx`
-- `campus-nginx` keeps the app-level routing and `auth_request` logic
-- PostgreSQL stays outside Kubernetes on `S4`
-
-## Current Confirmed PROD Direction
-
-The repo already prepares a separate PROD overlay, but PROD should currently be
-treated as a target deployment path, not as a finished rollout.
-
-The intended model is:
-
-- k3s cluster on `S1`, `S2`, `S3`
-- ingress-nginx as the cluster ingress layer
-- Envoy Gateway as the Gateway API-based replacement path
-- `campus-nginx` as the internal application gateway
-- PostgreSQL still external on `S4`
-- external entry through `GW`
+- `DEV` runs k3s as a single-node cluster
+- Traefik is disabled
+- Envoy Gateway is installed and active in `envoy-gateway-system`
+- the app namespace is `campus-dev`
+- active workloads are `frontend`, `auth`, `backend`, `campus-nginx`, and `campus-importer`
+- the active Envoy `NodePort` is `31080`
+- `campus-nginx` remains the internal app gateway and auth boundary
+- PostgreSQL stays outside Kubernetes on the dedicated DB host
+- public access is provided through the `davl.at` reverse proxy
 
 ## Database Placement
 
 The database is intentionally outside Kubernetes.
 
-Current confirmed endpoint characteristics:
+Current confirmed endpoint:
 
-- host: `192.168.50.4`
+- host: `192.168.56.20`
 - port: `5432`
-- database name: `campus`
+- database: `campus`
 
-Credentials are provided through secret env files and must not be committed to
-git. The repository should only contain templates and examples for those values.
+Credentials are injected via secret env files and must not be committed.
 
 ## Configuration Strategy
 
-Application deployment uses:
+Current active deployment uses:
 
-- Kustomize for app manifests under `deploy/app/`
-- Helm only for shared infrastructure such as `ingress-nginx`
-- Helm also for shared infrastructure such as `Envoy Gateway`
-- environment-specific `ConfigMap` generation from env files
-- environment-specific `Secret` generation from env files
-
-This means:
-
-- non-secret values belong in `deploy/app/overlays/<env>/config/`
-- secret values belong outside git and should be injected via local env files
-- `deploy/templates/` documents the expected keys
+- Kustomize for app manifests under `deploy/dev/`
+- Helm for Envoy Gateway installation under `deploy/infra/envoy-gateway/`
+- versioned config files under `deploy/dev/config/`
+- ignored secret files under `deploy/dev/secrets/`
+- GHCR for deployable images
 
 ## What Is In Repo Today
 
-The repository already includes:
+The repository currently includes:
 
-- a reusable app base in `deploy/app/base`
-- separate `dev` and `prod` overlays
-- a DEV image strategy based on GHCR images
-- versioned ingress-nginx values baselines in `deploy/infra/ingress-nginx`
-- phase-1 Envoy Gateway baselines in `deploy/infra/envoy-gateway`
-- a DEV deploy workflow for a Linux self-hosted runner on `S5`
-- an automatic `main -> CI -> DEV deploy` path for the `S5` runner
+- an active DEV manifest set in `deploy/dev/`
+- Envoy Gateway controller baselines in `deploy/infra/envoy-gateway/`
+- legacy ingress-nginx baselines in `deploy/infra/ingress-nginx/`
+- GitHub Actions CI build and GHCR publishing on `main`
+- self-hosted DEV auto-deploy via `.github/workflows/deploy-dev.yml`
 
 ## What Is Still Outside Repo Or Incomplete
 
-The following are not yet fully captured in git:
+The following are still incomplete or partly external:
 
-- the actual `GW` nginx configuration
-- the final PROD delivery flow
-- self-hosted runner registration and service management on `S5`
-
-Those gaps should be documented and then reduced over time so the repo becomes
-the main source of truth.
+- the exact public VPS nginx configuration
+- the full GW private routing configuration
+- long-term stabilization of the single-node DEV cluster
+- the final PROD rollout path

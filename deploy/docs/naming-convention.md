@@ -1,40 +1,34 @@
 # Naming Convention
 
-This document defines the current and recommended naming rules for Campus++
-across namespaces, workloads, images, and entry hostnames.
-
-The goal is to keep names stable, environment-aware, and easy to operate even
-without a public production domain.
+This document defines the current naming rules for Campus++ across namespaces,
+workloads, images, and entrypoints.
 
 ## Guiding Rules
 
-- keep application workload names stable across environments
-- encode environment differences in namespaces and entry hostnames, not by
-  renaming every workload
-- prefer `GW` as the public entry point instead of exposing cluster node IPs to
-  users
-- keep Kubernetes service names internal and simple
-- keep image names aligned with service names
+- keep workload names stable
+- carry environment separation in namespace and entrypoint, not in every object name
+- keep image names aligned with component names
+- keep public names on the edge layer, not on raw node IPs
 
 ## Kubernetes Resource Naming
 
-Current app resource naming in the repo:
+Current active names:
 
-- namespace base: `campus`
-- DEV namespace: `campus-dev`
-- PROD namespace: `campus-prod`
+- namespace: `campus-dev`
 - frontend deployment/service: `frontend`
 - auth deployment/service: `auth`
 - backend deployment/service: `backend`
-- internal gateway deployment/service: `campus-nginx`
+- internal app gateway: `campus-nginx`
 - importer job: `campus-importer`
-- shared ingress resource: `campus`
+- Envoy gateway: `campus-dev`
+- Envoy route: `campus`
+- Envoy proxy policy object: `campus-dev-edge`
 
-This is a good baseline and should stay stable.
+These names are already in use and should remain stable.
 
 ## Image Naming
 
-Container image names should match the workload names:
+Current GHCR images:
 
 - `ghcr.io/nexoc/campus-frontend`
 - `ghcr.io/nexoc/campus-auth`
@@ -44,75 +38,54 @@ Container image names should match the workload names:
 
 Rules:
 
-- keep one image name per component
-- differentiate deployments by tag, not by inventing new image names
-- prefer immutable deployment tags for actual rollout decisions
+- one image name per component
+- deployment identity belongs in tags
+- `sha-<shortsha>` is the immutable build identity
+- `dev-latest` is a convenience pointer for the DEV workflow
 
 ## Hostname Strategy
 
-### Current Confirmed DEV Host
+Current confirmed public DEV hostname:
 
-The current DEV overlay uses:
+- `campus.davl.at`
 
-- `campus-dev.192-168-50-5.sslip.io`
+Current internal smoke endpoint:
 
-This is acceptable as a bootstrap or lab hostname because it resolves directly
-to the DEV node IP.
+- `http://192.168.56.40:31080`
 
-### Recommended Target Strategy
+Policy:
 
-For a maintainable setup, user-facing entry names should terminate on `GW`.
-
-Preferred direction:
-
-- DEV entry hostname points to `GW`
-- PROD entry hostname points to `GW`
-- `GW` proxies to the appropriate cluster ingress entrypoint
-
-Example pattern:
-
-- `campus-dev.<internal-zone>`
-- `campus-prod.<internal-zone>`
-
-If no internal DNS is available yet, use one of these temporary options:
-
-- `/etc/hosts` entries on the client machines
-- local LAN DNS if available
-- `sslip.io` only as a temporary DEV fallback
+- users should access the public hostname, not the raw node IP
+- raw node IPs are acceptable for operator smoke tests only
+- `sslip.io` is no longer the active DEV hostname strategy
 
 ## Naming Rules By Layer
 
-At the edge:
+At the public edge:
 
-- users should access `GW` hostnames, not raw node IPs
+- use `campus.davl.at`
 
-In Kubernetes:
+Inside Kubernetes:
 
-- Ingress hostnames should represent the environment entrypoint
-- service names should stay environment-neutral
-- namespaces should carry the environment separation
+- keep service names environment-neutral
+- keep environment identity in namespace and edge routing
 
 In CI and registry:
 
-- images keep stable component names
-- tags carry build identity such as `sha-<shortsha>`
-- overlays should pin immutable tags for real deployments
-- moving tags like `dev-latest` are acceptable as convenience pointers, but
-  should not be deployment truth
+- keep stable component image names
+- use `sha-<shortsha>` for immutable references
+- use `dev-latest` only for fast-moving DEV delivery
 
 ## Current Repo Alignment
 
 The repo currently reflects:
 
 - stable workload names
-- environment-separated namespaces
-- DEV hostname defined in the DEV ingress patch
+- `campus-dev` as the active namespace
 - GHCR image names aligned with the component model
+- Envoy Gateway resources aligned with the DEV rollout
 
-The repo does not yet fully reflect:
+The repo still does not fully capture:
 
-- the final `GW` hostname policy
-- the final PROD hostname
-- the exact internal DNS or hosts-file strategy used by clients
-
-Those items should be documented once the `GW` naming choice is finalized.
+- final PROD naming
+- the full public edge nginx configuration

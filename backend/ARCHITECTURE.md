@@ -1,154 +1,138 @@
-# Architecture Overview — Campus++ Backend
+# Backend Architecture — Campus++
 
-## 1. Purpose
+## Purpose
 
-This document describes the architectural decisions and structural
-principles of the Campus++ backend service.
+This document describes the current backend architecture as it exists in the
+repository and in the active DEV deployment.
 
-The goal of the architecture is to provide a clear separation of
-responsibilities, reflect the domain model directly in the codebase,
-and support long-term maintainability and scalability.
+It is not a greenfield design note anymore. It reflects the implemented
+service, package structure, and runtime boundaries.
 
----
+## Runtime Position
 
-## 2. High-Level Architecture
+The backend is not exposed directly to the public internet.
 
-The Campus++ system follows a multi-service architecture:
+Current request path:
 
-- Frontend: Vue 3 SPA
-- Auth Service: Spring Boot (authentication and authorization)
-- Backend Service: Spring Boot (domain logic and data)
-- Gateway: Nginx (single entry point, security enforcement)
-- Database: PostgreSQL
-- Orchestration: Docker Compose
+`Internet -> davl.at -> DEV 192.168.56.40:31080 -> Envoy Gateway -> campus-nginx -> backend`
 
-The backend service is **not directly exposed** to clients.
-All requests pass through the gateway, which performs authentication
-and forwards trusted identity information via HTTP headers.
+Trust boundary:
 
----
+- public TLS and public hostname terminate on `davl.at`
+- Envoy Gateway is the Kubernetes entry layer
+- `campus-nginx` is the internal application gateway
+- backend consumes trusted upstream headers and does not act as the public edge
 
-## 3. Trust and Security Model
+## Service Context
 
-The backend service does not perform authentication.
+Campus++ currently runs with these main services:
 
-- JWT validation is handled exclusively by the Auth Service
-- The gateway validates requests using an internal auth endpoint
-- The backend trusts the gateway and consumes identity information
-  from request headers (e.g. user ID, roles)
+- `frontend` — Vue SPA
+- `auth` — Spring Boot authentication service
+- `backend` — Spring Boot domain/data service
+- `campus-nginx` — internal app gateway and auth boundary
+- `campus-importer` — one-shot data import job
+- PostgreSQL on `192.168.56.20`
 
-This model ensures:
-- no duplicated authentication logic
-- reduced attack surface
-- strict separation of concerns
+The backend connects to PostgreSQL directly and runs Flyway migrations for the
+`app` schema during startup.
 
----
+## Security Model
 
-## 4. Domain-Oriented Project Structure
+The backend does not perform primary authentication itself.
 
-The backend does **not** use a traditional layer-based structure
-(controller/service/repository at the root level).
+Current model:
 
-Instead, it follows a **domain-oriented (module-first) structure**.
+- `auth` handles login, registration, token issuance, and token validation
+- `campus-nginx` enforces access using upstream auth checks
+- backend receives trusted identity data through headers and maps it into
+  `UserContext`
 
-```
+This keeps auth logic centralized and avoids duplicating JWT handling across
+domain modules.
 
-modules/
-├── courses
-├── studyprograms
-├── reviews
-├── threads
-├── posts
-├── favourites
-├── reports
-└── coursesuggestions
+## Code Structure
 
-```
+The backend is organized around domain modules instead of a single global
+controller/service/repository split.
 
-Each module represents a distinct business domain and is responsible
-for its own API, business rules and data.
+Top-level areas:
 
-### Advantages of this approach
+- `modules/`
+- `config/`
+- `security/`
+- `common/`
 
-- The folder structure directly reflects the domain model (UML)
-- Business logic is not scattered across unrelated packages
-- Each module has clear ownership and boundaries
-- Modules can be evolved or extracted independently
-- The risk of creating large “god services” is reduced
+Typical module layout:
 
----
-
-## 5. Module Internal Structure
-
-Inside each domain module, responsibilities are separated as follows:
-
-```
-
+```text
 <module>/
-├── api/        # REST controllers (HTTP layer)
-├── service/    # Business logic and use cases
-├── model/      # Domain models and DTOs
-└── README.md   # Module contract and responsibility
-
+├── api/
+├── service/
+├── repository/
+├── model/
+└── README.md
 ```
 
-- `api`: Handles HTTP requests and responses only
-- `service`: Contains domain rules and authorization checks
-- `model`: Represents domain concepts and API data structures
-- `README.md`: Documents the module’s responsibility and boundaries
+Responsibilities:
 
----
+- `api/` exposes HTTP endpoints
+- `service/` holds business rules and authorization checks
+- `repository/` performs persistence access
+- `model/` contains domain models and DTOs
 
-## 6. Cross-Cutting Concerns
+## Current Domain Modules
 
-Logic that is shared across multiple modules is placed outside of
-the domain modules:
+Implemented modules present in the codebase:
 
-```
+- `studyprograms`
+- `courses`
+- `reviews`
+- `favourites`
+- `threads`
+- `posts`
+- `comments`
+- `reports`
+- `reactions`
+- `watch`
+- `coursematerials`
 
-config/     # Application-wide configuration
-security/   # Gateway-trusted user context handling
-common/     # Exceptions and shared utilities
+Special case:
 
-```
+- `coursesuggestions` currently has a database table but no active backend
+  implementation module
 
-This prevents tight coupling between domain modules and shared logic.
+## Persistence Style
 
----
+The backend currently uses:
 
-## 7. Database Design Principles
+- Flyway migrations as the schema contract
+- PostgreSQL as the primary data store
+- repository-based persistence access
+- explicit SQL and JDBC-centric repositories for much of the data layer
 
-- Database schema is defined explicitly using Flyway migrations
-- SQL is treated as the primary source of truth
-- ORM usage (e.g. JPA) is optional and secondary
-- No foreign keys to external services (e.g. Auth Service)
-- User references are stored as UUIDs only
-- Production environments use schema validation, not auto-generation
+The project is not a pure JPA-first design. Schema ownership lives in the
+migrations.
 
----
+## Cross-Cutting Concerns
 
-## 8. Current Project State
+Shared logic outside modules includes:
 
-At the current stage, the project focuses on:
+- `config/` for app, web, JSON, and JDBC setup
+- `security/` for `UserContext` extraction and request-scoped identity handling
+- `common/` for exception handling, utilities, and debug helpers
 
-- architectural structure
-- domain boundaries
-- database contracts
+## Current Operational Notes
 
-No business logic or persistence implementations are finalized yet.
-This allows architectural decisions to be reviewed and adjusted
-before implementation begins.
+- active Spring profile in DEV is `dev`
+- backend listens on container port `8080`
+- DEV deploy runs in namespace `campus-dev`
+- current active deployment path is `deploy/dev/`
+- public traffic reaches backend only through `campus-nginx`
 
----
+## Known Gaps
 
-## 9. Design Goals Summary
-
-The architecture is designed to achieve:
-
-- clear separation of concerns
-- strong alignment with the domain model
-- security through gateway enforcement
-- maintainability over rapid short-term development
-- readiness for future scaling and extension
-```
-
+- the single-node DEV cluster is operationally unstable at times
+- some newer domain areas exist in code but are not yet documented in deeper
+  functional detail outside their module READMEs
+- `coursesuggestions` remains only partially realized

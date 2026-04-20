@@ -1,33 +1,33 @@
-
 # Module: favourites
 
-## Responsibility
-Manages favourite courses for users. Allows users to add, list, and remove their favourite courses.
+## Current Role
 
-## Core concepts
-- Favourite: A user's saved course.
-- User: The owner of the favourite.
-- Course: The course marked as favourite.
+Manages user favourites for both courses and study programs.
 
-## API Endpoints (FavouritesController)
-- `GET /api/favourites` — List all favourites for the current user (authenticated)
-- `POST /api/favourites` — Add a course to favourites (authenticated)
-- `DELETE /api/favourites/{courseId}` — Remove a course from favourites (authenticated)
+This module is authenticated-only. User identity is taken from the backend
+user context, not from request payloads.
 
-## Ownership rules
-- Favourites are owned by the user who created them.
-- Users can only manage their own favourites.
-- User ID is derived from UserContext (NOT from request body).
+## API
 
-## Related modules
-- courses: Favourites are linked to courses.
+Course favourites:
 
-## Table description
-**favourites**
-| Column         | Type      | Description                       |
-| -------------- | --------- | --------------------------------- |
-| user_id        | UUID      | Owner of the favourite (PK)       |
-| course_id      | UUID      | Linked course (PK)                |
-| created_at     | TIMESTAMP | When the favourite was added      |
+- `GET /api/favourites`
+- `POST /api/favourites`
+- `DELETE /api/favourites/{courseId}`
 
-**Primary Key**: Composite key (user_id, course_id)
+Study program favourites:
+
+- `GET /api/favourites/study-programs`
+- `POST /api/favourites/study-programs`
+- `DELETE /api/favourites/study-programs/{studyProgramId}`
+
+## Ownership Rules
+
+- users manage only their own favourites
+- course and study program IDs are passed in requests
+- current user ID comes from upstream-authenticated context
+
+## Notes
+
+- this module does not expose public read-only endpoints
+- it depends on existing course and study program records

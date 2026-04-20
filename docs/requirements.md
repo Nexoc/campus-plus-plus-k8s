@@ -1,5 +1,16 @@
 # 3. Functional Requirements (MoSCoW, Rupp)
 
+## Status Note
+
+This file is a requirements snapshot, not the runtime/deployment source of
+truth.
+
+For the current deployed DEV setup as of April 20, 2026, use:
+
+- `README.md`
+- `deploy/README.md`
+- `deploy/docs/*`
+
 All functional requirements below follow the MoSCoW prioritization and are formulated using a Rupp-style structure (“The system shall…”).
 
 ## 3.1 Must Requirements
