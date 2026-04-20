@@ -17,7 +17,6 @@ concurrency:
 
 jobs:
   deploy-dev:
-    name: DEV runner activation and environment check
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' ||
@@ -31,11 +30,9 @@ jobs:
     runs-on:
       - self-hosted
       - Linux
-    timeout-minutes: 15
-    environment: dev
+    timeout-minutes: 10
     env:
       KUBECONFIG: /home/nexoc/.kube/config
-      CAMPUS_SECRETS_ROOT: /home/nexoc/campus-secrets
 
     steps:
       - name: Checkout repository
@@ -43,115 +40,26 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Show workflow context
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Workflow name: $GITHUB_WORKFLOW"
-          echo "Event name: $GITHUB_EVENT_NAME"
-          echo "Ref: $GITHUB_REF"
-          echo "SHA: $GITHUB_SHA"
-          echo "Actor: $GITHUB_ACTOR"
-
-      - name: Show runner information
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Runner is alive"
-          hostname
-          whoami
-          pwd
-          uname -a
-
-      - name: Verify required commands
-        shell: bash
-        run: |
-          set -euo pipefail
-          for cmd in bash kubectl curl sed mktemp; do
-            command -v "$cmd" >/dev/null 2>&1 || {
-              echo "Missing required command: $cmd" >&2
-              exit 1
-            }
-          done
-
-      - name: Verify kubeconfig exists
-        shell: bash
-        run: |
-          set -euo pipefail
-          [[ -f "$KUBECONFIG" ]] || {
-            echo "KUBECONFIG not found: $KUBECONFIG" >&2
-            exit 1
-          }
-          ls -lah "$KUBECONFIG"
-
       - name: Verify cluster access
         shell: bash
         run: |
           set -euo pipefail
+          kubectl get nodes -o wide
 
-          retry_command() {
-            local max_attempts="$1"
-            local sleep_seconds="$2"
-            shift 2
-
-            local attempt=1
-            while true; do
-              if "$@"; then
-                return 0
-              fi
-
-              if (( attempt >= max_attempts )); then
-                echo "Command failed after ${attempt} attempts: $*" >&2
-                return 1
-              fi
-
-              echo "Attempt ${attempt} failed: $*" >&2
-              echo "Retrying in ${sleep_seconds}s..." >&2
-              sleep "$sleep_seconds"
-              attempt=$((attempt + 1))
-            done
-          }
-
-          kubectl config current-context || true
-          retry_command 5 10 kubectl get nodes -o wide
-          retry_command 5 10 kubectl get ns
-          retry_command 5 10 kubectl get pods -A
-
-      - name: Verify DEV host secret files
+      - name: Apply manifests
         shell: bash
         run: |
           set -euo pipefail
-          secret_dir="$CAMPUS_SECRETS_ROOT/dev"
-          required_files=(
-            "$secret_dir/db-secrets.env"
-            "$secret_dir/auth-secrets.env"
-          )
+          kubectl apply -k deploy/dev
 
-          for path in "${required_files[@]}"; do
-            [[ -f "$path" ]] || {
-              echo "Missing required host secret file: $path" >&2
-              exit 1
-            }
-          done
-
-          ls -lah "$secret_dir"
-
-      - name: Show deploy directory status
+      - name: Wait for rollout
         shell: bash
         run: |
           set -euo pipefail
-          echo "Repository root:"
-          pwd
-          echo
-          echo "deploy tree:"
-          ls -lah deploy || true
-          echo
-          echo "dev overlay:"
-          ls -lah deploy/app/overlays/dev || true
+          kubectl rollout status deployment/campus-test -n campus-dev --timeout=120s
 
-      - name: Final success marker
+      - name: Show deployed resources
         shell: bash
         run: |
           set -euo pipefail
-          echo "DEV runner activation check passed."
-          echo "GitHub Actions -> self-hosted runner -> cluster access -> secret files: OK"
+          kubectl get all -n campus-dev -o wide
