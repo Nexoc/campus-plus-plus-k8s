@@ -34,7 +34,7 @@ jobs:
     timeout-minutes: 15
     environment: dev
     env:
-      KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+      KUBECONFIG: /home/nexoc/.kube/config
       CAMPUS_SECRETS_ROOT: /home/nexoc/campus-secrets
 
     steps:
@@ -115,6 +115,7 @@ jobs:
           kubectl config current-context || true
           retry_command 5 10 kubectl get nodes -o wide
           retry_command 5 10 kubectl get ns
+          retry_command 5 10 kubectl get pods -A
 
       - name: Verify DEV host secret files
         shell: bash
