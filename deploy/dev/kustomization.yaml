@@ -3,10 +3,58 @@ kind: Kustomization
 
 namespace: campus-dev
 
+generatorOptions:
+  disableNameSuffixHash: true
+
 resources:
   - namespace.yaml
-  - deployment.yaml
-  - service.yaml
+  - frontend-deployment.yaml
+  - frontend-service.yaml
+  - auth-deployment.yaml
+  - auth-service.yaml
+  - backend-deployment.yaml
+  - backend-service.yaml
+  - nginx-deployment.yaml
+  - nginx-service.yaml
+  - importer-job.yaml
   - envoyproxy.yaml
   - gateway.yaml
   - httproute.yaml
+
+configMapGenerator:
+  - name: auth-config
+    envs:
+      - config/auth-config.env
+  - name: backend-config
+    envs:
+      - config/backend-config.env
+  - name: importer-config
+    envs:
+      - config/importer-config.env
+
+secretGenerator:
+  - name: db-secrets
+    envs:
+      - secrets/db-secrets.env
+    type: Opaque
+  - name: auth-secrets
+    envs:
+      - secrets/auth-secrets.env
+    type: Opaque
+
+images:
+  - name: campus-frontend
+    newName: ghcr.io/nexoc/campus-frontend
+    newTag: dev-latest
+  - name: campus-auth
+    newName: ghcr.io/nexoc/campus-auth
+    newTag: dev-latest
+  - name: campus-backend
+    newName: ghcr.io/nexoc/campus-backend
+    newTag: dev-latest
+  - name: campus-nginx
+    newName: ghcr.io/nexoc/campus-nginx
+    newTag: dev-latest
+  - name: campus-importer
+    newName: ghcr.io/nexoc/campus-importer
+    newTag: dev-latest
