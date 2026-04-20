@@ -1,60 +1,23 @@
 name: Deploy DEV
 
 on:
-  # Automatic path:
-  # deploy to S5 only after the main CI pipeline has finished successfully.
   workflow_run:
     workflows: ["CI Pipeline"]
     types:
       - completed
-  # Manual path:
-  # keep a dispatch entry point for re-runs or render-only checks.
+
   workflow_dispatch:
-    inputs:
-      image_tag:
-        description: Immutable GHCR tag to deploy, for example sha-19a6a44
-        required: false
-        default: ""
-        type: string
-      render_only:
-        description: Render manifests only and skip kubectl apply
-        required: false
-        default: false
-        type: boolean
-      smoke_url:
-        description: Runner-local smoke URL for the legacy ingress path
-        required: false
-        default: http://127.0.0.1:30080/
-        type: string
-      smoke_host_header:
-        description: Optional Host header for the legacy ingress smoke check
-        required: false
-        default: campus-dev.192-168-50-5.sslip.io
-        type: string
-      envoy_smoke_url:
-        description: Runner-local smoke URL for the Envoy staging NodePort
-        required: false
-        default: http://127.0.0.1:31080/
-        type: string
-      timeout_seconds:
-        description: Rollout and smoke timeout in seconds
-        required: false
-        default: "300"
-        type: string
 
 permissions:
   contents: read
 
-# Avoid overlapping deploys to the same DEV environment.
 concurrency:
   group: campus-dev-deploy
   cancel-in-progress: false
 
 jobs:
   deploy-dev:
-    name: Deploy DEV on campus-dev runner
-    # For auto-deploy, accept only successful CI runs for push events on main.
-    # Manual workflow_dispatch remains allowed.
+    name: DEV runner activation and environment check
     if: >-
       ${{
         github.event_name == 'workflow_dispatch' ||
@@ -67,95 +30,59 @@ jobs:
       }}
     runs-on:
       - self-hosted
-      - linux
-      # Custom label that should point to S5, the DEV runner host.
-      - campus-dev
-    timeout-minutes: 30
+      - Linux
+    timeout-minutes: 15
     environment: dev
     env:
       KUBECONFIG: /etc/rancher/k3s/k3s.yaml
-      # Fixed host path on S5 for non-git secret material used by the DEV deploy.
       CAMPUS_SECRETS_ROOT: /home/nexoc/campus-secrets
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # On workflow_run, deploy the exact commit that passed CI.
           ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Resolve deployment parameters
-        id: params
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          MANUAL_IMAGE_TAG: ${{ inputs.image_tag }}
-          MANUAL_SMOKE_URL: ${{ inputs.smoke_url }}
-          MANUAL_SMOKE_HOST_HEADER: ${{ inputs.smoke_host_header }}
-          MANUAL_ENVOY_SMOKE_URL: ${{ inputs.envoy_smoke_url }}
-          MANUAL_TIMEOUT_SECONDS: ${{ inputs.timeout_seconds }}
-          WORKFLOW_RUN_SHA: ${{ github.event.workflow_run.head_sha }}
-        run: |
-          set -euo pipefail
-
-          if [[ "$EVENT_NAME" == "workflow_run" ]]; then
-            # CI already built and pushed images for the triggering commit,
-            # so derive the immutable GHCR tag from that workflow_run SHA.
-            resolved_image_tag="sha-${WORKFLOW_RUN_SHA:0:7}"
-            resolved_render_only="false"
-            resolved_smoke_url="http://127.0.0.1:30080/"
-            resolved_smoke_host_header="campus-dev.192-168-50-5.sslip.io"
-            resolved_envoy_smoke_url="http://127.0.0.1:31080/"
-            resolved_timeout_seconds="300"
-          else
-            resolved_image_tag="${MANUAL_IMAGE_TAG:-}"
-            if [[ -z "$resolved_image_tag" ]]; then
-              # Manual runs may omit image_tag and fall back to the checked-out SHA.
-              resolved_image_tag="sha-${GITHUB_SHA:0:7}"
-            fi
-            resolved_render_only="${{ inputs.render_only }}"
-            resolved_smoke_url="${MANUAL_SMOKE_URL:-http://127.0.0.1:30080/}"
-            resolved_smoke_host_header="${MANUAL_SMOKE_HOST_HEADER:-campus-dev.192-168-50-5.sslip.io}"
-            resolved_envoy_smoke_url="${MANUAL_ENVOY_SMOKE_URL:-http://127.0.0.1:31080/}"
-            resolved_timeout_seconds="${MANUAL_TIMEOUT_SECONDS:-300}"
-          fi
-
-          if [[ -z "$resolved_image_tag" ]]; then
-            echo "Image tag resolved to an empty value." >&2
-            exit 1
-          fi
-
-          echo "image_tag=$resolved_image_tag" >> "$GITHUB_OUTPUT"
-          echo "render_only=$resolved_render_only" >> "$GITHUB_OUTPUT"
-          echo "smoke_url=$resolved_smoke_url" >> "$GITHUB_OUTPUT"
-          echo "smoke_host_header=$resolved_smoke_host_header" >> "$GITHUB_OUTPUT"
-          echo "envoy_smoke_url=$resolved_envoy_smoke_url" >> "$GITHUB_OUTPUT"
-          echo "timeout_seconds=$resolved_timeout_seconds" >> "$GITHUB_OUTPUT"
-
-      - name: Show deployment inputs
+      - name: Show workflow context
         shell: bash
         run: |
           set -euo pipefail
-          echo "Workflow ref: $GITHUB_REF"
-          echo "Workflow SHA: $GITHUB_SHA"
-          echo "Event: ${{ github.event_name }}"
-          echo "Resolved image tag: ${{ steps.params.outputs.image_tag }}"
-          echo "Render only: ${{ steps.params.outputs.render_only }}"
-          echo "Smoke URL: ${{ steps.params.outputs.smoke_url }}"
-          echo "Smoke Host header: ${{ steps.params.outputs.smoke_host_header }}"
-          echo "Envoy smoke URL: ${{ steps.params.outputs.envoy_smoke_url }}"
-          echo "Timeout seconds: ${{ steps.params.outputs.timeout_seconds }}"
+          echo "Workflow name: $GITHUB_WORKFLOW"
+          echo "Event name: $GITHUB_EVENT_NAME"
+          echo "Ref: $GITHUB_REF"
+          echo "SHA: $GITHUB_SHA"
+          echo "Actor: $GITHUB_ACTOR"
 
-      - name: Verify runner prerequisites
+      - name: Show runner information
         shell: bash
         run: |
           set -euo pipefail
-          for cmd in bash kubectl curl mktemp sed; do
+          echo "Runner is alive"
+          hostname
+          whoami
+          pwd
+          uname -a
+
+      - name: Verify required commands
+        shell: bash
+        run: |
+          set -euo pipefail
+          for cmd in bash kubectl curl sed mktemp; do
             command -v "$cmd" >/dev/null 2>&1 || {
               echo "Missing required command: $cmd" >&2
               exit 1
             }
           done
+
+      - name: Verify kubeconfig exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -f "$KUBECONFIG" ]] || {
+            echo "KUBECONFIG not found: $KUBECONFIG" >&2
+            exit 1
+          }
+          ls -lah "$KUBECONFIG"
 
       - name: Verify cluster access
         shell: bash
@@ -186,7 +113,8 @@ jobs:
           }
 
           kubectl config current-context || true
-          retry_command 5 10 kubectl get nodes
+          retry_command 5 10 kubectl get nodes -o wide
+          retry_command 5 10 kubectl get ns
 
       - name: Verify DEV host secret files
         shell: bash
@@ -205,123 +133,24 @@ jobs:
             }
           done
 
-      - name: Ensure Envoy Gateway for DEV
-        if: ${{ steps.params.outputs.render_only != 'true' }}
+          ls -lah "$secret_dir"
+
+      - name: Show deploy directory status
         shell: bash
         run: |
           set -euo pipefail
+          echo "Repository root:"
+          pwd
+          echo
+          echo "deploy tree:"
+          ls -lah deploy || true
+          echo
+          echo "dev overlay:"
+          ls -lah deploy/app/overlays/dev || true
 
-          retry_command() {
-            local max_attempts="$1"
-            local sleep_seconds="$2"
-            shift 2
-
-            local attempt=1
-            while true; do
-              if "$@"; then
-                return 0
-              fi
-
-              if (( attempt >= max_attempts )); then
-                echo "Command failed after ${attempt} attempts: $*" >&2
-                return 1
-              fi
-
-              echo "Attempt ${attempt} failed: $*" >&2
-              echo "Retrying in ${sleep_seconds}s..." >&2
-              sleep "$sleep_seconds"
-              attempt=$((attempt + 1))
-            done
-          }
-
-          required_crds=(
-            gateways.gateway.networking.k8s.io
-            gatewayclasses.gateway.networking.k8s.io
-            httproutes.gateway.networking.k8s.io
-            envoyproxies.gateway.envoyproxy.io
-            clienttrafficpolicies.gateway.envoyproxy.io
-          )
-
-          kubectl get ns campus-dev >/dev/null 2>&1 || kubectl create ns campus-dev
-          command -v helm >/dev/null 2>&1 || {
-            echo "Missing required command: helm" >&2
-            exit 1
-          }
-
-          # Always run helm upgrade so changes to values-dev.yaml are applied to
-          # an already-installed controller as well.
-          retry_command 5 15 \
-          helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
-            --version v1.7.0 \
-            --namespace envoy-gateway-system \
-            --create-namespace \
-            -f deploy/infra/envoy-gateway/values-dev.yaml
-
-          retry_command 5 10 \
-          kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
-
-          controller_deployment=""
-          for attempt in 1 2 3 4 5; do
-            controller_deployment="$(
-              kubectl -n envoy-gateway-system get deployment \
-                -l app.kubernetes.io/instance=eg \
-                -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true
-            )"
-
-            if [[ -n "$controller_deployment" ]]; then
-              break
-            fi
-
-            echo "Envoy Gateway deployment not discoverable yet. Retrying in 10s..." >&2
-            sleep 10
-          done
-
-          if [[ -z "$controller_deployment" ]]; then
-            echo "Envoy Gateway deployment was not found after installation." >&2
-            exit 1
-          fi
-
-          retry_command 5 15 \
-          kubectl -n envoy-gateway-system rollout status "deployment/$controller_deployment" --timeout=300s
-
-          retry_command 5 10 \
-          kubectl get gatewayclass campus-envoy
-
-          for crd in "${required_crds[@]}"; do
-            retry_command 5 10 \
-            kubectl get crd "$crd" >/dev/null
-          done
-
-      - name: Render DEV overlay only
-        if: ${{ steps.params.outputs.render_only == 'true' }}
+      - name: Final success marker
         shell: bash
         run: |
           set -euo pipefail
-          bash deploy/scripts/apply-overlay.sh \
-            --environment dev \
-            --image-tag "${{ steps.params.outputs.image_tag }}" \
-            --render-only
-
-      - name: Apply DEV overlay
-        if: ${{ steps.params.outputs.render_only != 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash deploy/scripts/apply-overlay.sh \
-            --environment dev \
-            --image-tag "${{ steps.params.outputs.image_tag }}"
-
-      - name: Verify DEV rollout
-        if: ${{ steps.params.outputs.render_only != 'true' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Smoke check targets the local legacy ingress NodePort on S5 and uses
-          # the expected host via Host header. During phase 1 we also
-          # probe the Envoy staging NodePort separately.
-          bash deploy/scripts/verify-overlay.sh \
-            --environment dev \
-            --timeout-seconds "${{ steps.params.outputs.timeout_seconds }}" \
-            --smoke-url "${{ steps.params.outputs.smoke_url }}" \
-            --smoke-host-header "${{ steps.params.outputs.smoke_host_header }}" \
-            --envoy-smoke-url "${{ steps.params.outputs.envoy_smoke_url }}"
+          echo "DEV runner activation check passed."
+          echo "GitHub Actions -> self-hosted runner -> cluster access -> secret files: OK"
