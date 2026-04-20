@@ -1,12 +1,14 @@
 package at.campus.backend.modules.comments.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 /**
  * CreateCommentRequest - Request model for creating a comment.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class CreateCommentRequest {
 
     private String content;
-    private String userName;
 
     // Constructors
 
@@ -25,13 +27,5 @@ public class CreateCommentRequest {
 
     public void setContent(String content) {
         this.content = content;
-    }
-
-    public String getUserName() {
-        return userName;
-    }
-
-    public void setUserName(String userName) {
-        this.userName = userName;
     }
 }

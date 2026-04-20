@@ -82,7 +82,6 @@ async function handleSubmit() {
     await discussionsStore.createThread(props.courseId, {
       title: formData.value.title,
       content: formData.value.content || undefined,
-      userName: authStore.user?.nickname || authStore.user?.email || 'Anonymous',
     })
     resetForm()
     emit('thread-created')

@@ -1,11 +1,14 @@
 package at.campus.backend.modules.threads.service;
 
+import at.campus.backend.common.exception.ForbiddenException;
+import at.campus.backend.common.exception.NotFoundException;
 import at.campus.backend.modules.threads.model.Thread;
 import at.campus.backend.modules.threads.model.UpdateThreadRequest;
 import at.campus.backend.modules.threads.repository.ThreadRepository;
 import at.campus.backend.modules.watch.model.WatchTargetType;
 import at.campus.backend.modules.watch.service.NotificationService;
 import at.campus.backend.modules.watch.service.WatchService;
+import at.campus.backend.security.Roles;
 import at.campus.backend.security.UserContext;
 import org.springframework.stereotype.Service;
 
@@ -47,19 +50,19 @@ public class ThreadService {
      */
     public Thread getThreadById(UUID threadId) {
         return threadRepository.findById(threadId)
-            .orElseThrow(() -> new RuntimeException("Thread not found: " + threadId));
+            .orElseThrow(() -> new NotFoundException("Thread not found: " + threadId));
     }
 
     /**
      * Create a new thread (requires authentication).
      * Authorization: Any authenticated user can create a thread.
      */
-    public Thread createThread(UUID courseId, String title, String content, String userName) {
+    public Thread createThread(UUID courseId, String title, String content) {
         if (userContext.getUserId() == null) {
-            throw new RuntimeException("Authentication required to create a thread");
+            throw new ForbiddenException("Authentication required to create a thread");
         }
         if (title == null || title.isBlank()) {
-            throw new RuntimeException("Thread title is required");
+            throw new IllegalArgumentException("Thread title is required");
         }
 
         Thread thread = new Thread();
@@ -68,7 +71,7 @@ public class ThreadService {
         thread.setTitle(title);
         thread.setContent(content);
         thread.setCreatedBy(UUID.fromString(userContext.getUserId()));
-        thread.setCreatedByName(userName);
+        thread.setCreatedByName(userContext.getEffectiveDisplayName());
 
         threadRepository.save(thread);
         
@@ -94,18 +97,18 @@ public class ThreadService {
      */
     public Thread updateThread(UUID threadId, UpdateThreadRequest request) {
         if (userContext.getUserId() == null) {
-            throw new SecurityException("Only authenticated users can update threads");
+            throw new ForbiddenException("Only authenticated users can update threads");
         }
 
         Thread thread = threadRepository.findById(threadId)
-            .orElseThrow(() -> new RuntimeException("Thread not found: " + threadId));
+            .orElseThrow(() -> new NotFoundException("Thread not found: " + threadId));
 
         // Check if user is the author or a moderator
         boolean isAuthor = thread.getCreatedBy().toString().equals(userContext.getUserId());
-        boolean isModerator = userContext.hasRole("MODERATOR");
+        boolean isModerator = userContext.hasRole(Roles.MODERATOR);
 
         if (!isAuthor && !isModerator) {
-            throw new SecurityException("Only the author or a moderator can update this thread");
+            throw new ForbiddenException("Only the author or a moderator can update this thread");
         }
 
         if (request.getTitle() != null && !request.getTitle().isBlank()) {
@@ -124,18 +127,18 @@ public class ThreadService {
      */
     public void deleteThread(UUID threadId) {
         if (userContext.getUserId() == null) {
-            throw new SecurityException("Only authenticated users can delete threads");
+            throw new ForbiddenException("Only authenticated users can delete threads");
         }
 
         Thread thread = threadRepository.findById(threadId)
-            .orElseThrow(() -> new RuntimeException("Thread not found: " + threadId));
+            .orElseThrow(() -> new NotFoundException("Thread not found: " + threadId));
 
         // Check if user is the author or a moderator
         boolean isAuthor = thread.getCreatedBy().toString().equals(userContext.getUserId());
-        boolean isModerator = userContext.hasRole("MODERATOR");
+        boolean isModerator = userContext.hasRole(Roles.MODERATOR);
 
         if (!isAuthor && !isModerator) {
-            throw new SecurityException("Only the author or a moderator can delete this thread");
+            throw new ForbiddenException("Only the author or a moderator can delete this thread");
         }
 
         threadRepository.deleteById(threadId);

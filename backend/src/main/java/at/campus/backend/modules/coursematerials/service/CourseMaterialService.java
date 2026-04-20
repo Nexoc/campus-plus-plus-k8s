@@ -6,6 +6,7 @@ import at.campus.backend.modules.coursematerials.model.CourseMaterialDto;
 import at.campus.backend.modules.coursematerials.model.CourseMaterialUpdateRequest;
 import at.campus.backend.modules.coursematerials.repository.CourseMaterialRepository;
 import at.campus.backend.modules.courses.repository.CourseRepository;
+import at.campus.backend.security.Roles;
 import at.campus.backend.security.UserContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -204,7 +205,7 @@ public class CourseMaterialService {
                 );
 
         boolean isModerator =
-                userContext.hasRole("Moderator") || userContext.hasRole("MODERATOR");
+                userContext.hasRole(Roles.MODERATOR);
 
 
         boolean isUploader = material.getUploaderId().toString().equals(userId);
@@ -238,7 +239,7 @@ public class CourseMaterialService {
                 );
 
         boolean isModerator =
-                userContext.hasRole("Moderator") || userContext.hasRole("MODERATOR");
+                userContext.hasRole(Roles.MODERATOR);
 
         boolean isUploader = material.getUploaderId().toString().equals(userId);
 

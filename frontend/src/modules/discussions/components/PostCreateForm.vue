@@ -32,7 +32,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useDiscussionsStore } from '../store/discussions.store'
-import { useAuthStore } from '@/modules/auth/store/auth.store'
 
 interface Props {
   threadId: string
@@ -46,7 +45,6 @@ const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const discussionsStore = useDiscussionsStore()
-const authStore = useAuthStore()
 
 const formData = ref({
   content: '',
@@ -61,7 +59,6 @@ async function handleSubmit() {
   try {
     await discussionsStore.createPost(props.threadId, {
       content: formData.value.content,
-      userName: authStore.user?.nickname || authStore.user?.email || 'Anonymous',
     })
     resetForm()
     emit('post-created')

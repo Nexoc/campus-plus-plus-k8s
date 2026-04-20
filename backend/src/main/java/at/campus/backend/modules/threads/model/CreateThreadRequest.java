@@ -1,16 +1,18 @@
 package at.campus.backend.modules.threads.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.util.UUID;
 
 /**
  * CreateThreadRequest - Request model for creating a thread.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class CreateThreadRequest {
 
     private UUID courseId;
     private String title;
     private String content;
-    private String userName;
 
     // Constructors
 
@@ -46,13 +48,5 @@ public class CreateThreadRequest {
 
     public void setContent(String content) {
         this.content = content;
-    }
-
-    public String getUserName() {
-        return userName;
-    }
-
-    public void setUserName(String userName) {
-        this.userName = userName;
     }
 }

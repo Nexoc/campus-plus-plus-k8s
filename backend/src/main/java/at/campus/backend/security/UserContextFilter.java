@@ -8,7 +8,9 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * UserContextFilter
@@ -26,7 +28,8 @@ import java.util.Set;
  * EXPECTED HEADERS
  * --------------------------------------------------
  *   X-User-Id     -> unique user identifier
- *   X-User-Roles  -> single role (one role per user)
+ *   X-User-Roles  -> role or comma-separated roles
+ *   X-User-Name   -> trusted display name resolved by the gateway
  *
  * LIFECYCLE
  * --------------------------------------------------
@@ -40,6 +43,7 @@ public class UserContextFilter extends OncePerRequestFilter {
 
     private static final String USER_ID_HEADER = "X-User-Id";
     private static final String USER_ROLES_HEADER = "X-User-Roles";
+    private static final String USER_NAME_HEADER = "X-User-Name";
 
     private final UserContext userContext;
 
@@ -65,6 +69,7 @@ public class UserContextFilter extends OncePerRequestFilter {
         // --------------------------------------------------
         String userId = request.getHeader(USER_ID_HEADER);
         String roleHeader = request.getHeader(USER_ROLES_HEADER);
+        String userName = request.getHeader(USER_NAME_HEADER);
 
         // --------------------------------------------------
         // Populate UserContext ONLY if userId is present
@@ -74,17 +79,21 @@ public class UserContextFilter extends OncePerRequestFilter {
         if (userId != null) {
 
             userContext.setUserId(userId);
+            userContext.setDisplayName(userName);
 
             // --------------------------------------------------
-            // Populate role ONLY if header is present and valid
+            // Populate roles ONLY if header is present and valid
             // --------------------------------------------------
-            // System guarantees exactly ONE role per user.
+            // The current auth service emits a single role, but the backend
+            // accepts comma-separated values to stay robust if that changes.
             if (roleHeader != null) {
-                String role = roleHeader.trim();
+                Set<String> roles = Arrays.stream(roleHeader.split(","))
+                        .map(String::trim)
+                        .filter(role -> !role.isBlank())
+                        .collect(Collectors.toSet());
 
-                // Ignore empty or blank roles
-                if (!role.isBlank()) {
-                    userContext.setRoles(Set.of(role));
+                if (!roles.isEmpty()) {
+                    userContext.setRoles(roles);
                 }
             }
         }

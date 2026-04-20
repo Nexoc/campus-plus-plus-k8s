@@ -5,6 +5,7 @@ import at.campus.backend.modules.reports.model.ReportReason;
 import at.campus.backend.modules.reports.model.ReportStatus;
 import at.campus.backend.modules.reports.repository.ReportRepository;
 import at.campus.backend.modules.reviews.repository.ReviewRepository;
+import at.campus.backend.security.Roles;
 import at.campus.backend.security.UserContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -245,7 +246,7 @@ public class ReportService {
      * Throws 403 Forbidden if user is not a moderator.
      */
     private void requireModerator() {
-        if (!userContext.hasRole("Moderator")) {
+        if (!userContext.hasRole(Roles.MODERATOR)) {
             log.warn("Forbidden: user {} attempted moderation operation", userContext.getUserId());
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, 
                 "Only moderators can access moderation functionality");

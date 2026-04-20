@@ -3,7 +3,9 @@ package at.campus.backend.security;
 import org.springframework.stereotype.Component;
 import org.springframework.web.context.annotation.RequestScope;
 
+import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * UserContext represents the identity of the currently authenticated user.
@@ -26,6 +28,7 @@ import java.util.Set;
  *
  *   X-User-Id     -> unique user identifier
  *   X-User-Roles  -> comma-separated list of roles
+ *   X-User-Name   -> trusted display name resolved upstream
  *
  * LIFECYCLE
  * --------------------------------------------------
@@ -51,9 +54,15 @@ public class UserContext {
 
     /**
      * Set of roles assigned to the user.
+     * Roles are normalized to uppercase on write.
      * Example: STUDENT, MODERATOR, APPLICANT
      */
     private Set<String> roles;
+
+    /**
+     * Trusted display name propagated by the gateway.
+     */
+    private String displayName;
 
     // Setters are used by UserContextFilter
     public void setUserId(String userId) {
@@ -61,7 +70,25 @@ public class UserContext {
     }
 
     public void setRoles(Set<String> roles) {
-        this.roles = roles;
+        if (roles == null) {
+            this.roles = null;
+            return;
+        }
+
+        this.roles = roles.stream()
+                .map(UserContext::normalizeRole)
+                .filter(role -> role != null && !role.isBlank())
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    public void setDisplayName(String displayName) {
+        if (displayName == null) {
+            this.displayName = null;
+            return;
+        }
+
+        String normalizedDisplayName = displayName.trim();
+        this.displayName = normalizedDisplayName.isBlank() ? null : normalizedDisplayName;
     }
 
     // Read-only access for application code
@@ -73,6 +100,14 @@ public class UserContext {
         return roles;
     }
 
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public String getEffectiveDisplayName() {
+        return displayName != null ? displayName : userId;
+    }
+
     /**
      * Convenience helper for role checks.
      *
@@ -81,6 +116,17 @@ public class UserContext {
      * - Controllers must NOT perform authorization logic.
      */
     public boolean hasRole(String role) {
-        return roles != null && roles.contains(role);
+        String normalizedRole = normalizeRole(role);
+        return normalizedRole != null
+                && roles != null
+                && roles.contains(normalizedRole);
+    }
+
+    private static String normalizeRole(String role) {
+        if (role == null) {
+            return null;
+        }
+
+        return role.trim().toUpperCase(Locale.ROOT);
     }
 }

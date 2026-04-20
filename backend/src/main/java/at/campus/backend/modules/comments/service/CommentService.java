@@ -1,10 +1,13 @@
 package at.campus.backend.modules.comments.service;
 
+import at.campus.backend.common.exception.ForbiddenException;
+import at.campus.backend.common.exception.NotFoundException;
 import at.campus.backend.modules.comments.model.Comment;
 import at.campus.backend.modules.comments.model.CommentDto;
 import at.campus.backend.modules.comments.model.CreateCommentRequest;
 import at.campus.backend.modules.comments.model.UpdateCommentRequest;
 import at.campus.backend.modules.comments.repository.CommentRepository;
+import at.campus.backend.security.Roles;
 import at.campus.backend.security.UserContext;
 import org.springframework.stereotype.Service;
 
@@ -50,14 +53,14 @@ public class CommentService {
      */
     public CommentDto createComment(UUID postId, CreateCommentRequest request) {
         if (userContext.getUserId() == null) {
-            throw new SecurityException("Only authenticated users can create comments");
+            throw new ForbiddenException("Only authenticated users can create comments");
         }
 
         Comment comment = new Comment();
         comment.setId(UUID.randomUUID());
         comment.setPostId(postId);
         comment.setUserId(UUID.fromString(userContext.getUserId()));
-        comment.setUserName(request.getUserName());
+        comment.setUserName(userContext.getEffectiveDisplayName());
         comment.setContent(request.getContent());
 
         commentRepository.save(comment);
@@ -72,18 +75,18 @@ public class CommentService {
      */
     public CommentDto updateComment(UUID commentId, UpdateCommentRequest request) {
         if (userContext.getUserId() == null) {
-            throw new SecurityException("Only authenticated users can update comments");
+            throw new ForbiddenException("Only authenticated users can update comments");
         }
 
         Comment comment = commentRepository.findById(commentId)
-            .orElseThrow(() -> new IllegalArgumentException("Comment not found"));
+            .orElseThrow(() -> new NotFoundException("Comment not found: " + commentId));
 
         // Check authorization: author or moderator
         boolean isAuthor = comment.getUserId().equals(UUID.fromString(userContext.getUserId()));
-        boolean isModerator = userContext.hasRole("MODERATOR");
+        boolean isModerator = userContext.hasRole(Roles.MODERATOR);
 
         if (!isAuthor && !isModerator) {
-            throw new SecurityException("Only the author or a moderator can update this comment");
+            throw new ForbiddenException("Only the author or a moderator can update this comment");
         }
 
         comment.setContent(request.getContent());
@@ -99,18 +102,18 @@ public class CommentService {
      */
     public void deleteComment(UUID commentId) {
         if (userContext.getUserId() == null) {
-            throw new SecurityException("Only authenticated users can delete comments");
+            throw new ForbiddenException("Only authenticated users can delete comments");
         }
 
         Comment comment = commentRepository.findById(commentId)
-            .orElseThrow(() -> new IllegalArgumentException("Comment not found"));
+            .orElseThrow(() -> new NotFoundException("Comment not found: " + commentId));
 
         // Check authorization: author or moderator
         boolean isAuthor = comment.getUserId().equals(UUID.fromString(userContext.getUserId()));
-        boolean isModerator = userContext.hasRole("MODERATOR");
+        boolean isModerator = userContext.hasRole(Roles.MODERATOR);
 
         if (!isAuthor && !isModerator) {
-            throw new SecurityException("Only the author or a moderator can delete this comment");
+            throw new ForbiddenException("Only the author or a moderator can delete this comment");
         }
 
         commentRepository.deleteById(commentId);

@@ -9,6 +9,7 @@ import at.campus.backend.modules.reviews.repository.ReviewRepository;
 import at.campus.backend.modules.watch.model.WatchTargetType;
 import at.campus.backend.modules.watch.service.NotificationService;
 import at.campus.backend.modules.watch.service.WatchService;
+import at.campus.backend.security.Roles;
 import at.campus.backend.security.UserContext;
 import org.springframework.beans.BeanUtils;
 import org.springframework.http.HttpStatus;
@@ -121,8 +122,8 @@ public class ReviewService {
         }
 
         // 2. Check role authorization
-        boolean hasStudentRole = userContext.hasRole("STUDENT");
-        boolean hasModeratorRole = userContext.hasRole("Moderator");
+        boolean hasStudentRole = userContext.hasRole(Roles.STUDENT);
+        boolean hasModeratorRole = userContext.hasRole(Roles.MODERATOR);
 
         if (!hasStudentRole && !hasModeratorRole) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, 
@@ -192,7 +193,7 @@ public class ReviewService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Review not found"));
 
         // 3. Check authorization: ownership or moderator role
-        boolean isModerator = userContext.hasRole("Moderator");
+        boolean isModerator = userContext.hasRole(Roles.MODERATOR);
         boolean isOwner = existing.getUserId().toString().equals(userId);
         
         if (!isOwner && !isModerator) {
@@ -252,7 +253,7 @@ public class ReviewService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Review not found"));
 
         // 3. Check authorization: ownership or moderator role
-        boolean isModerator = userContext.hasRole("Moderator");
+        boolean isModerator = userContext.hasRole(Roles.MODERATOR);
         boolean isOwner = existing.getUserId().toString().equals(userId);
         
         if (!isOwner && !isModerator) {
@@ -272,7 +273,7 @@ public class ReviewService {
      */
     public Review flagReview(UUID id, String reason) {
         // 1. Check moderator role
-        if (!userContext.hasRole("Moderator")) {
+        if (!userContext.hasRole(Roles.MODERATOR)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, 
                 "Only moderators can flag reviews");
         }
@@ -297,7 +298,7 @@ public class ReviewService {
      */
     public Review unflagReview(UUID id) {
         // 1. Check moderator role
-        if (!userContext.hasRole("Moderator")) {
+        if (!userContext.hasRole(Roles.MODERATOR)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, 
                 "Only moderators can unflag reviews");
         }
@@ -322,7 +323,7 @@ public class ReviewService {
      */
     public void deleteReviewByModerator(UUID id) {
         // 1. Check moderator role
-        if (!userContext.hasRole("Moderator")) {
+        if (!userContext.hasRole(Roles.MODERATOR)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, 
                 "Only moderators can delete reviews");
         }

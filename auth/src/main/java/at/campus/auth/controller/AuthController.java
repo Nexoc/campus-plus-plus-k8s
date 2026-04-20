@@ -186,7 +186,17 @@ public class AuthController {
         return ResponseEntity.ok()
                 .header("X-User-Id", user.getId().toString())
                 .header("X-User-Roles", user.getRole().name())
+                .header("X-User-Name", resolveDisplayName(user))
                 .build();
+    }
+
+    private String resolveDisplayName(User user) {
+        String nickname = user.getNickname();
+        if (nickname != null && !nickname.isBlank()) {
+            return nickname;
+        }
+
+        return user.getEmail();
     }
 
     /* =====================================================

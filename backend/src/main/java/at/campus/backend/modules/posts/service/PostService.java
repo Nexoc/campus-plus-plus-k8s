@@ -1,5 +1,7 @@
 package at.campus.backend.modules.posts.service;
 
+import at.campus.backend.common.exception.ForbiddenException;
+import at.campus.backend.common.exception.NotFoundException;
 import at.campus.backend.modules.posts.model.Post;
 import at.campus.backend.modules.posts.model.PostDto;
 import at.campus.backend.modules.posts.model.CreatePostRequest;
@@ -9,6 +11,7 @@ import at.campus.backend.modules.comments.repository.CommentRepository;
 import at.campus.backend.modules.watch.model.WatchTargetType;
 import at.campus.backend.modules.watch.service.NotificationService;
 import at.campus.backend.modules.watch.service.WatchService;
+import at.campus.backend.security.Roles;
 import at.campus.backend.security.UserContext;
 import org.springframework.stereotype.Service;
 
@@ -72,14 +75,14 @@ public class PostService {
      */
     public PostDto createPost(UUID threadId, CreatePostRequest request) {
         if (userContext.getUserId() == null) {
-            throw new SecurityException("Only authenticated users can create posts");
+            throw new ForbiddenException("Only authenticated users can create posts");
         }
 
         Post post = new Post();
         post.setId(UUID.randomUUID());
         post.setThreadId(threadId);
         post.setUserId(UUID.fromString(userContext.getUserId()));
-        post.setUserName(request.getUserName());
+        post.setUserName(userContext.getEffectiveDisplayName());
         post.setContent(request.getContent());
 
         postRepository.save(post);
@@ -106,18 +109,18 @@ public class PostService {
      */
     public PostDto updatePost(UUID postId, UpdatePostRequest request) {
         if (userContext.getUserId() == null) {
-            throw new SecurityException("Only authenticated users can update posts");
+            throw new ForbiddenException("Only authenticated users can update posts");
         }
 
         Post post = postRepository.findById(postId)
-            .orElseThrow(() -> new IllegalArgumentException("Post not found"));
+            .orElseThrow(() -> new NotFoundException("Post not found: " + postId));
 
         // Check authorization: author or moderator
         boolean isAuthor = post.getUserId().equals(UUID.fromString(userContext.getUserId()));
-        boolean isModerator = userContext.hasRole("MODERATOR");
+        boolean isModerator = userContext.hasRole(Roles.MODERATOR);
 
         if (!isAuthor && !isModerator) {
-            throw new SecurityException("Only the author or a moderator can update this post");
+            throw new ForbiddenException("Only the author or a moderator can update this post");
         }
 
         post.setContent(request.getContent());
@@ -133,18 +136,18 @@ public class PostService {
      */
     public void deletePost(UUID postId) {
         if (userContext.getUserId() == null) {
-            throw new SecurityException("Only authenticated users can delete posts");
+            throw new ForbiddenException("Only authenticated users can delete posts");
         }
 
         Post post = postRepository.findById(postId)
-            .orElseThrow(() -> new IllegalArgumentException("Post not found"));
+            .orElseThrow(() -> new NotFoundException("Post not found: " + postId));
 
         // Check authorization: author or moderator
         boolean isAuthor = post.getUserId().equals(UUID.fromString(userContext.getUserId()));
-        boolean isModerator = userContext.hasRole("MODERATOR");
+        boolean isModerator = userContext.hasRole(Roles.MODERATOR);
 
         if (!isAuthor && !isModerator) {
-            throw new SecurityException("Only the author or a moderator can delete this post");
+            throw new ForbiddenException("Only the author or a moderator can delete this post");
         }
 
         postRepository.deleteById(postId);

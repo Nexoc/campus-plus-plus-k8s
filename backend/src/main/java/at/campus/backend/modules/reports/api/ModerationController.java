@@ -3,6 +3,7 @@ package at.campus.backend.modules.reports.api;
 import at.campus.backend.modules.reports.model.*;
 import at.campus.backend.modules.reports.service.ModerationService;
 import at.campus.backend.modules.reports.service.ReportService;
+import at.campus.backend.security.Roles;
 import at.campus.backend.security.UserContext;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -147,7 +148,7 @@ public class ModerationController {
      * Throws 403 if user is not a moderator.
      */
     private void validateModeratorRole() {
-        if (!userContext.hasRole("Moderator")) {
+        if (!userContext.hasRole(Roles.MODERATOR)) {
             throw new ResponseStatusException(
                     HttpStatus.FORBIDDEN,
                     "Access denied: Moderator role required"

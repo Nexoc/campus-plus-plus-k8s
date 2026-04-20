@@ -58,6 +58,20 @@ public class GlobalExceptionHandler {
                 ));
     }
 
+    @ExceptionHandler(SecurityException.class)
+    public ResponseEntity<Map<String, Object>> handleSecurity(
+            SecurityException ex
+    ) {
+        log.warn("Forbidden: {}", ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(errorBody(
+                        HttpStatus.FORBIDDEN,
+                        ex.getMessage()
+                ));
+    }
+
     // ==================================================
     // 404 NOT FOUND
     // ==================================================

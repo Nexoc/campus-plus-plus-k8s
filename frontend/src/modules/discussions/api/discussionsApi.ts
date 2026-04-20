@@ -6,7 +6,6 @@ import type { Thread, Post, Comment } from '../model/Discussion'
 export interface CreateThreadRequest {
   title: string
   content?: string
-  userName?: string
 }
 
 export interface UpdateThreadRequest {
@@ -16,7 +15,6 @@ export interface UpdateThreadRequest {
 
 export interface CreatePostRequest {
   content: string
-  userName?: string
 }
 
 export interface UpdatePostRequest {
@@ -25,7 +23,6 @@ export interface UpdatePostRequest {
 
 export interface CreateCommentRequest {
   content: string
-  userName?: string
 }
 
 export interface UpdateCommentRequest {

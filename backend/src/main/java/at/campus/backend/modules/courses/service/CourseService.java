@@ -2,6 +2,7 @@ package at.campus.backend.modules.courses.service;
 
 import at.campus.backend.modules.courses.model.Course;
 import at.campus.backend.modules.courses.repository.CourseRepository;
+import at.campus.backend.security.Roles;
 import at.campus.backend.security.UserContext;
 import at.campus.backend.common.exception.ForbiddenException;
 import at.campus.backend.common.exception.NotFoundException;
@@ -141,7 +142,7 @@ public class CourseService {
     // ==================================================
 
     private void requireAdmin() {
-        if (!userContext.hasRole("Moderator")) {
+        if (!userContext.hasRole(Roles.MODERATOR)) {
 
             log.warn(
                     "Forbidden access: user {} tried Moderator operation",

@@ -36,7 +36,7 @@ public class ThreadController {
         @PathVariable UUID courseId,
         @RequestBody CreateThreadRequest request
     ) {
-        var thread = service.createThread(courseId, request.getTitle(), request.getContent(), request.getUserName());
+        var thread = service.createThread(courseId, request.getTitle(), request.getContent());
         return ThreadDto.fromDomain(thread, 0);
     }
 

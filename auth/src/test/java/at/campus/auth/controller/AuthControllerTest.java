@@ -155,7 +155,8 @@ class AuthControllerTest {
                         .principal(authentication))
                 .andExpect(status().isOk())
                 .andExpect(header().string("X-User-Id", fixedId.toString()))
-                .andExpect(header().string("X-User-Roles", "Moderator"));
+                .andExpect(header().string("X-User-Roles", "Moderator"))
+                .andExpect(header().string("X-User-Name", "admin"));
 
         verifyNoInteractions(authService);
     }

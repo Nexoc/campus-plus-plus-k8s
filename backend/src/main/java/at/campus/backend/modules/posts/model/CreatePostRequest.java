@@ -1,12 +1,14 @@
 package at.campus.backend.modules.posts.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 /**
  * CreatePostRequest - Request model for creating a post.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class CreatePostRequest {
 
     private String content;
-    private String userName;
 
     // Constructors
 
@@ -25,13 +27,5 @@ public class CreatePostRequest {
 
     public void setContent(String content) {
         this.content = content;
-    }
-
-    public String getUserName() {
-        return userName;
-    }
-
-    public void setUserName(String userName) {
-        this.userName = userName;
     }
 }
