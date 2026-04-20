@@ -50,6 +50,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
           kubectl apply -k deploy/dev
 
       - name: Wait for rollout
@@ -63,3 +64,6 @@ jobs:
         run: |
           set -euo pipefail
           kubectl get all -n campus-dev -o wide
+          kubectl get gateway,httproute,envoyproxy -n campus-dev -o wide
+          kubectl get gatewayclass
+          kubectl get svc -n envoy-gateway-system

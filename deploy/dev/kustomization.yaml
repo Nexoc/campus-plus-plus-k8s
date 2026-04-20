@@ -7,3 +7,6 @@ resources:
   - namespace.yaml
   - deployment.yaml
   - service.yaml
+  - envoyproxy.yaml
+  - gateway.yaml
+  - httproute.yaml
