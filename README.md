@@ -34,6 +34,29 @@ Known gap:
 - the single-node DEV cluster is still operationally unstable and shows restarts
   around Envoy and other control-plane components
 
+## Next Steps
+
+The practical next plan is:
+
+1. Close the current security and access-control gaps first.
+   This includes removing the bootstrap admin with a known password, fixing missing
+   moderator-only checks where write access is too broad, and eliminating runtime
+   secret staging inside the self-hosted runner workspace.
+2. Stabilize the single-node DEV cluster.
+   Focus on the `NodeNotReady` episodes, short API disconnects, and the restarts
+   around Envoy-related and control-plane components.
+3. Move the external entry path from implicit host knowledge into repository-owned
+   documentation and configuration.
+   The exact `davl.at` nginx reverse proxy setup should no longer live only on the
+   VPS.
+4. Make the DEV deploy path safer and more reproducible.
+   Manual and workflow-driven deploys should not depend on staging secret env files
+   inside the repo checkout, and the runbook should reflect the actual deploy flow.
+5. After DEV is secure and operationally stable, define the production-like rollout
+   path.
+   That includes the final public host shape, deployment topology, and the future
+   PROD environment model.
+
 ## Runtime Modes
 
 ### 1. Local Docker Runtime
