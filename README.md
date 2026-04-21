@@ -190,13 +190,13 @@ Supported Spring profiles:
 
 Current GitHub Actions behavior:
 
-- `CI Pipeline` runs auth tests and backend build
+- `CI Pipeline` runs auth tests, backend tests, and backend build
 - on `push` to `main`, CI builds and pushes images to GHCR
 - images are published as both `sha-<shortsha>` and `dev-latest`
 - `Deploy DEV` runs on the self-hosted DEV runner
-- the deploy workflow stages secrets, creates the GHCR pull secret, applies
-  `deploy/dev`, restarts deployments for `dev-latest`, and waits for importer
-  completion
+- the deploy workflow stages secrets, creates the GHCR pull secret, pins
+  `deploy/dev` to the successful CI commit tag, applies the manifests, and
+  waits for importer completion
 
 ## Project Structure
 

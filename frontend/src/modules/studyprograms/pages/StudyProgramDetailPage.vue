@@ -1,12 +1,13 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
+import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { studyProgramsApi } from '../api/studyProgramsApi'
-import CampusMap from '../components/CampusMap.vue'
 import type { StudyProgramDetail } from '../model/StudyProgramDetail'
 import StudyProgramFavouriteButton from '@/modules/favourites/components/StudyProgramFavouriteButton.vue'
 import { useFavouritesStore } from '@/modules/favourites/store/favourites.store'
 import { useAuthStore } from '@/modules/auth/store/auth.store'
+
+const CampusMap = defineAsyncComponent(() => import('../components/CampusMap.vue'))
 
 const route = useRoute()
 const authStore = useAuthStore()

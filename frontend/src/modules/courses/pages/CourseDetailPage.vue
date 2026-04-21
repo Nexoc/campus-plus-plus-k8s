@@ -5,6 +5,7 @@ import FavouriteButton from '@/modules/favourites/components/FavouriteButton.vue
 import WatchButton from '@/shared/components/WatchButton.vue'
 import { useFavouritesStore } from '@/modules/favourites/store/favourites.store'
 import ReviewsSection from '@/modules/reviews/components/ReviewsSection.vue'
+import { sanitizeHtml, sanitizeUrl } from '@/shared/utils/sanitizeHtml'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { coursesApi } from '../api/coursesApi'
@@ -18,10 +19,12 @@ const favouritesStore = useFavouritesStore()
 const course = ref<Course | null>(null)
 const loading = ref(false)
 const error = ref('')
+const sanitizedDetailsHtml = computed(() => sanitizeHtml(course.value?.detailsHtml))
+const safeSourceUrl = computed(() => sanitizeUrl(course.value?.sourceUrl))
 
 function normalizeBlocks(raw: unknown): RichBlock[] {
   if (typeof raw === 'string') {
-    return [{ type: 'text', content: raw }]
+    return [{ type: 'text', content: sanitizeHtml(raw) }]
   }
 
   if (!Array.isArray(raw)) return []
@@ -29,17 +32,17 @@ function normalizeBlocks(raw: unknown): RichBlock[] {
   return raw
     .map((item) => {
       if (typeof item === 'string') {
-        return { type: 'text', content: item } as RichBlock
+        return { type: 'text', content: sanitizeHtml(item) } as RichBlock
       }
       if (item && typeof item === 'object') {
         const block = item as Record<string, unknown>
         if (block.type === 'text' && typeof block.content === 'string') {
-          return { type: 'text', content: block.content } as RichBlock
+          return { type: 'text', content: sanitizeHtml(block.content) } as RichBlock
         }
         if (block.type === 'list' && Array.isArray(block.items)) {
           const items = block.items
             .filter((entry) => typeof entry === 'string')
-            .map((entry) => entry)
+            .map((entry) => sanitizeHtml(entry))
           return { type: 'list', items, ordered: Boolean(block.ordered) } as RichBlock
         }
       }
@@ -50,7 +53,7 @@ function normalizeBlocks(raw: unknown): RichBlock[] {
 
 const sections = computed(() => {
   if (!course.value) return []
-  if (course.value.detailsHtml) return []
+  if (sanitizedDetailsHtml.value) return []
   return [
     { title: 'Content', blocks: normalizeBlocks(course.value.content) },
     { title: 'Learning Outcomes', blocks: normalizeBlocks(course.value.learningOutcomes) },
@@ -119,9 +122,9 @@ onMounted(load)
           {{ course.description }}
         </div>
 
-        <div class="course-section" v-if="course.detailsHtml">
+        <div class="course-section" v-if="sanitizedDetailsHtml">
           <h3>Details</h3>
-          <div class="html-content" v-html="course.detailsHtml"></div>
+          <div class="html-content" v-html="sanitizedDetailsHtml"></div>
         </div>
 
         <div v-else>
@@ -147,14 +150,13 @@ onMounted(load)
           </div>
         </div>
 
-        <div class="course-section" v-if="course.sourceUrl">
+        <div class="course-section" v-if="safeSourceUrl">
           <h3>Source</h3>
-          <a :href="course.sourceUrl" target="_blank" rel="noreferrer">
-            {{ course.sourceUrl }}
+          <a :href="safeSourceUrl" target="_blank" rel="noreferrer">
+            {{ safeSourceUrl }}
           </a>
         </div>
 
-        <!-- 🔽 ВОТ ТУТ МЫ ДОБАВИЛИ, БОЛЬШЕ НИЧЕГО -->
         <CourseMaterialsSection
           v-if="authStore.isAuthenticated && course.courseId"
           :courseId="course.courseId"

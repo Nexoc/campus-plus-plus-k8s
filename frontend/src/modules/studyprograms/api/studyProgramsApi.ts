@@ -1,5 +1,6 @@
 import http from '@/app/api/http'
 import type { StudyProgram } from '../model/StudyProgram'
+import type { StudyProgramDetail } from '../model/StudyProgramDetail'
 
 export const studyProgramsApi = {
   getAll(params?: {
@@ -22,7 +23,7 @@ export const studyProgramsApi = {
   },
 
   getDetails(id: string) {
-    return http.get(`/api/public/study-programs/${id}/details`)
+    return http.get<StudyProgramDetail>(`/api/public/study-programs/${id}/details`)
   },
 
   create(program: StudyProgram) {

@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import maplibregl from 'maplibre-gl'
-import 'maplibre-gl/dist/maplibre-gl.css'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import type { Map as MapLibreMap } from 'maplibre-gl'
 import type { CampusBuilding } from '../model/CampusBuilding'
 import campusPlanImage from '@/assets/HCW_Lageplan.jpg'
 
@@ -10,8 +9,9 @@ const props = defineProps<{
 }>()
 
 const mapContainer = ref<HTMLDivElement>()
-const map = ref<maplibregl.Map>()
+const map = ref<MapLibreMap>()
 const showModal = ref(false)
+let maplibreModulePromise: Promise<typeof import('maplibre-gl')> | null = null
 
 const openModal = () => {
   showModal.value = true
@@ -30,57 +30,90 @@ const buildingsList = computed(() => {
 })
 
 onMounted(() => {
-  if (!mapContainer.value || !hasBuildings.value) return
+  void renderMap()
+})
+
+watch(buildingsList, () => {
+  void renderMap()
+})
+
+onBeforeUnmount(() => {
+  destroyMap()
+})
+
+async function renderMap() {
+  destroyMap()
+
+  if (!mapContainer.value || !hasBuildings.value || buildingsList.value.length === 0) {
+    return
+  }
 
   const buildings = buildingsList.value
-  if (buildings.length === 0) return
-
-  // Use first building as center
   const firstBuilding = buildings[0]
-  
-  // Initialize interactive map with Geoapify
+  const maplibregl = await loadMapLibre()
+
   map.value = new maplibregl.Map({
     container: mapContainer.value,
-    style: `https://maps.geoapify.com/v1/styles/osm-bright/style.json?apiKey=90ff8868d0704abe832a7f36cd54df06`,
+    style: 'https://maps.geoapify.com/v1/styles/osm-bright/style.json?apiKey=90ff8868d0704abe832a7f36cd54df06',
     center: [firstBuilding.lon, firstBuilding.lat],
-    zoom: 15
+    zoom: 15,
   })
 
-  // Add navigation controls (zoom buttons)
   map.value.addControl(new maplibregl.NavigationControl(), 'top-right')
 
-  // Add markers for each building
   buildings.forEach((building, idx) => {
-    const color = idx === 0 ? '#FF0000' : '#4C90CC'
-    
-    // Create custom marker
-    const el = document.createElement('div')
-    el.className = 'custom-marker'
-    el.style.backgroundColor = color
-    el.style.width = '24px'
-    el.style.height = '24px'
-    el.style.borderRadius = '50% 50% 50% 0'
-    el.style.transform = 'rotate(-45deg)'
-    el.style.border = '2px solid white'
-    el.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'
+    const markerElement = buildMarker(idx === 0 ? '#FF0000' : '#4C90CC')
+    const popupContent = buildPopupContent(building)
 
-    // Add marker to map
-    new maplibregl.Marker({ element: el })
+    new maplibregl.Marker({ element: markerElement })
       .setLngLat([building.lon, building.lat])
-      .setPopup(
-        new maplibregl.Popup({ offset: 25 })
-          .setHTML(`<strong>${building.label}</strong><br>${building.address}`)
-      )
+      .setPopup(new maplibregl.Popup({ offset: 25 }).setDOMContent(popupContent))
       .addTo(map.value!)
   })
-})
+}
 
-// Cleanup on unmount
-onMounted(() => {
-  return () => {
-    map.value?.remove()
+function destroyMap() {
+  map.value?.remove()
+  map.value = undefined
+}
+
+function buildMarker(color: string) {
+  const element = document.createElement('div')
+  element.className = 'custom-marker'
+  element.style.backgroundColor = color
+  element.style.width = '24px'
+  element.style.height = '24px'
+  element.style.borderRadius = '50% 50% 50% 0'
+  element.style.transform = 'rotate(-45deg)'
+  element.style.border = '2px solid white'
+  element.style.boxShadow = '0 2px 4px rgba(0,0,0,0.3)'
+  return element
+}
+
+function buildPopupContent(building: CampusBuilding) {
+  const container = document.createElement('div')
+  const title = document.createElement('strong')
+  title.textContent = building.label
+  container.appendChild(title)
+
+  if (building.address) {
+    container.appendChild(document.createElement('br'))
+    container.appendChild(document.createTextNode(building.address))
   }
-})
+
+  return container
+}
+
+async function loadMapLibre() {
+  if (!maplibreModulePromise) {
+    maplibreModulePromise = Promise.all([
+      import('maplibre-gl'),
+      import('maplibre-gl/dist/maplibre-gl.css'),
+    ]).then(([module]) => module)
+  }
+
+  return maplibreModulePromise
+}
 </script>
 
 <template>

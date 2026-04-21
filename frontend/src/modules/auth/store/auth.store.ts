@@ -19,6 +19,7 @@
 
 import http from '@/app/api/http'
 import * as authApi from '@/modules/auth/api/auth.api'
+import { isModeratorRole } from '@/shared/utils/roles'
 import { logger } from '@/shared/utils/logger'
 import { defineStore } from 'pinia'
 
@@ -73,14 +74,14 @@ export const useAuthStore = defineStore('auth', {
      * NOT from JWT parsing.
      */
     isModerator: (state): boolean => {
-      return state.user?.role === 'Moderator'
+      return isModeratorRole(state.user?.role)
     },
 
     /**
      * Alias for isModerator (backward compatibility).
      */
     isAdmin: (state): boolean => {
-      return state.user?.role === 'Moderator'
+      return isModeratorRole(state.user?.role)
     },
   },
 

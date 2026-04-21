@@ -67,4 +67,5 @@ spec:
               memory: 768Mi
       volumes:
         - name: course-materials
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: course-materials

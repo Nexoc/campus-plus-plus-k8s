@@ -1,7 +1,7 @@
 <template>
   <CollapsibleSection
     title="Reviews"
-    :show-toggle="auth.isAuthenticated && auth.user?.role !== 'APPLICANT' && (!userHasReviewed || editingId !== null)"
+    :show-toggle="auth.isAuthenticated && !isApplicantRole(auth.user?.role) && (!userHasReviewed || editingId !== null)"
     show-label="Write a Review"
     hide-label="Hide Form"
   >
@@ -160,6 +160,7 @@
 
 <script setup lang="ts">
 import { useAuthStore } from '@/modules/auth/store/auth.store'
+import { isApplicantRole } from '@/shared/utils/roles'
 import { computed, ref } from 'vue'
 import { reviewsApi } from '../api/reviewsApi'
 import type { Review, ReviewSummary, CreateReviewRequest } from '../model/Review'
@@ -209,8 +210,8 @@ const canReportReview = (review: Review) => {
   // Only authenticated users who are not the review author can report
   // Applicants (unauthenticated) cannot report
   // Cannot report if already reported
-  return auth.isAuthenticated && 
-         auth.user?.role !== 'APPLICANT' && 
+  return auth.isAuthenticated &&
+         !isApplicantRole(auth.user?.role) &&
          !isOwnReview(review) &&
          !reportedReviewIds.value.has(review.reviewId || '')
 }

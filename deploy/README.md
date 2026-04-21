@@ -61,6 +61,7 @@ Before applying the active DEV manifests, make sure:
 - your `kubectl` context points to the DEV k3s cluster
 - Envoy Gateway is installed in `envoy-gateway-system`
 - the cluster can pull images from GHCR
+- the `local-path` StorageClass is available for the `course-materials` PVC
 - the cluster can reach PostgreSQL at `192.168.56.20:5432`
 - DEV secret env files are available either locally or on the runner host
 
@@ -131,27 +132,23 @@ kubectl apply -f deploy/dev/namespace.yaml
 kubectl create secret docker-registry ghcr-pull \
   --namespace campus-dev \
   --docker-server ghcr.io \
-  --docker-username YOUR_GITHUB_USER \
-  --docker-password YOUR_GHCR_TOKEN \
+  --docker-username YOUR_GHCR_PULL_USERNAME \
+  --docker-password YOUR_GHCR_PULL_TOKEN \
   --dry-run=client -o yaml | kubectl apply -f -
 ```
+
+The recommended credential here is a long-lived read-only GHCR token dedicated
+to image pulls. Avoid using a workflow-scoped `GITHUB_TOKEN` for cluster pull
+secrets because it expires after the job finishes.
 
 Apply the shared GatewayClass and the DEV stack:
 
 ```bash
+IMAGE_TAG=sha-<shortsha>
+sed -i "s/newTag: dev-latest/newTag: ${IMAGE_TAG}/g" deploy/dev/kustomization.yaml
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 kubectl delete job campus-importer -n campus-dev --ignore-not-found
 kubectl apply -k deploy/dev
-```
-
-If the manifests still point to `dev-latest`, force a restart so the node pulls
-the latest published images:
-
-```bash
-kubectl rollout restart deployment/frontend -n campus-dev
-kubectl rollout restart deployment/auth -n campus-dev
-kubectl rollout restart deployment/backend -n campus-dev
-kubectl rollout restart deployment/campus-nginx -n campus-dev
 ```
 
 Wait for the stack:
@@ -169,13 +166,17 @@ kubectl wait --for=condition=complete job/campus-importer -n campus-dev --timeou
 Current workflow behavior:
 
 - `.github/workflows/ci.yml` runs on `main`
+- CI runs auth and backend tests before image publish
 - CI builds and pushes images to GHCR
 - CI publishes both `sha-<shortsha>` and `dev-latest`
 - `.github/workflows/deploy-dev.yml` runs on the self-hosted DEV runner after a
   successful CI run
-- the deploy workflow stages secrets, creates `ghcr-pull`, applies
-  `deploy/dev`, restarts the app deployments for `dev-latest`, and waits for
+- the deploy workflow pins `deploy/dev` to the exact `sha-<shortsha>` of the
+  successful CI run, creates `ghcr-pull`, applies `deploy/dev`, and waits for
   importer completion
+- when `GHCR_PULL_TOKEN` is configured as a repository or organization secret,
+  the deploy workflow uses it for a durable cluster pull secret; otherwise it
+  falls back to `GITHUB_TOKEN` with a warning
 
 This means the active DEV branch is:
 

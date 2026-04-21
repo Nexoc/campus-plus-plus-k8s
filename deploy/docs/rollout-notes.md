@@ -49,11 +49,11 @@ Legacy/reference files:
 The current repo supports this flow:
 
 1. Push to `main`.
-2. `CI Pipeline` runs auth tests and backend build.
+2. `CI Pipeline` runs auth tests, backend tests, and backend build.
 3. CI builds and pushes images to GHCR.
 4. CI publishes both `sha-<shortsha>` and `dev-latest`.
 5. `Deploy DEV` runs on the self-hosted DEV runner.
-6. The deploy workflow stages secrets, creates `ghcr-pull`, applies `deploy/dev`, and restarts app deployments for `dev-latest`.
+6. The deploy workflow stages secrets, creates `ghcr-pull`, pins `deploy/dev` to the successful CI commit tag, and applies the manifests.
 7. The workflow waits for `frontend`, `auth`, `backend`, and `campus-nginx`.
 8. The workflow waits for `campus-importer` completion.
 9. Envoy serves the app through `31080`.
@@ -69,18 +69,11 @@ kubectl kustomize deploy/dev
 Apply manifests:
 
 ```bash
+IMAGE_TAG=sha-<shortsha>
+sed -i "s/newTag: dev-latest/newTag: ${IMAGE_TAG}/g" deploy/dev/kustomization.yaml
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 kubectl delete job campus-importer -n campus-dev --ignore-not-found
 kubectl apply -k deploy/dev
-```
-
-Force refresh when using `dev-latest`:
-
-```bash
-kubectl rollout restart deployment/frontend -n campus-dev
-kubectl rollout restart deployment/auth -n campus-dev
-kubectl rollout restart deployment/backend -n campus-dev
-kubectl rollout restart deployment/campus-nginx -n campus-dev
 ```
 
 Inspect resources:

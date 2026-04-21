@@ -71,7 +71,7 @@ const editContent = ref('')
 const isAuthorOrModerator = computed(() => {
   return (
     authStore.isAuthenticated &&
-    (authStore.user?.id === props.comment.userId || authStore.user?.role === 'Moderator')
+    (authStore.user?.id === props.comment.userId || authStore.isModerator)
   )
 })
 

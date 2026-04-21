@@ -126,7 +126,7 @@ const isThreadAuthorOrModerator = computed(() => {
   return (
     authStore.isAuthenticated &&
     thread.value &&
-    (authStore.user?.id === thread.value.createdBy || authStore.user?.role === 'Moderator')
+    (authStore.user?.id === thread.value.createdBy || authStore.isModerator)
   )
 })
 

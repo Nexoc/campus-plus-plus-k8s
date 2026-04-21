@@ -5,6 +5,7 @@ import at.campus.backend.modules.coursematerials.model.CourseMaterial;
 import at.campus.backend.modules.coursematerials.model.CourseMaterialDto;
 import at.campus.backend.modules.coursematerials.model.CourseMaterialUpdateRequest;
 import at.campus.backend.modules.coursematerials.repository.CourseMaterialRepository;
+import at.campus.backend.modules.coursematerials.storage.CourseMaterialStorage;
 import at.campus.backend.modules.courses.repository.CourseRepository;
 import at.campus.backend.security.Roles;
 import at.campus.backend.security.UserContext;
@@ -14,10 +15,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
@@ -32,8 +30,6 @@ import java.util.UUID;
 @Service
 public class CourseMaterialService {
 
-    private static final Path STORAGE_DIR = Path.of("/data/course-materials");
-
     private static final Set<String> ALLOWED_TYPES = Set.of(
             "application/pdf",
             "image/png",
@@ -42,15 +38,18 @@ public class CourseMaterialService {
 
     private final CourseMaterialRepository materialRepo;
     private final CourseRepository courseRepo;
+    private final CourseMaterialStorage storage;
     private final UserContext userContext;
 
     public CourseMaterialService(
             CourseMaterialRepository materialRepo,
             CourseRepository courseRepo,
+            CourseMaterialStorage storage,
             UserContext userContext
     ) {
         this.materialRepo = materialRepo;
         this.courseRepo = courseRepo;
+        this.storage = storage;
         this.userContext = userContext;
     }
 
@@ -103,11 +102,8 @@ public class CourseMaterialService {
         material.setCreatedAt(LocalDateTime.now());
 
         try {
-            Files.createDirectories(STORAGE_DIR);
-            Path target = STORAGE_DIR.resolve(storageKey);
-
             try (InputStream in = file.getInputStream()) {
-                Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                storage.store(storageKey, in);
             }
 
             materialRepo.insert(material);
@@ -161,9 +157,7 @@ public class CourseMaterialService {
                         new NotFoundException("Course material not found: " + materialId)
                 );
 
-        Path filePath = STORAGE_DIR.resolve(material.getStorageKey());
-
-        if (!Files.exists(filePath)) {
+        if (!storage.exists(material.getStorageKey())) {
             throw new ResponseStatusException(
                     HttpStatus.INTERNAL_SERVER_ERROR,
                     "Material file missing on disk"
@@ -171,7 +165,7 @@ public class CourseMaterialService {
         }
 
         try {
-            InputStream in = Files.newInputStream(filePath);
+            InputStream in = storage.open(material.getStorageKey());
             return new CourseMaterialDownload(
                     in,
                     material.getOriginalFilename(),
@@ -247,10 +241,8 @@ public class CourseMaterialService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN);
         }
 
-        Path filePath = STORAGE_DIR.resolve(material.getStorageKey());
-
         try {
-            Files.deleteIfExists(filePath);
+            storage.delete(material.getStorageKey());
             materialRepo.deleteById(materialId);
         } catch (Exception e) {
             throw new ResponseStatusException(

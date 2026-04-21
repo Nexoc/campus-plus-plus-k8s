@@ -4,8 +4,9 @@
 
 Handles course material upload, listing, download, update, and deletion.
 
-This module stores metadata in PostgreSQL and file bytes on disk under
-`/data/course-materials`.
+This module stores metadata in PostgreSQL and file bytes behind a storage
+abstraction. The active implementation stores bytes on disk under the
+configured root path, which defaults to `/data/course-materials`.
 
 ## API
 
@@ -24,4 +25,7 @@ Material management endpoints:
 
 - upload/download is not public-edge storage; it is handled by the backend
 - metadata lives in `app.course_materials`
-- current implementation depends on backend-local filesystem storage
+- DEV Kubernetes now mounts `/data/course-materials` from a PVC, so pod
+  restarts no longer wipe uploaded files
+- the current backend storage implementation is still filesystem-based; a later
+  object-storage backend can be added behind the same contract

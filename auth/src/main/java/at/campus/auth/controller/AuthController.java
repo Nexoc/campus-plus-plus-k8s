@@ -25,6 +25,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 
+import java.util.Locale;
 import java.util.Map;
 
 
@@ -185,9 +186,13 @@ public class AuthController {
 
         return ResponseEntity.ok()
                 .header("X-User-Id", user.getId().toString())
-                .header("X-User-Roles", user.getRole().name())
+                .header("X-User-Roles", toGatewayRoleHeader(user))
                 .header("X-User-Name", resolveDisplayName(user))
                 .build();
+    }
+
+    private String toGatewayRoleHeader(User user) {
+        return user.getRole().name().toUpperCase(Locale.ROOT);
     }
 
     private String resolveDisplayName(User user) {
