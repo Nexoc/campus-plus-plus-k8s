@@ -103,6 +103,17 @@ chmod 700 /home/nexoc/campus-secrets /home/nexoc/campus-secrets/dev
 chmod 600 /home/nexoc/campus-secrets/dev/*.env
 ```
 
+Prepare the same layout for `home` before running the first `home-*` release:
+
+```bash
+mkdir -p /home/nexoc/campus-secrets/home
+cp deploy/templates/secrets/db-secrets.env.example /home/nexoc/campus-secrets/home/db-secrets.env
+cp deploy/templates/secrets/auth-secrets.env.example /home/nexoc/campus-secrets/home/auth-secrets.env
+chown -R nexoc:nexoc /home/nexoc/campus-secrets/home
+chmod 700 /home/nexoc/campus-secrets/home
+chmod 600 /home/nexoc/campus-secrets/home/*.env
+```
+
 ## Install Or Update Envoy Gateway
 
 Install or upgrade the controller:
@@ -258,5 +269,4 @@ Current open issues:
 - `deploy/docs/rollout-notes.md`
 - `deploy/docs/structure.md`
 - `deploy/infra/envoy-gateway/README.md`
-- `deploy/infra/gw-nginx/README.md`
 - `deploy/infra/gw-nginx/README.md`

@@ -18,6 +18,24 @@ Campus++ app
   -> monitoring and PROD later
 ```
 
+## What This Demonstrates
+
+This repository is maintained as a DevOps/Kubernetes migration project, not just
+as a full-stack app repository.
+
+It currently demonstrates:
+
+- containerized frontend, backend, auth, importer, and nginx services
+- immutable GHCR release images tagged from Git tags
+- validation-only CI on `main`
+- controlled non-prod releases from `dev-*` and `home-*` tags
+- self-hosted GitHub Actions runners pinned by labels
+- Kustomize-based Kubernetes deployment overlays under `deploy/app`
+- Envoy Gateway / Gateway API as the active Kubernetes entry layer
+- a dedicated `gw` nginx edge baseline in repo
+- external PostgreSQL on `s4`
+- monitoring and future PROD rollout planned as separate phases
+
 ## Current Status
 
 The active lab DEV deployment is working through Envoy Gateway on `s5-dev`.
@@ -113,6 +131,18 @@ Shared infrastructure baselines:
 
 - `deploy/infra/envoy-gateway/`
 - `deploy/infra/gw-nginx/`
+
+Manual Kubernetes deployment uses the same release contract as the workflow:
+
+```bash
+bash deploy/scripts/apply-overlay.sh \
+  --environment dev \
+  --image-tag dev-2026.04.24-1
+
+bash deploy/scripts/verify-overlay.sh \
+  --environment dev \
+  --expected-nodeport 30080
+```
 
 ## CI/CD
 
