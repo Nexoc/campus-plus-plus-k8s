@@ -227,10 +227,10 @@ kubectl get gateway,httproute,envoyproxy,clienttrafficpolicy -n campus-dev -o wi
 bash deploy/scripts/verify-overlay.sh --environment dev --expected-nodeport 30080
 ```
 
-Check the external public entry:
+Check the lab edge entry through `gw`:
 
 ```bash
-curl -I https://campus.davl.at/
+curl -I http://10.123.127.29/
 ```
 
 Expected result:
@@ -239,7 +239,7 @@ Expected result:
 - `campus-importer` is `Complete`
 - `gateway/campus` is `Programmed=True`
 - `httproute/campus` is accepted
-- public API paths respond through Envoy
+- lab edge requests respond through Envoy
 
 ## Known Gaps
 
@@ -258,4 +258,5 @@ Current open issues:
 - `deploy/docs/rollout-notes.md`
 - `deploy/docs/structure.md`
 - `deploy/infra/envoy-gateway/README.md`
+- `deploy/infra/gw-nginx/README.md`
 - `deploy/infra/gw-nginx/README.md`

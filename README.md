@@ -2,131 +2,81 @@
 
 [![CI Pipeline](https://github.com/Nexoc/campus-plus-plus-k8s/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nexoc/campus-plus-plus-k8s/actions/workflows/ci.yml)
 
-Campus++ is a full-stack Hochschule Campus Wien application with a local Docker
-runtime and a Kubernetes-based non-prod Kubernetes deployment model.
+Campus++ is a full-stack Hochschule Campus Wien application packaged and
+deployed as a production-like Kubernetes / DevOps portfolio project.
 
-Main runtime components:
+The current focus is not only the application code, but the delivery platform
+around it:
 
-- `frontend`
-- `auth`
-- `backend`
-- `campus-nginx`
-- `campus-importer`
-- PostgreSQL
-- Envoy Gateway
+```text
+Campus++ app
+  -> Docker images
+  -> GHCR
+  -> k3s non-prod clusters
+  -> Envoy Gateway / Gateway API
+  -> tag-based CI/CD
+  -> monitoring and PROD later
+```
 
 ## Current Status
 
-The current working lab DEV entry path is:
+The active lab DEV deployment is working through Envoy Gateway on `s5-dev`.
 
-`Internet -> gw -> DEV 192.168.50.5:30080 -> Envoy Gateway -> campus-nginx -> frontend/auth/backend -> PostgreSQL 192.168.50.4`
+Verified release:
 
-Confirmed today:
+- Git tag: `dev-2026.04.24-1`
+- Images: `ghcr.io/nexoc/campus-*:dev-2026.04.24-1`
+- Target cluster: `s5-dev` / `192.168.50.5`
+- Namespace: `campus-dev`
+- Entry point: Envoy Gateway `NodePort 30080`
 
-- `campus-dev` namespace is deployed on k3s
-- `frontend`, `auth`, `backend`, `campus-nginx`, and `campus-importer` run in Kubernetes
-- `campus-importer` completed and populated the database
-- Envoy Gateway exposes the app through `NodePort 30080`
-- `deploy/app` is the canonical Kubernetes deployment tree
-- non-prod releases are tag-driven, not branch auto-deploy driven
+Current lab request path:
 
-Known gap:
+```text
+client
+  -> gw 10.123.127.29
+  -> s5-dev 192.168.50.5:30080
+  -> Envoy Gateway / Gateway API
+  -> campus-nginx
+  -> frontend / auth / backend
+  -> PostgreSQL 192.168.50.4
+```
 
-- the single-node DEV cluster is still operationally unstable and shows restarts
-  around Envoy and other control-plane components
+Confirmed runtime state:
 
-## Next Steps
+- `frontend`, `auth`, `backend`, and `campus-nginx` are running in Kubernetes
+- `campus-importer` completes successfully
+- `Gateway/campus` is `Programmed=True`
+- `HTTPRoute/campus` is accepted and routes to `campus-nginx`
+- `EnvoyProxy/campus-edge` publishes `NodePort 30080`
+- `ClientTrafficPolicy/campus-edge` is present
+- Envoy Gateway / Gateway API is the only active Kubernetes entry layer
 
-The practical next plan is:
+## Architecture
 
-1. Close the current security and access-control gaps first.
-   This includes removing the bootstrap admin with a known password, fixing missing
-   moderator-only checks where write access is too broad, and eliminating runtime
-   secret staging inside the self-hosted runner workspace.
-2. Stabilize the single-node DEV cluster.
-   Focus on the `NodeNotReady` episodes, short API disconnects, and the restarts
-   around Envoy-related and control-plane components.
-3. Harden the external entry path.
-   The repo now contains the lab `gw` nginx baseline; the remaining work is a
-   stable public hostname/TLS shape instead of HTTP-only lab access.
-4. Make the DEV deploy path safer and more reproducible.
-   Manual and workflow-driven deploys should not depend on staging secret env files
-   inside the repo checkout, and the runbook should reflect the actual deploy flow.
-5. After DEV is secure and operationally stable, define the production-like rollout
-   path.
-   That includes the final public host shape, deployment topology, and the future
-   PROD environment model.
+Main application components:
+
+- `frontend`: Vue 3 single-page application
+- `auth`: Spring Boot authentication service
+- `backend`: Spring Boot API service
+- `campus-nginx`: internal application gateway and auth boundary
+- `campus-importer`: one-shot data import job
+- PostgreSQL: external database on `s4`
+
+Delivery and platform components:
+
+- GHCR for application images
+- GitHub Actions for CI and release orchestration
+- self-hosted runners for cluster deployment
+- k3s for non-prod Kubernetes
+- Envoy Gateway / Gateway API for Kubernetes ingress
+- nginx on `gw` for the lab edge proxy
 
 ## Runtime Modes
 
-### 1. Local Docker Runtime
+### Local Docker Runtime
 
 Use the root `docker-compose.yml` for local development and smoke testing.
-
-This path includes:
-
-- local image builds
-- bundled PostgreSQL container
-- local `campus-nginx`
-
-### 2. Kubernetes Non-Prod Runtime
-
-Use `deploy/app/overlays/` and the GitHub Actions release workflow for the
-active non-prod path.
-
-This path includes:
-
-- Kustomize overlays in `deploy/app/overlays/`
-- Envoy Gateway controller baselines in `deploy/infra/envoy-gateway/`
-- self-hosted GitHub Actions deploys on the `s5` and `home` runners
-- GHCR-backed image delivery
-
-Current release channels:
-
-- `dev-*` deploys to the lab `s5` cluster
-- `home-*` deploys to the home cluster
-- `main` runs validation only
-
-## Documentation
-
-General project docs:
-
-- [SRS](docs/SRS.md)
-- [Requirements](docs/requirements.md)
-
-Deployment docs:
-
-- [Deployment Runbook](deploy/README.md)
-- [Environments](deploy/docs/environments.md)
-- [Naming Convention](deploy/docs/naming-convention.md)
-- [Rollout Notes](deploy/docs/rollout-notes.md)
-
-## Local Quick Start
-
-### Prerequisites
-
-- Docker
-- Docker Compose v2
-- free port `80`
-
-### Configuration
-
-The local runtime uses the root `docker-compose.yml` and a local `.env.dev`
-file.
-
-Required variables:
-
-- `BACKEND_PROFILE`
-- `AUTH_PROFILE`
-- `DB_HOST`
-- `DB_PORT`
-- `DB_NAME`
-- `DB_USERNAME`
-- `DB_PASSWORD`
-- `JWT_SECRET`
-- `JWT_EXPIRATION`
-
-### Start
 
 ```bash
 docker compose --env-file .env.dev up -d --build
@@ -134,97 +84,80 @@ docker compose --env-file .env.dev up -d --build
 
 Open:
 
-- `http://localhost`
-
-### Show container status
-
-```bash
-docker compose --env-file .env.dev ps -a
+```text
+http://localhost
 ```
 
-### Stop
+Stop:
 
 ```bash
 docker compose --env-file .env.dev down -v --remove-orphans
 ```
 
-## Architecture
+### Kubernetes Non-Prod Runtime
 
-```text
-Internet
-  ↓
-davl.at / Public VPS
-  ↓
-Private path / VPN
-  ↓
-DEV NodePort 30080
-  ↓
-Envoy Gateway
-  ↓
-campus-nginx
-  ├── frontend
-  ├── auth
-  └── backend
-       ↓
-    PostgreSQL 192.168.50.4
-```
+Use `deploy/app/overlays/` for Kubernetes deployments.
 
-## Services
+Active overlays:
 
-### Frontend
+- `deploy/app/overlays/dev`: lab cluster on `s5-dev`
+- `deploy/app/overlays/home`: home cluster, same app model with its own edge patch
+- `deploy/app/overlays/prod`: reserved for future PROD work
 
-- Vue 3 SPA
-- served behind `campus-nginx`
-- API calls use same-origin paths such as `/api/*` and `/auth/*`
+Shared deployment helpers:
 
-### campus-nginx
+- `deploy/scripts/apply-overlay.sh`
+- `deploy/scripts/verify-overlay.sh`
 
-- internal application gateway
-- serves frontend assets
-- routes `/auth/*`, `/api/*`, `/account/*`, `/admin/*`
-- enforces auth via `auth_request`
-- forwards trusted identity headers to backend services
+Shared infrastructure baselines:
 
-### Auth Service
-
-- Spring Boot
-- login, registration, account operations
-- JWT issuing and validation
-- Flyway-managed auth schema
-
-### Backend
-
-- Spring Boot
-- public and protected REST API
-- Flyway-managed app schema
-- trusts upstream identity headers from `campus-nginx`
-
-### Importer
-
-- one-shot Kubernetes Job
-- waits for DB connectivity and schema readiness
-- imports HCW study programs and courses into PostgreSQL
-
-## Profiles
-
-Supported Spring profiles:
-
-- `dev`
-- `test`
-- `prod`
+- `deploy/infra/envoy-gateway/`
+- `deploy/infra/gw-nginx/`
 
 ## CI/CD
 
+`main` is the only working branch.
+
 Current GitHub Actions behavior:
 
-- `CI Pipeline` runs auth tests, backend tests, and backend build
-- `push` and `pull_request` on `main` run validation only
-- `dev-*` tags build and publish GHCR images, then deploy to the `s5` runner
-- `home-*` tags build and publish GHCR images, then deploy to the `home` runner
-- release image tags are exactly the pushed Git tag
-- deploys use the canonical `deploy/app` overlays and Envoy/Gateway API path
+- `push` to `main`: validation only
+- `pull_request` to `main`: validation only
+- `dev-*` tag: build/push images and deploy to lab `s5`
+- `home-*` tag: build/push images and deploy to the home runner
+- `v*` tags: reserved for future PROD; no active PROD workflow yet
 
-## Project Structure
+Release images are tagged exactly with the Git tag that triggered the workflow.
+
+Example DEV release:
+
+```bash
+git tag dev-2026.04.24-1
+git push origin dev-2026.04.24-1
+```
+
+Expected result:
+
+- `Non-Prod Release` workflow starts
+- GHCR images are published with tag `dev-2026.04.24-1`
+- `Deploy DEV to s5` runs on runner labels `dev+s5`
+- `Deploy HOME to home runner` is skipped
+- Kubernetes rollout is verified through Envoy/Gateway API checks
+
+## Runner Model
+
+GitHub Actions targets self-hosted runners by labels, not by runner names.
+
+Current non-prod label contract:
+
+- lab runner: `self-hosted`, `Linux`, `X64`, `dev`, `s5`
+- home runner: `self-hosted`, `Linux`, `X64`, `dev`, `home`
+
+The release workflow depends on these labels:
+
+- `dev-*` requires `dev+s5`
+- `home-*` requires `dev+home`
+
+## Repository Layout
 
 ```text
 campus-plus-plus/
@@ -232,8 +165,13 @@ campus-plus-plus/
 ├── backend/
 ├── deploy/
 │   ├── app/
+│   │   ├── base/
+│   │   └── overlays/
 │   ├── docs/
 │   ├── infra/
+│   │   ├── envoy-gateway/
+│   │   └── gw-nginx/
+│   ├── scripts/
 │   └── templates/
 ├── docs/
 ├── frontend/
@@ -243,10 +181,29 @@ campus-plus-plus/
 └── README.md
 ```
 
-## Notes
+## Deployment Docs
 
-- `campus-nginx` is the application security boundary
-- backend does not parse JWT directly
-- the public DEV hostname currently terminates on `davl.at`
-- the active DEV deployment path is Envoy/Gateway API based
+- [Deployment Runbook](deploy/README.md)
+- [Environments](deploy/docs/environments.md)
+- [Naming Convention](deploy/docs/naming-convention.md)
+- [Rollout Notes](deploy/docs/rollout-notes.md)
+- [Deployment Structure](deploy/docs/structure.md)
+- [GW nginx baseline](deploy/infra/gw-nginx/README.md)
+- [Envoy Gateway baseline](deploy/infra/envoy-gateway/README.md)
 
+## Next Work
+
+Current planned work:
+
+- apply and verify the repo-owned `gw` nginx baseline on the gateway host
+- harden the lab edge with a stable public hostname and TLS
+- bring up monitoring on `s6`
+- review the `home` overlay before the first real `home-*` release
+- design the future PROD release path for `v*` tags
+
+Recommended monitoring target for `s6`:
+
+- 2 vCPU
+- 4 GB RAM
+- 30-50 GB disk
+- Prometheus, Grafana, Alertmanager, node-exporter, kube-state-metrics
