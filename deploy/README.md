@@ -45,8 +45,7 @@ deploy/
 │   └── secrets/
 ├── infra/
 │   ├── envoy-gateway/
-│   ├── gw-nginx/
-│   └── ingress-nginx/
+│   └── gw-nginx/
 └── docs/
 ```
 
@@ -260,4 +259,3 @@ Current open issues:
 - `deploy/docs/structure.md`
 - `deploy/infra/envoy-gateway/README.md`
 - `deploy/infra/gw-nginx/README.md`
-- `deploy/infra/ingress-nginx/README.md`

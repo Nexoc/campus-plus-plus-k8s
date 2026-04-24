@@ -2,8 +2,8 @@
 
 This document describes the current deployment layout.
 
-The canonical Kubernetes rollout path is now `deploy/app/` with environment
-overlays, not the older dedicated `deploy/dev/` tree.
+The canonical Kubernetes rollout path is `deploy/app/` with environment
+overlays.
 
 ## High-Level Layout
 
@@ -17,8 +17,7 @@ deploy/
 │       └── prod/
 ├── infra/
 │   ├── envoy-gateway/
-│   ├── gw-nginx/
-│   └── ingress-nginx/
+│   └── gw-nginx/
 ├── scripts/
 ├── templates/
 └── docs/
@@ -59,13 +58,6 @@ Current lab edge baseline:
 - nginx site config for `gw`
 - reverse proxy from `gw:80` to `192.168.50.5:30080`
 - fixed Host header for the DEV `HTTPRoute`
-
-### `infra/ingress-nginx/`
-
-Legacy/reference baseline:
-
-- retained for migration history and comparison
-- not part of the active non-prod release flow
 
 ## `scripts/`
 

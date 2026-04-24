@@ -35,11 +35,6 @@ Active files:
 - `.github/workflows/ci.yml`
 - `.github/workflows/deploy-dev.yml`
 
-Legacy/reference files:
-
-- `deploy/dev/`
-- `deploy/infra/ingress-nginx/`
-
 ## Non-Prod Release Workflow
 
 The current repo supports this flow:

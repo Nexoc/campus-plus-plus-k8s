@@ -248,5 +248,5 @@ campus-plus-plus/
 - `campus-nginx` is the application security boundary
 - backend does not parse JWT directly
 - the public DEV hostname currently terminates on `davl.at`
-- the active DEV deployment path is Envoy-based, not ingress-nginx-based
+- the active DEV deployment path is Envoy/Gateway API based
 

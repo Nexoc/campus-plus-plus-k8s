@@ -30,9 +30,6 @@ Campus++ keeps application code and deployment code separate:
 - shared infra baselines live under `deploy/infra/`
 - templates live under `deploy/templates/`
 
-The `deploy/dev/` tree remains in git as historical material and is no longer
-the canonical rollout path.
-
 ## Runtime Environments
 
 Current active non-prod environments:
@@ -62,7 +59,6 @@ Notes:
 - Envoy Gateway is the active entry layer for both non-prod environments
 - `campus-nginx` remains the internal app gateway and auth boundary
 - PostgreSQL stays outside Kubernetes for the lab environment
-- legacy `ingress-nginx` is not part of the active release flow
 
 ## Configuration Strategy
 

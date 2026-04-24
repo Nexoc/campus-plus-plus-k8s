@@ -18,7 +18,6 @@ target/
 
 # Local deployment secrets generated from templates
 deploy/app/overlays/*/secrets/*.env
-deploy/dev/secrets/*.env
 deploy/.tmp/
 
 *.pdf
