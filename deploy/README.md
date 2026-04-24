@@ -45,6 +45,7 @@ deploy/
 │   └── secrets/
 ├── infra/
 │   ├── envoy-gateway/
+│   ├── gw-nginx/
 │   └── ingress-nginx/
 └── docs/
 ```
@@ -115,6 +116,34 @@ helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
   -f deploy/infra/envoy-gateway/values-dev.yaml
 
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
+```
+
+## Configure Lab GW Reverse Proxy
+
+The `gw` host forwards external lab HTTP traffic to Envoy on `s5-dev`.
+
+Reference config:
+
+- `deploy/infra/gw-nginx/campus-dev.conf`
+
+Install it on `gw` as:
+
+```text
+/etc/nginx/sites-enabled/campus-dev
+```
+
+Then validate and reload nginx on `gw`:
+
+```bash
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+Verify the proxy path:
+
+```bash
+curl -I http://10.123.127.29/
+curl -I -H 'Host: campus-dev.192-168-50-5.sslip.io' http://192.168.50.5:30080/
 ```
 
 ## Manual Non-Prod Apply
@@ -220,7 +249,7 @@ Current open issues:
 - the single-node DEV cluster still shows intermittent instability
 - Envoy-related components have had probe failures and restarts during host/API
   hiccups
-- the repo does not yet contain the exact public VPS nginx configuration
+- the current `gw` nginx baseline is HTTP-only lab configuration
 - PROD delivery is still not the active rollout path
 
 ## Related Docs
@@ -230,4 +259,5 @@ Current open issues:
 - `deploy/docs/rollout-notes.md`
 - `deploy/docs/structure.md`
 - `deploy/infra/envoy-gateway/README.md`
+- `deploy/infra/gw-nginx/README.md`
 - `deploy/infra/ingress-nginx/README.md`

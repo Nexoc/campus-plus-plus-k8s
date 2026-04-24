@@ -46,10 +46,9 @@ The practical next plan is:
 2. Stabilize the single-node DEV cluster.
    Focus on the `NodeNotReady` episodes, short API disconnects, and the restarts
    around Envoy-related and control-plane components.
-3. Move the external entry path from implicit host knowledge into repository-owned
-   documentation and configuration.
-   The exact `davl.at` nginx reverse proxy setup should no longer live only on the
-   VPS.
+3. Harden the external entry path.
+   The repo now contains the lab `gw` nginx baseline; the remaining work is a
+   stable public hostname/TLS shape instead of HTTP-only lab access.
 4. Make the DEV deploy path safer and more reproducible.
    Manual and workflow-driven deploys should not depend on staging secret env files
    inside the repo checkout, and the runbook should reflect the actual deploy flow.

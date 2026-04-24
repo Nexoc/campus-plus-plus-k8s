@@ -92,7 +92,7 @@ Real secrets must not be committed.
 
 The following remain future or partially external work:
 
-- the exact public edge config in front of the lab path
+- TLS/public hostname hardening for the lab edge
 - the final public hostname for the home overlay
 - future PROD rollout design
 - broader cluster hardening and monitoring

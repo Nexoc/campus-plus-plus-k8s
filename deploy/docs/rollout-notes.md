@@ -29,6 +29,7 @@ Active files:
 - `deploy/app/overlays/dev/`
 - `deploy/app/overlays/home/`
 - `deploy/infra/envoy-gateway/`
+- `deploy/infra/gw-nginx/`
 - `deploy/scripts/apply-overlay.sh`
 - `deploy/scripts/verify-overlay.sh`
 - `.github/workflows/ci.yml`
@@ -96,6 +97,6 @@ A successful verification pass should confirm:
 
 Current open issues:
 
-- the exact public edge configuration is still partly outside the repo
+- the lab `gw` nginx baseline is now in repo, but public hostname/TLS hardening is still future work
 - the home hostname is still a placeholder in the overlay
 - PROD delivery is intentionally not active yet

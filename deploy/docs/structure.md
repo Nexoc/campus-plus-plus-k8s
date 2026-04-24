@@ -17,6 +17,7 @@ deploy/
 │       └── prod/
 ├── infra/
 │   ├── envoy-gateway/
+│   ├── gw-nginx/
 │   └── ingress-nginx/
 ├── scripts/
 ├── templates/
@@ -50,6 +51,14 @@ Current active infra baseline:
 - Helm values for the Envoy Gateway controller
 - shared `GatewayClass`
 - controller-level notes
+
+### `infra/gw-nginx/`
+
+Current lab edge baseline:
+
+- nginx site config for `gw`
+- reverse proxy from `gw:80` to `192.168.50.5:30080`
+- fixed Host header for the DEV `HTTPRoute`
 
 ### `infra/ingress-nginx/`
 
