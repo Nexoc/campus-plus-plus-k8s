@@ -1,60 +1,123 @@
-name: Deploy DEV
+name: Non-Prod Release
 
 on:
-  workflow_run:
-    workflows: ["CI Pipeline"]
-    types:
-      - completed
-
-  workflow_dispatch:
+  push:
+    tags:
+      - "dev-*"
+      - "home-*"
 
 permissions:
   contents: read
-  packages: read
-
-concurrency:
-  group: campus-dev-deploy
-  cancel-in-progress: false
 
 jobs:
+  build-and-push-images:
+    name: Build and Push Release Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.release-meta.outputs.image_tag }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Select release image tag
+        id: release-meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE_TAG="${GITHUB_REF_NAME}"
+          case "$IMAGE_TAG" in
+            dev-*|home-*) ;;
+            *)
+              echo "Unsupported non-prod release tag: $IMAGE_TAG" >&2
+              exit 1
+              ;;
+          esac
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "Building and publishing images for release tag $IMAGE_TAG"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          push: true
+          tags: ghcr.io/nexoc/campus-frontend:${{ steps.release-meta.outputs.image_tag }}
+
+      - name: Build and push auth
+        uses: docker/build-push-action@v6
+        with:
+          context: ./auth
+          push: true
+          tags: ghcr.io/nexoc/campus-auth:${{ steps.release-meta.outputs.image_tag }}
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          push: true
+          tags: ghcr.io/nexoc/campus-backend:${{ steps.release-meta.outputs.image_tag }}
+
+      - name: Build and push campus-nginx
+        uses: docker/build-push-action@v6
+        with:
+          context: ./nginx
+          push: true
+          tags: ghcr.io/nexoc/campus-nginx:${{ steps.release-meta.outputs.image_tag }}
+
+      - name: Build and push importer
+        uses: docker/build-push-action@v6
+        with:
+          context: ./importer
+          push: true
+          tags: ghcr.io/nexoc/campus-importer:${{ steps.release-meta.outputs.image_tag }}
+
   deploy-dev:
-    if: >-
-      ${{
-        github.event_name == 'workflow_dispatch' ||
-        (
-          github.event_name == 'workflow_run' &&
-          github.event.workflow_run.conclusion == 'success' &&
-          github.event.workflow_run.event == 'push' &&
-          github.event.workflow_run.head_branch == 'main'
-        )
-      }}
+    name: Deploy DEV to s5
+    if: startsWith(github.ref_name, 'dev-')
+    needs: build-and-push-images
     runs-on:
       - self-hosted
       - Linux
+      - dev
+      - s5
+    concurrency:
+      group: campus-dev-release
+      cancel-in-progress: false
     timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: read
     env:
       KUBECONFIG: /home/nexoc/.kube/config
       CAMPUS_SECRETS_ROOT: /home/nexoc/campus-secrets
-
+      RELEASE_ENV: dev
+      DEPLOY_NAMESPACE: campus-dev
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
 
-      - name: Select immutable image tag
-        id: image-meta
+      - name: Show release inputs
         shell: bash
         run: |
           set -euo pipefail
-          if [[ "${{ github.event_name }}" == "workflow_run" ]]; then
-            DEPLOY_SHA="${{ github.event.workflow_run.head_sha }}"
-          else
-            DEPLOY_SHA="${GITHUB_SHA}"
-          fi
-          SHORT_SHA="${DEPLOY_SHA::7}"
-          echo "image_tag=sha-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
-          echo "Deploying commit ${DEPLOY_SHA} as image tag sha-${SHORT_SHA}"
+          echo "Release tag: ${{ needs.build-and-push-images.outputs.image_tag }}"
+          echo "Target runner: dev+s5"
+          echo "Target overlay: $RELEASE_ENV"
+          echo "Target namespace: $DEPLOY_NAMESPACE"
 
       - name: Verify cluster access
         shell: bash
@@ -62,27 +125,19 @@ jobs:
           set -euo pipefail
           kubectl get nodes -o wide
 
-      - name: Verify DEV host secret files
+      - name: Verify host secret files
         shell: bash
         run: |
           set -euo pipefail
           for path in \
-            "$CAMPUS_SECRETS_ROOT/dev/db-secrets.env" \
-            "$CAMPUS_SECRETS_ROOT/dev/auth-secrets.env"
+            "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/db-secrets.env" \
+            "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/auth-secrets.env"
           do
             [[ -f "$path" ]] || {
               echo "Missing required host secret file: $path" >&2
               exit 1
             }
           done
-
-      - name: Stage runtime secrets
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p deploy/dev/secrets
-          cp "$CAMPUS_SECRETS_ROOT/dev/db-secrets.env" deploy/dev/secrets/db-secrets.env
-          cp "$CAMPUS_SECRETS_ROOT/dev/auth-secrets.env" deploy/dev/secrets/auth-secrets.env
 
       - name: Ensure namespace and GHCR pull secret
         shell: bash
@@ -93,7 +148,7 @@ jobs:
           GHCR_FALLBACK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          kubectl apply -f deploy/dev/namespace.yaml
+          kubectl create namespace "$DEPLOY_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
           if [[ -n "${GHCR_PULL_TOKEN:-}" ]]; then
             pull_username="${GHCR_PULL_USERNAME:-$GHCR_REPOSITORY_OWNER}"
@@ -106,51 +161,152 @@ jobs:
           fi
 
           kubectl create secret docker-registry ghcr-pull \
-            --namespace campus-dev \
+            --namespace "$DEPLOY_NAMESPACE" \
             --docker-server ghcr.io \
             --docker-username "${pull_username}" \
             --docker-password "${pull_password}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Pin deploy manifests to selected commit
+      - name: Apply DEV overlay
         shell: bash
         run: |
           set -euo pipefail
-          IMAGE_TAG="${{ steps.image-meta.outputs.image_tag }}"
-          sed -i "s/newTag: dev-latest/newTag: ${IMAGE_TAG}/g" deploy/dev/kustomization.yaml
-          grep -n "newTag:" deploy/dev/kustomization.yaml
-
-      - name: Apply manifests
-        shell: bash
-        run: |
-          set -euo pipefail
-          kubectl delete deployment campus-test -n campus-dev --ignore-not-found
-          kubectl delete service campus-test -n campus-dev --ignore-not-found
-          kubectl delete httproute campus-test -n campus-dev --ignore-not-found
-          kubectl delete job campus-importer -n campus-dev --ignore-not-found
+          kubectl delete deployment campus-test -n "$DEPLOY_NAMESPACE" --ignore-not-found
+          kubectl delete service campus-test -n "$DEPLOY_NAMESPACE" --ignore-not-found
+          kubectl delete httproute campus-test -n "$DEPLOY_NAMESPACE" --ignore-not-found
+          kubectl delete job campus-importer -n "$DEPLOY_NAMESPACE" --ignore-not-found
           kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
-          kubectl apply -k deploy/dev
+          bash deploy/scripts/apply-overlay.sh \
+            --environment "$RELEASE_ENV" \
+            --image-tag "${{ needs.build-and-push-images.outputs.image_tag }}"
 
-      - name: Wait for app rollouts
+      - name: Verify DEV overlay
         shell: bash
         run: |
           set -euo pipefail
-          for name in frontend auth backend campus-nginx; do
-            kubectl rollout status "deployment/$name" -n campus-dev --timeout=300s
-          done
-
-      - name: Wait for importer job
-        shell: bash
-        run: |
-          set -euo pipefail
-          kubectl wait --for=condition=complete job/campus-importer -n campus-dev --timeout=600s
-          kubectl logs job/campus-importer -n campus-dev
+          bash deploy/scripts/verify-overlay.sh \
+            --environment "$RELEASE_ENV" \
+            --expected-nodeport 30080
 
       - name: Show deployed resources
         shell: bash
         run: |
           set -euo pipefail
-          kubectl get all -n campus-dev -o wide
-          kubectl get gateway,httproute,envoyproxy -n campus-dev -o wide
+          kubectl get all -n "$DEPLOY_NAMESPACE" -o wide
+          kubectl get gateway,httproute,envoyproxy,clienttrafficpolicy -n "$DEPLOY_NAMESPACE" -o wide
+          kubectl get gatewayclass
+          kubectl get svc -n envoy-gateway-system
+
+  deploy-home:
+    name: Deploy HOME to home runner
+    if: startsWith(github.ref_name, 'home-')
+    needs: build-and-push-images
+    runs-on:
+      - self-hosted
+      - Linux
+      - dev
+      - home
+    concurrency:
+      group: campus-home-release
+      cancel-in-progress: false
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      packages: read
+    env:
+      KUBECONFIG: /home/nexoc/.kube/config
+      CAMPUS_SECRETS_ROOT: /home/nexoc/campus-secrets
+      RELEASE_ENV: home
+      DEPLOY_NAMESPACE: campus-dev
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Show release inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Release tag: ${{ needs.build-and-push-images.outputs.image_tag }}"
+          echo "Target runner: dev+home"
+          echo "Target overlay: $RELEASE_ENV"
+          echo "Target namespace: $DEPLOY_NAMESPACE"
+
+      - name: Verify cluster access
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl get nodes -o wide
+
+      - name: Verify host secret files
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in \
+            "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/db-secrets.env" \
+            "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/auth-secrets.env"
+          do
+            [[ -f "$path" ]] || {
+              echo "Missing required host secret file: $path" >&2
+              exit 1
+            }
+          done
+
+      - name: Ensure namespace and GHCR pull secret
+        shell: bash
+        env:
+          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+          GHCR_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          GHCR_FALLBACK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          kubectl create namespace "$DEPLOY_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+          if [[ -n "${GHCR_PULL_TOKEN:-}" ]]; then
+            pull_username="${GHCR_PULL_USERNAME:-$GHCR_REPOSITORY_OWNER}"
+            pull_password="${GHCR_PULL_TOKEN}"
+            echo "Using persistent GHCR pull credentials"
+          else
+            pull_username="${GHCR_REPOSITORY_OWNER}"
+            pull_password="${GHCR_FALLBACK_TOKEN}"
+            echo "::warning::GHCR_PULL_TOKEN is not configured. Falling back to workflow GITHUB_TOKEN; future restarts may fail once that token expires."
+          fi
+
+          kubectl create secret docker-registry ghcr-pull \
+            --namespace "$DEPLOY_NAMESPACE" \
+            --docker-server ghcr.io \
+            --docker-username "${pull_username}" \
+            --docker-password "${pull_password}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply HOME overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl delete deployment campus-test -n "$DEPLOY_NAMESPACE" --ignore-not-found
+          kubectl delete service campus-test -n "$DEPLOY_NAMESPACE" --ignore-not-found
+          kubectl delete httproute campus-test -n "$DEPLOY_NAMESPACE" --ignore-not-found
+          kubectl delete job campus-importer -n "$DEPLOY_NAMESPACE" --ignore-not-found
+          kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
+          bash deploy/scripts/apply-overlay.sh \
+            --environment "$RELEASE_ENV" \
+            --image-tag "${{ needs.build-and-push-images.outputs.image_tag }}"
+
+      - name: Verify HOME overlay
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash deploy/scripts/verify-overlay.sh \
+            --environment "$RELEASE_ENV" \
+            --expected-nodeport 30080
+
+      - name: Show deployed resources
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl get all -n "$DEPLOY_NAMESPACE" -o wide
+          kubectl get gateway,httproute,envoyproxy,clienttrafficpolicy -n "$DEPLOY_NAMESPACE" -o wide
           kubectl get gatewayclass
           kubectl get svc -n envoy-gateway-system

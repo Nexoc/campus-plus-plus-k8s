@@ -1,142 +1,101 @@
 # Rollout Notes
 
-This document captures the current working DEV rollout.
-
-It reflects the setup that was actually verified:
-
-- GitHub Actions on `main`
-- GHCR image publishing
-- self-hosted deploy on the DEV node
-- Envoy Gateway entry on `31080`
-- external access through `davl.at`
+This document captures the current non-prod rollout model for Campus++.
 
 ## Current Status Summary
 
-Current confirmed path:
+Current delivery path:
 
-`GitHub -> GHCR -> DEV k3s -> Envoy Gateway -> campus-nginx -> frontend/auth/backend -> PostgreSQL`
+`Git tag -> GitHub Actions -> GHCR -> target runner -> k3s cluster -> Envoy Gateway -> campus-nginx -> services`
 
-Current confirmed external path:
+Current active lab path:
 
-`Internet -> davl.at -> private/VPN path -> DEV 192.168.56.40:31080 -> Envoy Gateway -> app`
+`Internet -> gw -> 192.168.50.5:30080 -> Envoy Gateway -> campus-nginx -> app`
 
-Confirmed DEV characteristics:
+Key characteristics:
 
-- images are published to GHCR on `push` to `main`
-- active manifests live under `deploy/dev/`
-- `frontend`, `auth`, `backend`, `campus-nginx`, and `campus-importer` run in `campus-dev`
-- importer completed successfully and populated the database
-- Gateway API objects `GatewayClass`, `Gateway`, `HTTPRoute`, and `EnvoyProxy` are active
-- the app responds through `192.168.56.40:31080`
-- the public hostname is fronted by the `davl.at` VPS
+- `main` runs validation only
+- `dev-*` tags build and release to the lab cluster
+- `home-*` tags build and release to the home cluster
+- `v*` is reserved for future PROD only
+- active manifests live under `deploy/app/overlays/`
+- Envoy Gateway is the active entry layer on NodePort `30080`
 
 ## Relevant Repo Files
 
-Active DEV files:
+Active files:
 
-- `deploy/dev/`
+- `deploy/app/base/`
+- `deploy/app/overlays/dev/`
+- `deploy/app/overlays/home/`
 - `deploy/infra/envoy-gateway/`
+- `deploy/scripts/apply-overlay.sh`
+- `deploy/scripts/verify-overlay.sh`
 - `.github/workflows/ci.yml`
 - `.github/workflows/deploy-dev.yml`
 
 Legacy/reference files:
 
-- `deploy/app/`
+- `deploy/dev/`
 - `deploy/infra/ingress-nginx/`
 
-## DEV Rollout Workflow
+## Non-Prod Release Workflow
 
 The current repo supports this flow:
 
-1. Push to `main`.
-2. `CI Pipeline` runs auth tests, backend tests, and backend build.
-3. CI builds and pushes images to GHCR.
-4. CI publishes both `sha-<shortsha>` and `dev-latest`.
-5. `Deploy DEV` runs on the self-hosted DEV runner.
-6. The deploy workflow stages secrets, creates `ghcr-pull`, pins `deploy/dev` to the successful CI commit tag, and applies the manifests.
-7. The workflow waits for `frontend`, `auth`, `backend`, and `campus-nginx`.
-8. The workflow waits for `campus-importer` completion.
-9. Envoy serves the app through `31080`.
+1. Push to `main` or open a PR against `main`.
+2. `CI Pipeline` runs validation only.
+3. Push a `dev-*` or `home-*` tag.
+4. `Non-Prod Release` builds and publishes GHCR images tagged exactly with `github.ref_name`.
+5. The matching deploy job runs on the label-pinned self-hosted runner.
+6. The workflow creates or updates `ghcr-pull`, applies the shared `GatewayClass`, renders the selected overlay, and applies it.
+7. The workflow verifies rollouts, importer completion, Gateway API resources, and Envoy NodePort `30080`.
 
-## Suggested Manual DEV Commands
+## Suggested Manual Commands
 
-Render manifests:
+Render a release manifest:
 
 ```bash
-kubectl kustomize deploy/dev
+bash deploy/scripts/apply-overlay.sh \
+  --environment dev \
+  --image-tag dev-2026.04.24-1 \
+  --render-only
 ```
 
-Apply manifests:
+Apply a non-prod overlay:
 
 ```bash
-IMAGE_TAG=sha-<shortsha>
-sed -i "s/newTag: dev-latest/newTag: ${IMAGE_TAG}/g" deploy/dev/kustomization.yaml
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 kubectl delete job campus-importer -n campus-dev --ignore-not-found
-kubectl apply -k deploy/dev
+bash deploy/scripts/apply-overlay.sh \
+  --environment dev \
+  --image-tag dev-2026.04.24-1
 ```
 
-Inspect resources:
+Verify a non-prod overlay:
 
 ```bash
-kubectl -n campus-dev get all -o wide
-kubectl -n campus-dev get gateway,httproute,envoyproxy -o wide
-kubectl get gatewayclass
-kubectl -n envoy-gateway-system get all -o wide
+bash deploy/scripts/verify-overlay.sh \
+  --environment dev \
+  --expected-nodeport 30080
 ```
 
-Check rollout status:
-
-```bash
-kubectl -n campus-dev rollout status deployment/frontend --timeout=300s
-kubectl -n campus-dev rollout status deployment/auth --timeout=300s
-kubectl -n campus-dev rollout status deployment/backend --timeout=300s
-kubectl -n campus-dev rollout status deployment/campus-nginx --timeout=300s
-kubectl -n campus-dev wait --for=condition=complete job/campus-importer --timeout=600s
-```
-
-Check importer logs:
-
-```bash
-kubectl -n campus-dev logs job/campus-importer
-```
-
-## Importer Notes
-
-Important current behavior:
-
-- the importer is a Kubernetes Job
-- it waits for DB connectivity and schema readiness
-- it skips cleanly when the database is already populated
-- it uses `ttlSecondsAfterFinished: 600`
-
-Rerun flow:
-
-```bash
-kubectl -n campus-dev delete job campus-importer --ignore-not-found
-kubectl apply -k deploy/dev
-```
-
-## DEV Verification Checklist
+## Verification Checklist
 
 A successful verification pass should confirm:
 
-- `frontend` pod is `Ready`
-- `auth` pod is `Ready`
-- `backend` pod is `Ready`
-- `campus-nginx` pod is `Ready`
-- `campus-importer` is `Complete`
-- `gateway/campus-dev` is `Programmed=True`
-- `httproute/campus` is accepted
-- `curl http://192.168.56.40:31080/` returns `200`
-- public API requests work through Envoy
-- `https://campus.davl.at/` works through the public VPS
+- `frontend`, `auth`, `backend`, and `campus-nginx` roll out successfully
+- `campus-importer` completes or has already been garbage-collected after success
+- `gateway/campus` is `Programmed=True`
+- `httproute/campus` is accepted and has `ResolvedRefs=True`
+- `envoyproxy/campus-edge` exists
+- `clienttrafficpolicy/campus-edge` exists
+- Envoy publishes NodePort `30080`
 
 ## Known Open Gaps
 
 Current open issues:
 
-- the single-node DEV cluster is still unstable at times
-- Envoy-related components have shown probe failures and restarts during node/API hiccups
-- the repo still lacks the exact public VPS nginx config
-- PROD rollout remains incomplete
+- the exact public edge configuration is still partly outside the repo
+- the home hostname is still a placeholder in the overlay
+- PROD delivery is intentionally not active yet

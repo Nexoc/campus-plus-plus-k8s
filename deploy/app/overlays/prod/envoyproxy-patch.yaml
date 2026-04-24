@@ -15,4 +15,4 @@ spec:
             spec:
               ports:
                 - port: 80
-                  nodePort: 31080
+                  nodePort: 30080

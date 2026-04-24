@@ -1,18 +1,18 @@
 # Naming Convention
 
-This document defines the current naming rules for Campus++ across namespaces,
-workloads, images, and entrypoints.
+This document defines the current naming rules for Campus++ across non-prod
+clusters, images, and release tags.
 
 ## Guiding Rules
 
-- keep workload names stable
-- carry environment separation in namespace and entrypoint, not in every object name
+- keep workload names stable across environments
+- keep environment identity in overlays, runner labels, and edge routing
 - keep image names aligned with component names
-- keep public names on the edge layer, not on raw node IPs
+- keep deploy identity in immutable Git tags
 
 ## Kubernetes Resource Naming
 
-Current active names:
+Current canonical names:
 
 - namespace: `campus-dev`
 - frontend deployment/service: `frontend`
@@ -20,11 +20,12 @@ Current active names:
 - backend deployment/service: `backend`
 - internal app gateway: `campus-nginx`
 - importer job: `campus-importer`
-- Envoy gateway: `campus-dev`
-- Envoy route: `campus`
-- Envoy proxy policy object: `campus-dev-edge`
+- Gateway: `campus`
+- HTTPRoute: `campus`
+- EnvoyProxy: `campus-edge`
+- ClientTrafficPolicy: `campus-edge`
 
-These names are already in use and should remain stable.
+These names stay stable across the lab and home non-prod overlays.
 
 ## Image Naming
 
@@ -39,53 +40,44 @@ Current GHCR images:
 Rules:
 
 - one image name per component
-- deployment identity belongs in tags
-- `sha-<shortsha>` is the immutable build identity
-- `dev-latest` is a convenience pointer for the DEV workflow
+- deployment identity belongs in the tag
+- non-prod images are tagged exactly with the Git tag that triggered the release
+
+Examples:
+
+- `dev-2026.04.24-1`
+- `home-2026.04.24-1`
+
+Reserved:
+
+- `v1.0.0` style tags for future PROD
+
+## Runner Label Naming
+
+Current workflow targeting rules:
+
+- lab deploy job requires labels `self-hosted`, `Linux`, `dev`, `s5`
+- home deploy job requires labels `self-hosted`, `Linux`, `dev`, `home`
+
+The workflow schedules against labels, not runner names.
 
 ## Hostname Strategy
 
-Current confirmed public DEV hostname:
+Lab non-prod:
 
-- `campus.davl.at`
+- active route hostname: `campus-dev.192-168-50-5.sslip.io`
+- active NodePort entry: `30080`
 
-Current internal smoke endpoint:
+Home non-prod:
 
-- `http://192.168.56.40:31080`
+- overlay placeholder hostname: `campus-home.local`
+- replace this with the real home edge hostname when that edge is finalized
 
-Policy:
+## Repo Alignment
 
-- users should access the public hostname, not the raw node IP
-- raw node IPs are acceptable for operator smoke tests only
-- `sslip.io` is no longer the active DEV hostname strategy
+The repo now reflects:
 
-## Naming Rules By Layer
-
-At the public edge:
-
-- use `campus.davl.at`
-
-Inside Kubernetes:
-
-- keep service names environment-neutral
-- keep environment identity in namespace and edge routing
-
-In CI and registry:
-
-- keep stable component image names
-- use `sha-<shortsha>` for immutable references
-- use `dev-latest` only for fast-moving DEV delivery
-
-## Current Repo Alignment
-
-The repo currently reflects:
-
-- stable workload names
-- `campus-dev` as the active namespace
-- GHCR image names aligned with the component model
-- Envoy Gateway resources aligned with the DEV rollout
-
-The repo still does not fully capture:
-
-- final PROD naming
-- the full public edge nginx configuration
+- stable component and service names
+- `deploy/app` as the canonical manifest tree
+- Envoy/Gateway API as the active ingress layer
+- tag-driven non-prod delivery via `dev-*` and `home-*`

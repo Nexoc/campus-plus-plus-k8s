@@ -5,27 +5,26 @@
 # Purpose:
 # - verify rollout status for the main application deployments in a target namespace
 # - confirm importer completion when the Job still exists
-# - check the ingress resource and optionally run one or more HTTP smoke tests
+# - validate Gateway API resources for the Envoy entry path
+# - optionally run an HTTP smoke test against the final Envoy endpoint
 #
 # This script is used both for manual verification and for the self-hosted
-# DEV deploy workflow after apply has finished.
+# non-prod deploy workflows after apply has finished.
 
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
 Usage:
-  deploy/scripts/verify-overlay.sh --environment <dev|prod> [--smoke-url <url>] [--smoke-host-header <host>] [--envoy-smoke-url <url>] [--envoy-smoke-host-header <host>] [--timeout-seconds <seconds>]
+  deploy/scripts/verify-overlay.sh --environment <dev|home|prod> [--smoke-url <url>] [--expected-nodeport <port>] [--timeout-seconds <seconds>]
 
 Required:
-  --environment     Target namespace selector: dev or prod
+  --environment     Target namespace selector: dev, home, or prod
 
 Optional:
-  --smoke-url               HTTP endpoint to probe after rollout checks
-  --smoke-host-header       Optional Host header for the primary ingress smoke check
-  --envoy-smoke-url         Optional HTTP endpoint for the Envoy staging smoke check
-  --envoy-smoke-host-header Optional Host header for the Envoy staging smoke check
-  --timeout-seconds         Timeout used for rollout and job completion checks
+  --smoke-url          Optional HTTP endpoint to probe after rollout checks
+  --expected-nodeport  Optional Envoy NodePort that must be published
+  --timeout-seconds    Timeout used for rollout, NodePort, and job completion checks
 EOF
 }
 
@@ -43,9 +42,7 @@ current_epoch_seconds() {
 
 environment=""
 smoke_url=""
-smoke_host_header=""
-envoy_smoke_url=""
-envoy_smoke_host_header=""
+expected_nodeport=""
 timeout_seconds="180"
 
 while [[ $# -gt 0 ]]; do
@@ -58,16 +55,8 @@ while [[ $# -gt 0 ]]; do
       smoke_url="${2:-}"
       shift 2
       ;;
-    --smoke-host-header)
-      smoke_host_header="${2:-}"
-      shift 2
-      ;;
-    --envoy-smoke-url)
-      envoy_smoke_url="${2:-}"
-      shift 2
-      ;;
-    --envoy-smoke-host-header)
-      envoy_smoke_host_header="${2:-}"
+    --expected-nodeport)
+      expected_nodeport="${2:-}"
       shift 2
       ;;
     --timeout-seconds)
@@ -86,8 +75,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "$environment" != "dev" && "$environment" != "prod" ]]; then
-  echo "--environment must be either 'dev' or 'prod'" >&2
+if [[ "$environment" != "dev" && "$environment" != "home" && "$environment" != "prod" ]]; then
+  echo "--environment must be one of 'dev', 'home', or 'prod'" >&2
   usage
   exit 1
 fi
@@ -99,12 +88,23 @@ if [[ ! "$timeout_seconds" =~ ^[0-9]+$ ]]; then
 fi
 
 case "$environment" in
-  dev) namespace="campus-dev" ;;
+  dev)
+    namespace="campus-dev"
+    if [[ -z "$expected_nodeport" ]]; then
+      expected_nodeport="30080"
+    fi
+    ;;
+  home)
+    namespace="campus-dev"
+    if [[ -z "$expected_nodeport" ]]; then
+      expected_nodeport="30080"
+    fi
+    ;;
   prod) namespace="campus-prod" ;;
 esac
 
 require_command kubectl
-if [[ -n "$smoke_url" || -n "$envoy_smoke_url" ]]; then
+if [[ -n "$smoke_url" ]]; then
   require_command curl
   require_command mktemp
 fi
@@ -193,13 +193,13 @@ clienttrafficpolicy_exists() {
 }
 
 envoy_nodeport_is_published() {
-  local envoy_smoke_port="${1:-}"
+  local nodeport="${1:-}"
 
-  [[ -n "$envoy_smoke_port" ]] || return 0
+  [[ -n "$nodeport" ]] || return 0
 
   kubectl get svc -A \
     -o jsonpath='{range .items[*]}{.spec.type}{"|"}{range .spec.ports[*]}{.nodePort}{" "}{end}{"\n"}{end}' 2>/dev/null \
-    | awk -F'|' -v port="$envoy_smoke_port" '
+    | awk -F'|' -v port="$nodeport" '
         $1 == "NodePort" {
           n = split($2, ports, " ")
           for (i = 1; i <= n; i++) {
@@ -216,7 +216,6 @@ envoy_nodeport_is_published() {
 run_smoke_check() {
   local label="$1"
   local url="$2"
-  local host_header="$3"
 
   [[ -n "$url" ]] || return 0
 
@@ -228,11 +227,6 @@ run_smoke_check() {
     -w '%{http_code}'
     --max-time "$timeout_seconds"
   )
-
-  if [[ -n "$host_header" ]]; then
-    echo "Using Host header for $label smoke check: $host_header"
-    curl_args+=(-H "Host: $host_header")
-  fi
 
   local deadline=$(( $(current_epoch_seconds) + timeout_seconds ))
   local attempt=1
@@ -275,7 +269,6 @@ run_smoke_check() {
 
 echo "Verifying namespace '$namespace'..."
 kubectl -n "$namespace" get pods
-kubectl -n "$namespace" get ingress
 kubectl -n "$namespace" get jobs
 
 for deployment in "${deployments[@]}"; do
@@ -295,72 +288,53 @@ else
   echo "Campus++ importer currently uses ttlSecondsAfterFinished, so this is expected when verification runs later."
 fi
 
-echo "Checking ingress resource..."
-kubectl -n "$namespace" get ingress campus
+echo "Checking Gateway API resources..."
+kubectl -n "$namespace" get gateway campus
+kubectl -n "$namespace" get httproute campus
 
-if [[ -n "$envoy_smoke_url" ]]; then
-  echo "Checking Gateway API resources..."
-  kubectl -n "$namespace" get gateway campus
-  kubectl -n "$namespace" get httproute campus
-
-  if ! wait_until "EnvoyProxy/campus-edge" "$timeout_seconds" envoyproxy_exists; then
-    print_gateway_diagnostics
-    exit 1
-  fi
-
-  if ! wait_until "ClientTrafficPolicy/campus-edge" "$timeout_seconds" clienttrafficpolicy_exists; then
-    print_gateway_diagnostics
-    exit 1
-  fi
-
-  if ! wait_until "Gateway/campus Accepted=True" "$timeout_seconds" gateway_has_condition Accepted True; then
-    print_gateway_diagnostics
-    exit 1
-  fi
-
-  if ! wait_until "HTTPRoute/campus Accepted=True" "$timeout_seconds" httproute_has_condition Accepted True; then
-    print_gateway_diagnostics
-    exit 1
-  fi
-
-  if ! wait_until "HTTPRoute/campus ResolvedRefs=True" "$timeout_seconds" httproute_has_condition ResolvedRefs True; then
-    print_gateway_diagnostics
-    exit 1
-  fi
-
-  if ! wait_until "Gateway/campus Programmed=True" "$timeout_seconds" gateway_has_condition Programmed True; then
-    print_gateway_diagnostics
-    exit 1
-  fi
-
-  envoy_smoke_port=""
-  if [[ "$envoy_smoke_url" =~ :([0-9]+)/?$ ]]; then
-    envoy_smoke_port="${BASH_REMATCH[1]}"
-  fi
-
-  if [[ -n "$envoy_smoke_port" ]]; then
-    if ! wait_until "Envoy NodePort ${envoy_smoke_port}" "$timeout_seconds" envoy_nodeport_is_published "${envoy_smoke_port}"; then
-      print_gateway_diagnostics
-      exit 1
-    fi
-  fi
-fi
-
-if ! run_smoke_check "Primary ingress" "$smoke_url" "$smoke_host_header"; then
-  exit 1
-fi
-
-if [[ -z "$smoke_url" ]]; then
-  echo "Primary smoke URL not provided. Skipping primary ingress smoke check."
-fi
-
-if ! run_smoke_check "Envoy staging" "$envoy_smoke_url" "${envoy_smoke_host_header:-$smoke_host_header}"; then
+if ! wait_until "EnvoyProxy/campus-edge" "$timeout_seconds" envoyproxy_exists; then
   print_gateway_diagnostics
   exit 1
 fi
 
-if [[ -z "$envoy_smoke_url" ]]; then
-  echo "Envoy staging smoke URL not provided. Skipping Envoy staging smoke check."
+if ! wait_until "ClientTrafficPolicy/campus-edge" "$timeout_seconds" clienttrafficpolicy_exists; then
+  print_gateway_diagnostics
+  exit 1
+fi
+
+if ! wait_until "Gateway/campus Accepted=True" "$timeout_seconds" gateway_has_condition Accepted True; then
+  print_gateway_diagnostics
+  exit 1
+fi
+
+if ! wait_until "HTTPRoute/campus Accepted=True" "$timeout_seconds" httproute_has_condition Accepted True; then
+  print_gateway_diagnostics
+  exit 1
+fi
+
+if ! wait_until "HTTPRoute/campus ResolvedRefs=True" "$timeout_seconds" httproute_has_condition ResolvedRefs True; then
+  print_gateway_diagnostics
+  exit 1
+fi
+
+if ! wait_until "Gateway/campus Programmed=True" "$timeout_seconds" gateway_has_condition Programmed True; then
+  print_gateway_diagnostics
+  exit 1
+fi
+
+if [[ -n "$expected_nodeport" ]]; then
+  if ! wait_until "Envoy NodePort ${expected_nodeport}" "$timeout_seconds" envoy_nodeport_is_published "${expected_nodeport}"; then
+    print_gateway_diagnostics
+    exit 1
+  fi
+fi
+
+if ! run_smoke_check "Envoy" "$smoke_url"; then
+  exit 1
+fi
+
+if [[ -z "$smoke_url" ]]; then
+  echo "Envoy smoke URL not provided. Skipping HTTP smoke check."
 fi
 
 echo "Verification completed successfully for '$environment'."

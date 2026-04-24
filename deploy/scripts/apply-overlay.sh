@@ -7,22 +7,21 @@
 # - validate that required config files exist and secret files are available
 #   either in the overlay or via a fixed host secret path
 # - optionally apply the rendered manifest to the target Kubernetes namespace
-# - show phase-1 rollout resources for both the legacy ingress path and the
-#   Envoy Gateway staging path
+# - show the current Envoy/Gateway API rollout resources after apply
 #
 # This script is used both for manual operator runs and for the self-hosted
-# DEV deploy workflow.
+# non-prod release workflow.
 
 set -euo pipefail
 
 usage() {
   cat <<'EOF'
 Usage:
-  deploy/scripts/apply-overlay.sh --environment <dev|prod> --image-tag <sha-...> [--render-only] [--manifest-out <path>]
+  deploy/scripts/apply-overlay.sh --environment <dev|home|prod> --image-tag <tag> [--render-only] [--manifest-out <path>]
 
 Required:
-  --environment   Target overlay: dev or prod
-  --image-tag     Immutable image tag to inject, for example sha-157f8d0
+  --environment   Target overlay: dev, home, or prod
+  --image-tag     Immutable image tag to inject, for example dev-2026.04.24-1
 
 Optional:
   --render-only   Render the overlay but do not run kubectl apply
@@ -82,20 +81,22 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ "$environment" != "dev" && "$environment" != "prod" ]]; then
-  echo "--environment must be either 'dev' or 'prod'" >&2
+if [[ "$environment" != "dev" && "$environment" != "home" && "$environment" != "prod" ]]; then
+  echo "--environment must be one of 'dev', 'home', or 'prod'" >&2
   usage
   exit 1
 fi
 
-if [[ ! "$image_tag" =~ ^sha-[A-Za-z0-9._-]+$ ]]; then
-  echo "--image-tag must match ^sha-[A-Za-z0-9._-]+$" >&2
+if [[ ! "$image_tag" =~ ^[A-Za-z0-9._-]+$ ]]; then
+  echo "--image-tag must match ^[A-Za-z0-9._-]+$" >&2
   usage
   exit 1
 fi
 
 case "$environment" in
   dev) namespace="campus-dev" ;;
+  # The home cluster mirrors the DEV namespace layout and differs at the edge layer.
+  home) namespace="campus-dev" ;;
   prod) namespace="campus-prod" ;;
 esac
 
@@ -180,7 +181,6 @@ kubectl apply -f "$rendered_manifest_path"
 
 echo "Current resource overview:"
 kubectl -n "$namespace" get pods
-kubectl -n "$namespace" get ingress
 kubectl -n "$namespace" get gateway
 kubectl -n "$namespace" get httproute
 kubectl -n "$namespace" get envoyproxy

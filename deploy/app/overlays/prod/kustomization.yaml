@@ -37,33 +37,32 @@ secretGenerator:
     type: Opaque
 
 # Production should deploy from GHCR using pinned immutable tags.
-# Replace `sha-change-me` with the selected release tag before applying PROD.
+# Replace `tag-change-me` with the selected release tag before applying PROD.
 images:
   - name: campus-frontend
     newName: ghcr.io/nexoc/campus-frontend
-    newTag: sha-change-me
+    newTag: tag-change-me
 
   - name: campus-auth
     newName: ghcr.io/nexoc/campus-auth
-    newTag: sha-change-me
+    newTag: tag-change-me
 
   - name: campus-backend
     newName: ghcr.io/nexoc/campus-backend
-    newTag: sha-change-me
+    newTag: tag-change-me
 
   - name: campus-nginx
     newName: ghcr.io/nexoc/campus-nginx
-    newTag: sha-change-me
+    newTag: tag-change-me
 
   - name: campus-importer
     newName: ghcr.io/nexoc/campus-importer
-    newTag: sha-change-me
+    newTag: tag-change-me
 
 patches:
   - path: replicas-patch.yaml
   - path: httproute-patch.yaml
   - path: envoyproxy-patch.yaml
-  - path: ingress-patch.yaml
   - path: namespace-patch.yaml
     target:
       version: v1

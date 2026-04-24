@@ -16,7 +16,6 @@ resources:
   - gateway.yaml
   - httproute.yaml
   - clienttrafficpolicy.yaml
-  - ingress.yaml
 
 transformers:
   - common-labels.yaml

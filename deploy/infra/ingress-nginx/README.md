@@ -1,20 +1,20 @@
 # ingress-nginx
 
-This directory is now legacy/reference material.
+This directory is legacy/reference material.
 
-`ingress-nginx` is no longer the active DEV entry path for Campus++.
+`ingress-nginx` is not part of the active Campus++ non-prod release flow.
 
 ## Current Status
 
-Active DEV entry layer today:
+Current non-prod entry layer:
 
-- Envoy Gateway on `192.168.56.40:31080`
+- Envoy Gateway on NodePort `30080`
 
-This directory remains in the repository because:
+This folder remains in the repository only because:
 
-- older manifests and rollout notes referenced ingress-nginx
-- it may still be useful for comparison or a fallback path
-- PROD may still reuse parts of the baseline later
+- older rollout history referenced ingress-nginx
+- it may still be useful as migration context
+- future PROD work may choose to compare against it
 
 ## What Is Here
 
@@ -23,14 +23,5 @@ Current files:
 - `values-dev.yaml`
 - `values-prod.yaml`
 
-These values are not the active DEV source of truth anymore.
-
-## If You Use It
-
-Treat this folder as:
-
-- historical context
-- migration reference
-- optional future fallback
-
-Do not treat it as the canonical current DEV path.
+Treat these values as historical baselines, not the source of truth for active
+lab or home releases.

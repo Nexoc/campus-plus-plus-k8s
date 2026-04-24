@@ -1,76 +1,53 @@
 # Deployment Structure
 
-This document describes the current layout of the deployment layer.
+This document describes the current deployment layout.
 
-The active DEV path was simplified and now uses a dedicated `deploy/dev/`
-directory instead of the older `deploy/app/overlays/dev` flow.
+The canonical Kubernetes rollout path is now `deploy/app/` with environment
+overlays, not the older dedicated `deploy/dev/` tree.
 
 ## High-Level Layout
 
 ```text
 deploy/
-├── dev/
-│   ├── config/
-│   └── secrets/
 ├── app/
 │   ├── base/
 │   └── overlays/
-├── templates/
-│   ├── config/
-│   └── secrets/
+│       ├── dev/
+│       ├── home/
+│       └── prod/
 ├── infra/
 │   ├── envoy-gateway/
 │   └── ingress-nginx/
+├── scripts/
+├── templates/
 └── docs/
 ```
 
-## `dev/`
+## `app/`
 
-This is the active DEV manifest set.
+This is the active manifest tree.
 
 Contents:
 
-- namespace
-- frontend, auth, backend, and `campus-nginx` deployments/services
-- importer job
-- Envoy Gateway resources: `EnvoyProxy`, `Gateway`, `HTTPRoute`
-- versioned config inputs
-- ignored local secret inputs
+- shared base workloads and Gateway API resources
+- overlay-specific config, secrets, and edge patches
+- image tag rewrite points for GHCR release tags
 
-This is the directory used by:
+This tree is used by:
 
-- manual `kubectl apply -k deploy/dev`
+- `deploy/scripts/apply-overlay.sh`
+- `deploy/scripts/verify-overlay.sh`
 - `.github/workflows/deploy-dev.yml`
-
-## `app/`
-
-This is the older Kustomize base/overlay tree.
-
-Current status:
-
-- retained for reference and possible future reuse
-- not the active DEV rollout path
-- still useful as a source of historical manifests and PROD-oriented ideas
-
-## `templates/`
-
-This directory contains example config and secret inputs.
-
-Purpose:
-
-- document required keys
-- provide safe starter files
-- keep live secrets out of git
 
 ## `infra/`
 
-This directory contains infrastructure-side baselines.
+Shared infrastructure-side baselines.
 
 ### `infra/envoy-gateway/`
 
-Current active infra baseline for DEV:
+Current active infra baseline:
 
-- Helm values for the controller
+- Helm values for the Envoy Gateway controller
 - shared `GatewayClass`
 - controller-level notes
 
@@ -78,30 +55,30 @@ Current active infra baseline for DEV:
 
 Legacy/reference baseline:
 
-- old ingress-nginx Helm values
-- retained for history and comparison
-- not the active DEV entry layer today
+- retained for migration history and comparison
+- not part of the active non-prod release flow
+
+## `scripts/`
+
+Operational helpers for manual and workflow-driven release actions:
+
+- `apply-overlay.sh` renders and applies an overlay with a concrete release tag
+- `verify-overlay.sh` verifies rollouts, importer completion, Gateway API health,
+  and Envoy NodePort publication
+
+## `templates/`
+
+Example config and secret inputs:
+
+- safe starter files for local preparation
+- reference layout for the host-side secret paths
+- no real secrets
 
 ## `docs/`
 
-Operational documentation for the deployment layer.
+Operational notes for:
 
-Key files:
-
-- `environments.md`
-- `naming-convention.md`
-- `rollout-notes.md`
-- this file
-
-## Separation Principle
-
-The repository still follows the same rule:
-
-- application code stays in service directories
-- deployment artifacts stay under `deploy/`
-
-That keeps:
-
-- source layout stable
-- business logic separate from cluster plumbing
-- infrastructure notes separate from application manifests
+- environment layout
+- release naming
+- rollout flow
+- deployment structure

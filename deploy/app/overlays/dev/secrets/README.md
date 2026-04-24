@@ -1,15 +1,12 @@
 # DEV Secrets
 
-This directory belongs to the legacy `deploy/app/overlays/dev` flow.
+This directory is used by the active `deploy/app/overlays/dev` flow.
 
-It is kept for reference only.
+During automated deploys, the self-hosted runner stages secrets here from:
 
-The active DEV rollout now uses:
+- `/home/nexoc/campus-secrets/dev/`
 
-- `deploy/dev/secrets/`
-- or `/home/nexoc/campus-secrets/dev/` on the self-hosted runner
-
-If you work on the old overlay tree anyway, the expected files remain:
+Expected files:
 
 - `db-secrets.env`
 - `auth-secrets.env`

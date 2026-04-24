@@ -5,15 +5,12 @@ kind: Kustomization
 resources:
   - ../../base
 
-# All rendered resources from this overlay will be placed into the DEV namespace
+# The home cluster mirrors the DEV namespace layout on a separate runner/cluster.
 namespace: campus-dev
 
-# Keep generated ConfigMap/Secret names stable
-# so references do not get hash suffixes
 generatorOptions:
   disableNameSuffixHash: true
 
-# Non-secret runtime configuration for services
 configMapGenerator:
   - name: auth-config
     envs:
@@ -27,9 +24,6 @@ configMapGenerator:
     envs:
       - config/importer-config.env
 
-# Secret values loaded from local env files
-# Create these local files from deploy/templates/secrets/*.env.example.
-# Real secret values must not be committed to git.
 secretGenerator:
   - name: db-secrets
     envs:
@@ -41,9 +35,6 @@ secretGenerator:
       - secrets/auth-secrets.env
     type: Opaque
 
-# Rewrite logical image names from base manifests
-# to real GHCR images used by the DEV environment.
-# Replace `tag-change-me` with the selected DEV release tag before apply.
 images:
   - name: campus-frontend
     newName: ghcr.io/nexoc/campus-frontend
@@ -65,11 +56,6 @@ images:
     newName: ghcr.io/nexoc/campus-importer
     newTag: tag-change-me
 
-# Patches:
-# - replicas-patch.yaml adjusts DEV replica counts
-# - httproute-patch.yaml overrides DEV Gateway API hostnames
-# - envoyproxy-patch.yaml assigns the final DEV Envoy NodePort
-# - namespace-patch.yaml renames and labels the Namespace
 patches:
   - path: replicas-patch.yaml
   - path: httproute-patch.yaml

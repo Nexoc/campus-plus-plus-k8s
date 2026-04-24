@@ -3,7 +3,7 @@
 [![CI Pipeline](https://github.com/Nexoc/campus-plus-plus-k8s/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nexoc/campus-plus-plus-k8s/actions/workflows/ci.yml)
 
 Campus++ is a full-stack Hochschule Campus Wien application with a local Docker
-runtime and a Kubernetes-based DEV deployment.
+runtime and a Kubernetes-based non-prod Kubernetes deployment model.
 
 Main runtime components:
 
@@ -17,17 +17,18 @@ Main runtime components:
 
 ## Current Status
 
-The current working DEV entry path is:
+The current working lab DEV entry path is:
 
-`Internet -> davl.at (nginx + TLS) -> private/VPN path -> DEV 192.168.56.40:31080 -> Envoy Gateway -> campus-nginx -> frontend/auth/backend -> PostgreSQL 192.168.56.20`
+`Internet -> gw -> DEV 192.168.50.5:30080 -> Envoy Gateway -> campus-nginx -> frontend/auth/backend -> PostgreSQL 192.168.50.4`
 
 Confirmed today:
 
 - `campus-dev` namespace is deployed on k3s
 - `frontend`, `auth`, `backend`, `campus-nginx`, and `campus-importer` run in Kubernetes
 - `campus-importer` completed and populated the database
-- Envoy Gateway exposes the app through `NodePort 31080`
-- `campus.davl.at` is served through the public VPS with HTTPS
+- Envoy Gateway exposes the app through `NodePort 30080`
+- `deploy/app` is the canonical Kubernetes deployment tree
+- non-prod releases are tag-driven, not branch auto-deploy driven
 
 Known gap:
 
@@ -69,19 +70,23 @@ This path includes:
 - bundled PostgreSQL container
 - local `campus-nginx`
 
-### 2. Kubernetes DEV Runtime
+### 2. Kubernetes Non-Prod Runtime
 
-Use `deploy/dev/` and the GitHub Actions workflows for the active DEV path.
+Use `deploy/app/overlays/` and the GitHub Actions release workflow for the
+active non-prod path.
 
 This path includes:
 
-- Kustomize manifests in `deploy/dev/`
+- Kustomize overlays in `deploy/app/overlays/`
 - Envoy Gateway controller baselines in `deploy/infra/envoy-gateway/`
-- self-hosted GitHub Actions deploy on the DEV node
+- self-hosted GitHub Actions deploys on the `s5` and `home` runners
 - GHCR-backed image delivery
 
-The older `deploy/app/` overlay tree is still in the repository, but it is not
-the active DEV rollout path anymore.
+Current release channels:
+
+- `dev-*` deploys to the lab `s5` cluster
+- `home-*` deploys to the home cluster
+- `main` runs validation only
 
 ## Documentation
 
@@ -153,7 +158,7 @@ davl.at / Public VPS
   ↓
 Private path / VPN
   ↓
-DEV NodePort 31080
+DEV NodePort 30080
   ↓
 Envoy Gateway
   ↓
@@ -162,7 +167,7 @@ campus-nginx
   ├── auth
   └── backend
        ↓
-    PostgreSQL 192.168.56.20
+    PostgreSQL 192.168.50.4
 ```
 
 ## Services
@@ -214,12 +219,11 @@ Supported Spring profiles:
 Current GitHub Actions behavior:
 
 - `CI Pipeline` runs auth tests, backend tests, and backend build
-- on `push` to `main`, CI builds and pushes images to GHCR
-- images are published as both `sha-<shortsha>` and `dev-latest`
-- `Deploy DEV` runs on the self-hosted DEV runner
-- the deploy workflow stages secrets, creates the GHCR pull secret, pins
-  `deploy/dev` to the successful CI commit tag, applies the manifests, and
-  waits for importer completion
+- `push` and `pull_request` on `main` run validation only
+- `dev-*` tags build and publish GHCR images, then deploy to the `s5` runner
+- `home-*` tags build and publish GHCR images, then deploy to the `home` runner
+- release image tags are exactly the pushed Git tag
+- deploys use the canonical `deploy/app` overlays and Envoy/Gateway API path
 
 ## Project Structure
 
@@ -228,7 +232,7 @@ campus-plus-plus/
 ├── auth/
 ├── backend/
 ├── deploy/
-│   ├── dev/
+│   ├── app/
 │   ├── docs/
 │   ├── infra/
 │   └── templates/
