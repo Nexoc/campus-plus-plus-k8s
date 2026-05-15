@@ -56,20 +56,65 @@
           - "':' ~ postgres_port|string in postgres_listeners.stdout"
         fail_msg: "PostgreSQL port {{ postgres_port }} is not listening"
 
-    - name: s4-db | read iptables INPUT rules
-      ansible.builtin.command: iptables -S INPUT
-      register: iptables_input_rules
+    - name: s4-db | check iptables availability
+      ansible.builtin.command: which iptables
+      register: iptables_check
       changed_when: false
       failed_when: false
+
+    - name: s4-db | require iptables for PostgreSQL firewall checks
+      ansible.builtin.assert:
+        that:
+          - iptables_check.rc == 0
+        fail_msg: "iptables is not available on s4-db; PostgreSQL firewall rules cannot be verified"
+
+    - name: s4-db | check firewall allow rule for each dev/prod client
+      ansible.builtin.command:
+        argv:
+          - iptables
+          - -C
+          - INPUT
+          - -p
+          - tcp
+          - -s
+          - "{{ item }}"
+          - --dport
+          - "{{ postgres_port }}"
+          - -j
+          - ACCEPT
+      register: postgres_firewall_allow_checks
+      changed_when: false
+      failed_when: false
+      loop: "{{ allowed_postgres_clients }}"
 
     - name: s4-db | require firewall allow rules for dev/prod clients when iptables is available
       ansible.builtin.assert:
         that:
-          - item in iptables_input_rules.stdout
-          - "--dport {{ postgres_port }}" in iptables_input_rules.stdout
-        fail_msg: "iptables rule for PostgreSQL client {{ item }} is missing"
-      loop: "{{ allowed_postgres_clients }}"
-      when: iptables_input_rules.rc == 0
+          - item.rc == 0
+        fail_msg: "iptables allow rule for PostgreSQL client {{ item.item }} is missing"
+      loop: "{{ postgres_firewall_allow_checks.results | default([]) }}"
+
+    - name: s4-db | check default PostgreSQL drop rule
+      ansible.builtin.command:
+        argv:
+          - iptables
+          - -C
+          - INPUT
+          - -p
+          - tcp
+          - --dport
+          - "{{ postgres_port }}"
+          - -j
+          - DROP
+      register: postgres_firewall_drop_check
+      changed_when: false
+      failed_when: false
+
+    - name: s4-db | require default PostgreSQL drop rule
+      ansible.builtin.assert:
+        that:
+          - postgres_firewall_drop_check.rc == 0
+        fail_msg: "iptables default DROP rule for PostgreSQL port {{ postgres_port }} is missing"
 
     - name: s4-db | locate pg_hba.conf
       ansible.builtin.shell: |
@@ -86,18 +131,23 @@
           - pg_hba_path.stdout | length > 0
         fail_msg: "Could not find pg_hba.conf under /etc/postgresql"
 
-    - name: s4-db | read pg_hba.conf without printing passwords
-      ansible.builtin.command: "grep -E '^[[:space:]]*host[[:space:]]+' {{ pg_hba_path.stdout }}"
-      register: pg_hba_host_rules
+    - name: s4-db | check pg_hba rule for each dev/prod client without printing values
+      ansible.builtin.shell: |
+        set -euo pipefail
+        grep -Eq '^[[:space:]]*host[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+{{ item | regex_escape }}/32[[:space:]]+' {{ pg_hba_path.stdout | quote }}
+      args:
+        executable: /bin/bash
+      register: pg_hba_client_checks
       changed_when: false
       failed_when: false
+      loop: "{{ allowed_postgres_clients }}"
 
     - name: s4-db | require pg_hba rules for dev/prod clients
       ansible.builtin.assert:
         that:
-          - item in pg_hba_host_rules.stdout
-        fail_msg: "pg_hba.conf rule for PostgreSQL client {{ item }} is missing"
-      loop: "{{ allowed_postgres_clients }}"
+          - item.rc == 0
+        fail_msg: "pg_hba.conf rule for PostgreSQL client {{ item.item }} is missing"
+      loop: "{{ pg_hba_client_checks.results | default([]) }}"
 
 - name: Check prod Kubernetes database alias from gw
   hosts: gw
