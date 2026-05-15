@@ -329,7 +329,13 @@ add log dashboards
 document retention policy
 ```
 
-## First Playbooks To Add Later
+## First Playbooks
+
+Initial preflight file:
+
+```text
+ops/playbooks/check-monitoring.yml
+```
 
 Suggested next files:
 
@@ -338,7 +344,6 @@ ops/playbooks/bootstrap-monitoring.yml
 ops/playbooks/install-node-exporter.yml
 ops/playbooks/install-prometheus-grafana.yml
 ops/playbooks/install-postgres-exporter.yml
-ops/playbooks/check-monitoring.yml
 ```
 
 Suggested future docs:
@@ -350,4 +355,3 @@ ops/templates/postgres-exporter.env.example
 ```
 
 No monitoring installation should start until the phase 1 runtime secret and port contract is confirmed.
-

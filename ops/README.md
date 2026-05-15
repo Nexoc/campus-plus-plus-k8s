@@ -111,6 +111,10 @@ Runs from `gw` and installs or upgrades Envoy Gateway in the prod cluster using 
 
 Runs the existing repository verification script and performs HTTP smoke checks through `s1-prod:30080`, `s2-prod:30080`, and `s3-prod:30080` with `Host: campus-prod.davl.at`.
 
+`check-monitoring.yml`
+
+Runs preflight checks on `s6-monitoring` before monitoring installation. It verifies basic VM capacity, systemd availability, network interfaces, and whether planned monitoring ports are free. It makes no changes.
+
 ## Design Docs
 
 - [Monitoring Design](docs/monitoring-design.md)
@@ -177,6 +181,12 @@ ansible-playbook -i ops/inventory/lab.ini ops/playbooks/install-envoy-prod.yml
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
 ansible-playbook -i ops/inventory/lab.ini ops/playbooks/verify-prod-release.yml
+```
+
+```bash
+# server: gw
+cd /home/nexoc/campus-plus-plus-k8s
+ansible-playbook -i ops/inventory/lab.ini ops/playbooks/check-monitoring.yml
 ```
 
 ```bash

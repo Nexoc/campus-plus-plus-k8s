@@ -1,0 +1,110 @@
+---
+# Execute from: gw
+# Target: s6-monitoring only.
+# Purpose: preflight checks for the central monitoring VM.
+# This playbook makes no changes and installs nothing.
+
+- name: Check monitoring VM preflight
+  hosts: monitoring
+  gather_facts: true
+  vars:
+    minimum_monitoring_vcpus: 2
+    minimum_monitoring_memory_mb: 3500
+    minimum_monitoring_root_disk_gb: 25
+    monitoring_candidate_ports:
+      - name: prometheus
+        port: 9090
+      - name: grafana
+        port: 3000
+      - name: alertmanager
+        port: 9093
+      - name: loki
+        port: 3100
+  tasks:
+    - name: s6-monitoring | read hostname
+      ansible.builtin.command: hostname
+      register: monitoring_hostname
+      changed_when: false
+
+    - name: s6-monitoring | read operating system release
+      ansible.builtin.command: cat /etc/os-release
+      register: monitoring_os_release
+      changed_when: false
+
+    - name: s6-monitoring | show brief interface addresses
+      ansible.builtin.command: ip -br a
+      register: monitoring_ip_brief
+      changed_when: false
+
+    - name: s6-monitoring | verify minimum CPU count
+      ansible.builtin.assert:
+        that:
+          - "(ansible_facts.processor_vcpus | default(ansible_facts.processor_count | default(0)) | int) >= minimum_monitoring_vcpus"
+        fail_msg: "s6-monitoring needs at least {{ minimum_monitoring_vcpus }} vCPU for the planned monitoring baseline"
+
+    - name: s6-monitoring | verify minimum memory
+      ansible.builtin.assert:
+        that:
+          - "(ansible_facts.memtotal_mb | int) >= minimum_monitoring_memory_mb"
+        fail_msg: "s6-monitoring needs at least {{ minimum_monitoring_memory_mb }} MB RAM for the planned monitoring baseline"
+
+    - name: s6-monitoring | derive root filesystem size
+      ansible.builtin.set_fact:
+        monitoring_root_disk_gb: "{{ (((ansible_facts.mounts | selectattr('mount', 'equalto', '/') | map(attribute='size_total') | first | int) / 1073741824) | round(1)) }}"
+
+    - name: s6-monitoring | verify minimum root filesystem size
+      ansible.builtin.assert:
+        that:
+          - "(monitoring_root_disk_gb | float) >= minimum_monitoring_root_disk_gb"
+        fail_msg: "s6-monitoring root filesystem needs at least {{ minimum_monitoring_root_disk_gb }} GB"
+
+    - name: s6-monitoring | check candidate monitoring ports are free before install
+      ansible.builtin.shell: |
+        set -euo pipefail
+        if ss -ltnH | awk '{ print $4 }' | grep -Eq '(:|\]){{ item.port }}$'; then
+          echo "in-use"
+        else
+          echo "free"
+        fi
+      args:
+        executable: /bin/bash
+      register: monitoring_port_checks
+      changed_when: false
+      loop: "{{ monitoring_candidate_ports }}"
+
+    - name: s6-monitoring | require candidate monitoring ports to be free
+      ansible.builtin.assert:
+        that:
+          - item.stdout == "free"
+        fail_msg: "Port {{ item.item.port }} for {{ item.item.name }} is already in use on s6-monitoring"
+      loop: "{{ monitoring_port_checks.results }}"
+
+    - name: s6-monitoring | check systemd availability
+      ansible.builtin.command: systemctl --version
+      register: monitoring_systemd_check
+      changed_when: false
+
+    - name: s6-monitoring | check docker availability without requiring it
+      ansible.builtin.command: docker --version
+      register: monitoring_docker_check
+      changed_when: false
+      failed_when: false
+
+    - name: s6-monitoring | check podman availability without requiring it
+      ansible.builtin.command: podman --version
+      register: monitoring_podman_check
+      changed_when: false
+      failed_when: false
+
+    - name: s6-monitoring | print non-secret preflight summary
+      ansible.builtin.debug:
+        msg:
+          hostname: "{{ monitoring_hostname.stdout }}"
+          os: "{{ (monitoring_os_release.stdout_lines | select('match', '^PRETTY_NAME=') | list | first | default('PRETTY_NAME=unknown')) | regex_replace('^PRETTY_NAME=', '') | regex_replace('\"', '') }}"
+          interfaces: "{{ monitoring_ip_brief.stdout_lines }}"
+          vcpus: "{{ ansible_facts.processor_vcpus | default(ansible_facts.processor_count | default('unknown')) }}"
+          memory_mb: "{{ ansible_facts.memtotal_mb }}"
+          root_disk_gb: "{{ monitoring_root_disk_gb }}"
+          systemd: "{{ monitoring_systemd_check.stdout_lines | first | default('unknown') }}"
+          docker: "{{ 'available' if monitoring_docker_check.rc == 0 else 'not installed' }}"
+          podman: "{{ 'available' if monitoring_podman_check.rc == 0 else 'not installed' }}"
