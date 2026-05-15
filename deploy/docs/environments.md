@@ -24,8 +24,9 @@ Home environment:
 Production environment:
 
 - `s1-prod`, `s2-prod`, and `s3-prod`: k3s HA production cluster nodes
-- `gw`: production deployment control host for the future `v*` workflow
+- `gw`: production deployment control host for the `v*` workflow
 - intended application hostname: `campus-prod.davl.at`
+- `s4-db`: stable Kubernetes DNS alias for external PostgreSQL in `campus-prod`
 
 ## Deployment Model
 
@@ -66,9 +67,12 @@ Production path:
 
 Notes:
 
-- Envoy Gateway is the active entry layer for non-prod and planned PROD environments
+- Envoy Gateway is the active entry layer for non-prod and PROD environments
 - `campus-nginx` remains the internal app gateway and auth boundary
 - PostgreSQL stays outside Kubernetes for the lab environment
+- in PROD, the real external PostgreSQL endpoint is provided by
+  `/home/nexoc/campus-secrets/prod/db-endpoint.env` on `gw`, not by committed
+  manifests
 
 ## Configuration Strategy
 
@@ -86,11 +90,16 @@ Self-hosted runners stage secrets from fixed host paths:
 
 - `/home/nexoc/campus-secrets/dev/`
 - `/home/nexoc/campus-secrets/home/`
+- `/home/nexoc/campus-secrets/prod/`
 
 Expected files per environment:
 
 - `db-secrets.env`
 - `auth-secrets.env`
+
+PROD also requires:
+
+- `db-endpoint.env`
 
 Real secrets must not be committed.
 

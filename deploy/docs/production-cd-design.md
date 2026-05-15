@@ -99,6 +99,7 @@ Required files and tools on `gw`:
 /home/nexoc/.kube/prod.yaml
 /home/nexoc/campus-secrets/prod/db-secrets.env
 /home/nexoc/campus-secrets/prod/auth-secrets.env
+/home/nexoc/campus-secrets/prod/db-endpoint.env
 kubectl
 git
 bash
@@ -122,10 +123,42 @@ git --version
 kubectl version --client
 ```
 
+## External Database Alias
+
+Application config keeps a stable database host:
+
+```text
+DB_HOST=s4-db
+```
+
+In production, `s4-db` is a Kubernetes DNS alias inside `campus-prod`, not a
+committed infrastructure address. During prod render/apply,
+`deploy/scripts/apply-overlay.sh` generates:
+
+- `service/s4-db`
+- `endpointslice/s4-db`
+
+The actual external PostgreSQL endpoint comes from host-local runtime config on
+`gw`:
+
+```text
+/home/nexoc/campus-secrets/prod/db-endpoint.env
+```
+
+Expected keys:
+
+```text
+DB_ENDPOINT_ADDRESS=<environment-specific IPv4 address>
+DB_ENDPOINT_PORT=5432
+```
+
+This file is not committed. A university deployment keeps the same workflow and
+overlay contract, but provides its own `db-endpoint.env` on the deployment host.
+
 ## Render-Only Gate
 
-Before adding or running a production workflow, render the production overlay
-from `gw` without applying it:
+Before running a production workflow, render the production overlay from `gw`
+without applying it:
 
 ```bash
 # server: gw
@@ -147,19 +180,21 @@ hostname: campus-prod.davl.at
 nodePort: 30080
 imagePullSecrets: ghcr-pull
 images: ghcr.io/nexoc/...:v-render-test
+service/s4-db
+endpointslice/s4-db
 ```
 
 Verify without printing secret values:
 
 ```bash
 # server: gw
-grep -nE "namespace: campus-prod|campus-prod.davl.at|nodePort: 30080|image: ghcr.io/nexoc|imagePullSecrets|ghcr-pull" /tmp/campus-prod-rendered.yaml -A3 -B3
+grep -nE "namespace: campus-prod|campus-prod.davl.at|nodePort: 30080|image: ghcr.io/nexoc|imagePullSecrets|ghcr-pull|kind: Service|kind: EndpointSlice|name: s4-db" /tmp/campus-prod-rendered.yaml -A3 -B3
 git status --short
 ```
 
-## Future Workflow Shape
+## Production Workflow Shape
 
-The future production workflow should live in:
+The production workflow lives in:
 
 ```text
 .github/workflows/deploy-prod.yml
@@ -183,6 +218,5 @@ namespace: campus-prod
 expected NodePort: 30080
 ```
 
-The first production release tag should only be created after the runner,
-secrets, environment approval, tag protection, and render-only gate are in
-place.
+Production release tags should only be created after the runner, secrets,
+environment approval, tag protection, and render-only gate are in place.

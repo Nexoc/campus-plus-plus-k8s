@@ -93,6 +93,13 @@ For the self-hosted runner, the deploy workflow stages secrets from:
 - `/home/nexoc/campus-secrets/dev/auth-secrets.env`
 - `/home/nexoc/campus-secrets/home/db-secrets.env`
 - `/home/nexoc/campus-secrets/home/auth-secrets.env`
+- `/home/nexoc/campus-secrets/prod/db-secrets.env`
+- `/home/nexoc/campus-secrets/prod/auth-secrets.env`
+- `/home/nexoc/campus-secrets/prod/db-endpoint.env`
+
+For PROD, `DB_HOST` remains `s4-db`. The deploy script renders `service/s4-db`
+and `endpointslice/s4-db` from `db-endpoint.env`, so the real external database
+address stays environment-specific and out of git.
 
 Prepare the fixed host path:
 
@@ -114,6 +121,19 @@ cp deploy/templates/secrets/auth-secrets.env.example /home/nexoc/campus-secrets/
 chown -R nexoc:nexoc /home/nexoc/campus-secrets/home
 chmod 700 /home/nexoc/campus-secrets/home
 chmod 600 /home/nexoc/campus-secrets/home/*.env
+```
+
+Prepare the `prod` host path on `gw` before running a `v*` release:
+
+```bash
+# server: gw
+mkdir -p /home/nexoc/campus-secrets/prod
+cp deploy/templates/secrets/db-secrets.env.example /home/nexoc/campus-secrets/prod/db-secrets.env
+cp deploy/templates/secrets/auth-secrets.env.example /home/nexoc/campus-secrets/prod/auth-secrets.env
+cp deploy/templates/secrets/db-endpoint.env.example /home/nexoc/campus-secrets/prod/db-endpoint.env
+chown -R nexoc:nexoc /home/nexoc/campus-secrets/prod
+chmod 700 /home/nexoc/campus-secrets/prod
+chmod 600 /home/nexoc/campus-secrets/prod/*.env
 ```
 
 ## Install Or Update Envoy Gateway
@@ -227,7 +247,7 @@ Current release namespaces:
 
 - `dev-*` for the lab `s5` cluster
 - `home-*` for the home cluster
-- `v*` reserved for controlled PROD releases through the future `gw` runner
+- `v*` reserved for controlled PROD releases through the `gw` runner
 
 ## Verification
 
