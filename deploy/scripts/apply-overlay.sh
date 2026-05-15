@@ -126,30 +126,33 @@ stage_host_secret_file() {
 
 trim_value() {
   local value="$1"
-  value="${value#"${value%%[![:space:]]*}"}"
-  value="${value%"${value##*[![:space:]]}"}"
-  printf '%s' "$value"
+  printf '%s' "$value" | sed -E 's/^[[:space:]]+//; s/[[:space:]]+$//'
 }
 
 read_env_value() {
   local source_path="$1"
   local key="$2"
   local line=""
+  local name=""
   local value=""
 
   while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line%$'\r'}"
     [[ "$line" =~ ^[[:space:]]*$ ]] && continue
     [[ "$line" =~ ^[[:space:]]*# ]] && continue
-    [[ "$line" =~ ^[[:space:]]*${key}[[:space:]]*= ]] || continue
+    [[ "$line" == *"="* ]] || continue
+
+    name="${line%%=*}"
+    name="$(trim_value "$name")"
+    [[ "$name" == "$key" ]] || continue
 
     value="${line#*=}"
     value="${value%%#*}"
     value="$(trim_value "$value")"
 
-    if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+    if [[ "${#value}" -ge 2 && "$value" == \"*\" && "$value" == *\" ]]; then
       value="${value:1:${#value}-2}"
-    elif [[ "$value" == \'* && "$value" == *\' ]]; then
+    elif [[ "${#value}" -ge 2 && "$value" == \'* && "$value" == *\' ]]; then
       value="${value:1:${#value}-2}"
     fi
 
