@@ -272,6 +272,10 @@
         return_content: true
         timeout: 10
       register: grafana_local_health
+      changed_when: false
+      retries: 30
+      delay: 2
+      until: grafana_local_health.status == 200
 
     - name: s6-monitoring | require local Grafana database status ok
       ansible.builtin.assert:
@@ -294,6 +298,10 @@
         return_content: true
         timeout: 10
       register: grafana_gw_health
+      changed_when: false
+      retries: 30
+      delay: 2
+      until: grafana_gw_health.status == 200
 
     - name: gw | require Grafana database status ok
       ansible.builtin.assert:
