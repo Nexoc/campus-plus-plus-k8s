@@ -21,7 +21,7 @@ Deployment code lives in:
 
 The current working lab request path is:
 
-`Internet -> gw -> DEV 192.168.50.5:30080 -> Envoy Gateway -> campus-nginx -> frontend/auth/backend -> PostgreSQL 192.168.50.4`
+`Internet -> gw -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> frontend/auth/backend -> PostgreSQL s4-db`
 
 Key points:
 
@@ -57,7 +57,9 @@ Before applying the active DEV manifests, make sure:
 - Envoy Gateway is installed in `envoy-gateway-system`
 - the cluster can pull images from GHCR
 - the `local-path` StorageClass is available for the `course-materials` PVC
-- the cluster can reach PostgreSQL at `192.168.50.4:5432`
+- the cluster can reach PostgreSQL at `s4-db:5432`
+- the hostnames `gw`, `s5-dev`, and `s4-db` resolve through DNS or `/etc/hosts`
+  on the servers that use them
 - DEV secret env files are available either locally or on the runner host
 
 ## Config And Secrets
@@ -145,6 +147,7 @@ Install it on `gw` as:
 Then validate and reload nginx on `gw`:
 
 ```bash
+# server: gw
 sudo nginx -t
 sudo systemctl reload nginx
 ```
@@ -152,8 +155,9 @@ sudo systemctl reload nginx
 Verify the proxy path:
 
 ```bash
-curl -I http://10.123.127.29/
-curl -I -H 'Host: campus-dev.192-168-50-5.sslip.io' http://192.168.50.5:30080/
+# server: gw
+curl -I http://gw/
+curl -I -H 'Host: campus-dev.s5-dev.local' http://s5-dev:30080/
 ```
 
 ## Manual Non-Prod Apply
@@ -161,6 +165,7 @@ curl -I -H 'Host: campus-dev.192-168-50-5.sslip.io' http://192.168.50.5:30080/
 Render the manifests:
 
 ```bash
+# server: s5-dev
 bash deploy/scripts/apply-overlay.sh \
   --environment dev \
   --image-tag dev-2026.04.24-1 \
@@ -170,6 +175,7 @@ bash deploy/scripts/apply-overlay.sh \
 Create or update the GHCR pull secret:
 
 ```bash
+# server: s5-dev
 kubectl create namespace campus-dev --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl create secret docker-registry ghcr-pull \
@@ -187,6 +193,7 @@ secrets because it expires after the job finishes.
 Apply the shared GatewayClass and the DEV stack:
 
 ```bash
+# server: s5-dev
 IMAGE_TAG=dev-2026.04.24-1
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 kubectl delete job campus-importer -n campus-dev --ignore-not-found
@@ -196,6 +203,7 @@ bash deploy/scripts/apply-overlay.sh --environment dev --image-tag "${IMAGE_TAG}
 Verify the stack:
 
 ```bash
+# server: s5-dev
 bash deploy/scripts/verify-overlay.sh --environment dev --expected-nodeport 30080
 ```
 
@@ -226,6 +234,7 @@ Current release namespaces:
 Inspect the active stack:
 
 ```bash
+# server: s5-dev
 kubectl get all -n campus-dev -o wide
 kubectl get gateway,httproute,envoyproxy -n campus-dev -o wide
 kubectl logs job/campus-importer -n campus-dev
@@ -234,6 +243,7 @@ kubectl logs job/campus-importer -n campus-dev
 Check the Envoy/Gateway API entry:
 
 ```bash
+# server: s5-dev
 kubectl get gateway,httproute,envoyproxy,clienttrafficpolicy -n campus-dev -o wide
 bash deploy/scripts/verify-overlay.sh --environment dev --expected-nodeport 30080
 ```
@@ -241,7 +251,8 @@ bash deploy/scripts/verify-overlay.sh --environment dev --expected-nodeport 3008
 Check the lab edge entry through `gw`:
 
 ```bash
-curl -I http://10.123.127.29/
+# server: gw
+curl -I http://gw/
 ```
 
 Expected result:

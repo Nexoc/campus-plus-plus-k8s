@@ -65,7 +65,7 @@ The workflow schedules against labels, not runner names.
 
 Lab non-prod:
 
-- active route hostname: `campus-dev.192-168-50-5.sslip.io`
+- active route hostname: `campus-dev.s5-dev.local`
 - active NodePort entry: `30080`
 
 Home non-prod:

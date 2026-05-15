@@ -8,7 +8,7 @@ In the active DEV deployment, the backend:
 
 - runs in Kubernetes in namespace `campus-dev`
 - is reached only through `campus-nginx`
-- connects to PostgreSQL on `192.168.56.20`
+- connects to PostgreSQL on `s4-db`
 - runs Flyway migrations for the app schema
 
 It is not intended to be exposed directly to the public internet.

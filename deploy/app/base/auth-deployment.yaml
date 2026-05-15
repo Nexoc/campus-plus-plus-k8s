@@ -18,6 +18,8 @@ spec:
         app.kubernetes.io/component: auth
     spec:
       automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull
       containers:
         - name: auth
           image: campus-auth:latest

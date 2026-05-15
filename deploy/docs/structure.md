@@ -56,7 +56,7 @@ Current active infra baseline:
 Current lab edge baseline:
 
 - nginx site config for `gw`
-- reverse proxy from `gw:80` to `192.168.50.5:30080`
+- reverse proxy from `gw:80` to `s5-dev:30080`
 - fixed Host header for the DEV `HTTPRoute`
 
 ## `scripts/`

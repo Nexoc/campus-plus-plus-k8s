@@ -11,7 +11,7 @@ It reflects the Flyway migrations that exist today, not an early design draft.
 
 The backend stores its domain data in PostgreSQL on the dedicated DB host:
 
-- host: `192.168.56.20`
+- host: `s4-db`
 - port: `5432`
 - database: `campus`
 - schema: `app`

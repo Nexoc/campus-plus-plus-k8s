@@ -18,6 +18,8 @@ spec:
         app.kubernetes.io/component: gateway
     spec:
       automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull
       containers:
         - name: campus-nginx
           image: campus-nginx:latest

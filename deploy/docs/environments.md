@@ -7,9 +7,13 @@ to tag-driven non-prod releases.
 
 Lab environment:
 
-- `gw` (`10.123.127.29`, `192.168.50.1`): gateway, NAT, SSH jump host
-- `s5-dev` (`192.168.50.5`): single-node k3s cluster and lab self-hosted runner
-- `s4` (`192.168.50.4`): PostgreSQL outside Kubernetes
+- `gw`: gateway, NAT, SSH jump host
+- `s5-dev`: single-node k3s cluster and lab self-hosted runner
+- `s4-db`: PostgreSQL outside Kubernetes
+
+IP addresses belong in host inventory or DNS, not in application manifests.
+Runtime configuration uses hostnames so the same repo can be deployed from
+different lab networks without editing tracked files.
 
 Home environment:
 
@@ -48,7 +52,7 @@ Current release channels:
 
 Lab path:
 
-`Internet -> gw -> 192.168.50.5:30080 -> Envoy Gateway -> campus-nginx -> services -> PostgreSQL 192.168.50.4`
+`Internet -> gw -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> services -> PostgreSQL s4-db`
 
 Home path:
 

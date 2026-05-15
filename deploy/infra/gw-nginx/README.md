@@ -8,7 +8,7 @@ DEV k3s node through Envoy Gateway.
 ## Current Lab Path
 
 ```text
-client -> gw:80 -> 192.168.50.5:30080 -> Envoy Gateway -> campus-nginx -> app
+client -> gw:80 -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> app
 ```
 
 ## Active Config
@@ -22,15 +22,19 @@ Use `campus-dev.conf` on `gw` as:
 The config intentionally sets:
 
 ```nginx
-proxy_set_header Host campus-dev.192-168-50-5.sslip.io;
+proxy_set_header Host campus-dev.s5-dev.local;
 ```
 
 This keeps Envoy `HTTPRoute` matching stable even when an operator opens the
 gateway by raw IP during lab testing.
 
+The `gw` host must be able to resolve `s5-dev`. Keep the concrete IP mapping in
+DNS or `/etc/hosts`, not in this repo-owned nginx config.
+
 ## Apply On `gw`
 
 ```bash
+# server: gw
 sudo nginx -t
 sudo systemctl reload nginx
 ```
@@ -38,15 +42,16 @@ sudo systemctl reload nginx
 ## Verify From `gw`
 
 ```bash
-curl -I http://10.123.127.29/
-curl -I -H 'Host: campus-dev.192-168-50-5.sslip.io' http://192.168.50.5:30080/
+# server: gw
+curl -I http://gw/
+curl -I -H 'Host: campus-dev.s5-dev.local' http://s5-dev:30080/
 ```
 
 Expected result:
 
 - both commands return `200 OK`
-- the direct `192.168.50.5:30080` check confirms Envoy/Gateway API routing
-- the `10.123.127.29` check confirms the `gw` reverse proxy
+- the direct `s5-dev:30080` check confirms Envoy/Gateway API routing
+- the `gw` check confirms the `gw` reverse proxy
 
 ## Future Public Host
 

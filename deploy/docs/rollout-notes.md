@@ -10,7 +10,7 @@ Current delivery path:
 
 Current active lab path:
 
-`Internet -> gw -> 192.168.50.5:30080 -> Envoy Gateway -> campus-nginx -> app`
+`Internet -> gw -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> app`
 
 Key characteristics:
 
@@ -52,6 +52,7 @@ The current repo supports this flow:
 Render a release manifest:
 
 ```bash
+# server: s5-dev
 bash deploy/scripts/apply-overlay.sh \
   --environment dev \
   --image-tag dev-2026.04.24-1 \
@@ -61,6 +62,7 @@ bash deploy/scripts/apply-overlay.sh \
 Apply a non-prod overlay:
 
 ```bash
+# server: s5-dev
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 kubectl delete job campus-importer -n campus-dev --ignore-not-found
 bash deploy/scripts/apply-overlay.sh \
@@ -71,6 +73,7 @@ bash deploy/scripts/apply-overlay.sh \
 Verify a non-prod overlay:
 
 ```bash
+# server: s5-dev
 bash deploy/scripts/verify-overlay.sh \
   --environment dev \
   --expected-nodeport 30080

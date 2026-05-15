@@ -18,6 +18,8 @@ spec:
         app.kubernetes.io/component: frontend
     spec:
       automountServiceAccountToken: false
+      imagePullSecrets:
+        - name: ghcr-pull
       containers:
         - name: frontend
           image: campus-frontend:latest

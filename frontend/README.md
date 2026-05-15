@@ -9,7 +9,7 @@ In the active DEV deployment, the frontend is:
 - built into a static image
 - served inside Kubernetes
 - reached through `campus-nginx`
-- exposed externally through Envoy Gateway and `campus.davl.at`
+- exposed externally through `gw`, Envoy Gateway, and `campus-dev.s5-dev.local`
 
 The frontend does not talk to raw backend service URLs. It uses same-origin
 paths such as:

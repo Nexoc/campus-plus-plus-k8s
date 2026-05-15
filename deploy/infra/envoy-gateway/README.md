@@ -12,7 +12,7 @@ App routing remains in the application layer:
 
 Current lab path:
 
-`Internet -> gw -> 192.168.50.5:30080 -> Envoy Gateway -> campus-nginx -> services`
+`Internet -> gw -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> services`
 
 Current home path:
 
@@ -46,6 +46,7 @@ Current files:
 Install or upgrade the controller:
 
 ```bash
+# server: s5-dev
 helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
   --version v1.7.0 \
   --namespace envoy-gateway-system \
@@ -56,6 +57,7 @@ helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
 Apply the shared `GatewayClass`:
 
 ```bash
+# server: s5-dev
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 ```
 
@@ -72,6 +74,7 @@ kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 If Envoy components restart or the edge stops routing correctly, verify:
 
 ```bash
+# server: s5-dev
 kubectl get gateway,httproute,envoyproxy,clienttrafficpolicy -n campus-dev -o wide
 kubectl get all -n envoy-gateway-system -o wide
 kubectl logs -n envoy-gateway-system deployment/envoy-gateway --tail=200

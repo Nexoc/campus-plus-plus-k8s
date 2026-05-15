@@ -33,7 +33,7 @@ It currently demonstrates:
 - Kustomize-based Kubernetes deployment overlays under `deploy/app`
 - Envoy Gateway / Gateway API as the active Kubernetes entry layer
 - a dedicated `gw` nginx edge baseline in repo
-- external PostgreSQL on `s4`
+- external PostgreSQL on `s4-db`
 - monitoring and future PROD rollout planned as separate phases
 
 ## Current Status
@@ -44,7 +44,7 @@ Verified release:
 
 - Git tag: `dev-2026.04.24-1`
 - Images: `ghcr.io/nexoc/campus-*:dev-2026.04.24-1`
-- Target cluster: `s5-dev` / `192.168.50.5`
+- Target cluster: `s5-dev`
 - Namespace: `campus-dev`
 - Entry point: Envoy Gateway `NodePort 30080`
 
@@ -52,12 +52,12 @@ Current lab request path:
 
 ```text
 client
-  -> gw 10.123.127.29
-  -> s5-dev 192.168.50.5:30080
+  -> gw
+  -> s5-dev:30080
   -> Envoy Gateway / Gateway API
   -> campus-nginx
   -> frontend / auth / backend
-  -> PostgreSQL 192.168.50.4
+  -> PostgreSQL s4-db
 ```
 
 Confirmed runtime state:
@@ -79,7 +79,7 @@ Main application components:
 - `backend`: Spring Boot API service
 - `campus-nginx`: internal application gateway and auth boundary
 - `campus-importer`: one-shot data import job
-- PostgreSQL: external database on `s4`
+- PostgreSQL: external database on `s4-db`
 
 Delivery and platform components:
 
@@ -135,6 +135,7 @@ Shared infrastructure baselines:
 Manual Kubernetes deployment uses the same release contract as the workflow:
 
 ```bash
+# server: s5-dev
 bash deploy/scripts/apply-overlay.sh \
   --environment dev \
   --image-tag dev-2026.04.24-1

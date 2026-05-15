@@ -14,11 +14,11 @@ The backend is not exposed directly to the public internet.
 
 Current request path:
 
-`Internet -> davl.at -> DEV 192.168.56.40:31080 -> Envoy Gateway -> campus-nginx -> backend`
+`Internet -> gw -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> backend`
 
 Trust boundary:
 
-- public TLS and public hostname terminate on `davl.at`
+- public edge traffic enters through `gw`
 - Envoy Gateway is the Kubernetes entry layer
 - `campus-nginx` is the internal application gateway
 - backend consumes trusted upstream headers and does not act as the public edge
@@ -32,7 +32,7 @@ Campus++ currently runs with these main services:
 - `backend` — Spring Boot domain/data service
 - `campus-nginx` — internal app gateway and auth boundary
 - `campus-importer` — one-shot data import job
-- PostgreSQL on `192.168.56.20`
+- PostgreSQL on `s4-db`
 
 The backend connects to PostgreSQL directly and runs Flyway migrations for the
 `app` schema during startup.
@@ -127,7 +127,7 @@ Shared logic outside modules includes:
 - active Spring profile in DEV is `dev`
 - backend listens on container port `8080`
 - DEV deploy runs in namespace `campus-dev`
-- current active deployment path is `deploy/dev/`
+- current active deployment path is `deploy/app/overlays/dev/`
 - public traffic reaches backend only through `campus-nginx`
 
 ## Known Gaps
