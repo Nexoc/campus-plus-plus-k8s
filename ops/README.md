@@ -122,6 +122,7 @@ Prepares `s6-monitoring` as the central monitoring VM. It installs safe base pac
 ## Design Docs
 
 - [Monitoring Design](docs/monitoring-design.md)
+- [Monitoring Runtime Model](docs/monitoring-runtime.md)
 
 ## Common Commands
 

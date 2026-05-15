@@ -108,6 +108,16 @@ GitHub Actions runner services on s5-dev and gw
 
 ## Components
 
+Chosen runtime model:
+
+```text
+central monitoring services on s6-monitoring: systemd-managed services
+VM exporters: systemd-managed services
+Kubernetes add-ons inside dev/prod clusters: Helm
+```
+
+See [Monitoring Runtime Model](monitoring-runtime.md) for the detailed decision.
+
 Initial VM-level components:
 
 ```text
