@@ -1,0 +1,40 @@
+---
+# Execute from: gw
+# Target: gw only. Verifies current production release through kubeconfig and nodePort smoke checks.
+
+- name: Verify production release from gw
+  hosts: gw
+  gather_facts: false
+  vars:
+    repo_root: /home/nexoc/campus-plus-plus-k8s
+    expected_nodeport: 30080
+    expected_host: campus-prod.davl.at
+    prod_nodes:
+      - s1-prod
+      - s2-prod
+      - s3-prod
+  tasks:
+    - name: gw | run repository production overlay verification
+      ansible.builtin.command:
+        argv:
+          - bash
+          - "{{ repo_root }}/deploy/scripts/verify-overlay.sh"
+          - --environment
+          - prod
+          - --expected-nodeport
+          - "{{ expected_nodeport }}"
+      args:
+        chdir: "{{ repo_root }}"
+      changed_when: false
+
+    - name: gw | smoke check production route on every prod node
+      ansible.builtin.uri:
+        url: "http://{{ item }}:{{ expected_nodeport }}/"
+        headers:
+          Host: "{{ expected_host }}"
+        method: GET
+        status_code: 200
+        return_content: false
+        timeout: 10
+      loop: "{{ prod_nodes }}"
+

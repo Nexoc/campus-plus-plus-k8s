@@ -1,0 +1,200 @@
+---
+# Execute from: gw
+# Target: gw only. Commands use kubeconfig to verify the prod k3s HA cluster.
+# This playbook does not change cluster state and does not print secret values.
+
+- name: Check production k3s cluster state from gw
+  hosts: gw
+  gather_facts: false
+  vars:
+    prod_kubeconfig: /home/nexoc/.kube/prod.yaml
+    prod_namespace: campus-prod
+    expected_prod_nodes:
+      - s1-prod
+      - s2-prod
+      - s3-prod
+    prod_deployments:
+      - auth
+      - backend
+      - campus-nginx
+      - frontend
+    expected_nodeport: 30080
+    expected_tag: ""
+  tasks:
+    - name: gw | verify prod kubeconfig exists
+      ansible.builtin.stat:
+        path: "{{ prod_kubeconfig }}"
+      register: prod_kubeconfig_stat
+
+    - name: gw | require prod kubeconfig
+      ansible.builtin.assert:
+        that:
+          - prod_kubeconfig_stat.stat.exists
+          - prod_kubeconfig_stat.stat.isreg
+        fail_msg: "Missing prod kubeconfig at {{ prod_kubeconfig }}"
+
+    - name: gw | get prod node readiness
+      ansible.builtin.shell: |
+        set -euo pipefail
+        kubectl --kubeconfig {{ prod_kubeconfig | quote }} get nodes -o jsonpath='{range .items[*]}{.metadata.name}{" "}{range .status.conditions[?(@.type=="Ready")]}{.status}{end}{"\n"}{end}'
+      args:
+        executable: /bin/bash
+      register: prod_node_readiness
+      changed_when: false
+
+    - name: gw | require every prod node to be Ready
+      ansible.builtin.assert:
+        that:
+          - "'{{ item }} True' in prod_node_readiness.stdout"
+        fail_msg: "Prod node {{ item }} is missing or not Ready"
+      loop: "{{ expected_prod_nodes }}"
+
+    - name: gw | verify campus-prod namespace exists
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ prod_kubeconfig }}"
+          - get
+          - namespace
+          - "{{ prod_namespace }}"
+      changed_when: false
+
+    - name: gw | verify production deployments are available
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ prod_kubeconfig }}"
+          - -n
+          - "{{ prod_namespace }}"
+          - rollout
+          - status
+          - "deployment/{{ item }}"
+          - --timeout=120s
+      changed_when: false
+      loop: "{{ prod_deployments }}"
+
+    - name: gw | check whether campus-importer job still exists
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ prod_kubeconfig }}"
+          - -n
+          - "{{ prod_namespace }}"
+          - get
+          - job/campus-importer
+      register: importer_job_lookup
+      changed_when: false
+      failed_when: false
+
+    - name: gw | verify campus-importer job completed when present
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ prod_kubeconfig }}"
+          - -n
+          - "{{ prod_namespace }}"
+          - wait
+          - --for=condition=complete
+          - job/campus-importer
+          - --timeout=120s
+      changed_when: false
+      when: importer_job_lookup.rc == 0
+
+    - name: gw | report importer job is absent after TTL cleanup
+      ansible.builtin.debug:
+        msg: "campus-importer job is not present; this is acceptable after ttlSecondsAfterFinished cleanup."
+      when: importer_job_lookup.rc != 0
+
+    - name: gw | collect deployed images when expected_tag is set
+      ansible.builtin.shell: |
+        set -euo pipefail
+        kubectl --kubeconfig {{ prod_kubeconfig | quote }} -n {{ prod_namespace | quote }} get deploy {{ item | quote }} -o jsonpath='{.spec.template.spec.containers[*].image}'
+      args:
+        executable: /bin/bash
+      register: prod_deployment_images
+      changed_when: false
+      loop: "{{ prod_deployments }}"
+      when: expected_tag | length > 0
+
+    - name: gw | require deployed images to use expected tag
+      ansible.builtin.assert:
+        that:
+          - "':' ~ expected_tag in item.stdout"
+        fail_msg: "Deployment {{ item.item }} does not use expected tag {{ expected_tag }}: {{ item.stdout }}"
+      loop: "{{ prod_deployment_images.results | default([]) }}"
+      when: expected_tag | length > 0
+
+    - name: gw | verify GatewayClass campus-envoy is accepted
+      ansible.builtin.shell: |
+        set -euo pipefail
+        kubectl --kubeconfig {{ prod_kubeconfig | quote }} get gatewayclass campus-envoy -o jsonpath='{range .status.conditions[?(@.type=="Accepted")]}{.status}{end}'
+      args:
+        executable: /bin/bash
+      register: gatewayclass_accepted
+      changed_when: false
+
+    - name: gw | require GatewayClass accepted=true
+      ansible.builtin.assert:
+        that:
+          - gatewayclass_accepted.stdout == "True"
+        fail_msg: "GatewayClass campus-envoy is not accepted"
+
+    - name: gw | verify production Gateway campus is programmed
+      ansible.builtin.shell: |
+        set -euo pipefail
+        kubectl --kubeconfig {{ prod_kubeconfig | quote }} -n {{ prod_namespace | quote }} get gateway campus -o jsonpath='{range .status.conditions[?(@.type=="Programmed")]}{.status}{end}'
+      args:
+        executable: /bin/bash
+      register: gateway_programmed
+      changed_when: false
+
+    - name: gw | require Gateway programmed=true
+      ansible.builtin.assert:
+        that:
+          - gateway_programmed.stdout == "True"
+        fail_msg: "Gateway campus is not programmed in {{ prod_namespace }}"
+
+    - name: gw | collect Envoy service nodePorts
+      ansible.builtin.shell: |
+        set -euo pipefail
+        kubectl --kubeconfig {{ prod_kubeconfig | quote }} -n envoy-gateway-system get svc -o jsonpath='{range .items[*].spec.ports[*]}{.nodePort}{"\n"}{end}'
+      args:
+        executable: /bin/bash
+      register: envoy_nodeports
+      changed_when: false
+
+    - name: gw | require Envoy nodePort
+      ansible.builtin.assert:
+        that:
+          - expected_nodeport | string in envoy_nodeports.stdout_lines
+        fail_msg: "Expected Envoy nodePort {{ expected_nodeport }} was not found"
+
+    - name: gw | verify s4-db Service exists
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ prod_kubeconfig }}"
+          - -n
+          - "{{ prod_namespace }}"
+          - get
+          - service
+          - s4-db
+      changed_when: false
+
+    - name: gw | verify s4-db EndpointSlice exists
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ prod_kubeconfig }}"
+          - -n
+          - "{{ prod_namespace }}"
+          - get
+          - endpointslice
+          - s4-db
+      changed_when: false

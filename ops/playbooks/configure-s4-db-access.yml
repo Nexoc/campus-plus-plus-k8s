@@ -1,0 +1,127 @@
+---
+# Execute from: gw
+# Target: s4-db only.
+# Purpose: idempotently allow dev/prod nodes to reach PostgreSQL.
+# This playbook does not open PostgreSQL to 0.0.0.0/0 and does not print passwords.
+
+- name: Configure PostgreSQL access on s4-db
+  hosts: db
+  gather_facts: false
+  become: true
+  vars:
+    allowed_postgres_clients: >-
+      {{
+        (groups.get('dev', []) + groups.get('prod', []))
+        | map('extract', hostvars, 'ansible_host')
+        | list
+      }}
+    postgres_port: 5432
+    postgres_hba_database: all
+    postgres_hba_user: all
+    postgres_hba_method: scram-sha-256
+  handlers:
+    - name: reload postgresql
+      ansible.builtin.service:
+        name: postgresql
+        state: reloaded
+  tasks:
+    - name: s4-db | collect service facts
+      ansible.builtin.service_facts:
+
+    - name: s4-db | require PostgreSQL service to be running
+      ansible.builtin.assert:
+        that:
+          - "ansible_facts.services | dict2items | selectattr('key', 'search', 'postgresql') | selectattr('value.state', 'equalto', 'running') | list | length > 0"
+        fail_msg: "No running PostgreSQL service was found on s4-db"
+
+    - name: s4-db | require inventory-derived PostgreSQL client list
+      ansible.builtin.assert:
+        that:
+          - allowed_postgres_clients | length > 0
+        fail_msg: "No PostgreSQL clients were derived from dev/prod inventory groups"
+
+    - name: s4-db | verify PostgreSQL listens on the configured port
+      ansible.builtin.command: "ss -ltn"
+      register: postgres_listeners
+      changed_when: false
+
+    - name: s4-db | require PostgreSQL port listener
+      ansible.builtin.assert:
+        that:
+          - "':' ~ postgres_port|string in postgres_listeners.stdout"
+        fail_msg: "PostgreSQL port {{ postgres_port }} is not listening"
+
+    - name: s4-db | add idempotent PostgreSQL allow rules before drop rule
+      ansible.builtin.shell: |
+        set -euo pipefail
+        client={{ item | quote }}
+        port={{ postgres_port | quote }}
+
+        if iptables -C INPUT -p tcp -s "$client" --dport "$port" -j ACCEPT >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        drop_line="$(iptables -L INPUT --line-numbers -n | awk -v port="$port" '$0 ~ /DROP/ && $0 ~ /tcp/ && $0 ~ ("dpt:" port) { print $1; exit }')"
+        if [ -n "$drop_line" ]; then
+          iptables -I INPUT "$drop_line" -p tcp -s "$client" --dport "$port" -j ACCEPT
+        else
+          iptables -A INPUT -p tcp -s "$client" --dport "$port" -j ACCEPT
+        fi
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: postgres_allow_rules
+      changed_when: "'inserted' in postgres_allow_rules.stdout"
+      loop: "{{ allowed_postgres_clients }}"
+
+    - name: s4-db | keep default PostgreSQL drop rule
+      ansible.builtin.shell: |
+        set -euo pipefail
+        port={{ postgres_port | quote }}
+        if iptables -C INPUT -p tcp --dport "$port" -j DROP >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+        iptables -A INPUT -p tcp --dport "$port" -j DROP
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: postgres_drop_rule
+      changed_when: "'inserted' in postgres_drop_rule.stdout"
+
+    - name: s4-db | check netfilter-persistent availability
+      ansible.builtin.command: which netfilter-persistent
+      register: netfilter_persistent_check
+      changed_when: false
+      failed_when: false
+
+    - name: s4-db | save iptables rules when netfilter-persistent is installed
+      ansible.builtin.command: netfilter-persistent save
+      changed_when: false
+      when: netfilter_persistent_check.rc == 0
+
+    - name: s4-db | locate pg_hba.conf
+      ansible.builtin.shell: |
+        set -euo pipefail
+        find /etc/postgresql -name pg_hba.conf -type f | sort | tail -n 1
+      args:
+        executable: /bin/bash
+      register: pg_hba_path
+      changed_when: false
+
+    - name: s4-db | require pg_hba.conf to exist
+      ansible.builtin.assert:
+        that:
+          - pg_hba_path.stdout | length > 0
+        fail_msg: "Could not find pg_hba.conf under /etc/postgresql"
+
+    - name: s4-db | add pg_hba rules for allowed dev/prod clients
+      ansible.builtin.lineinfile:
+        path: "{{ pg_hba_path.stdout }}"
+        regexp: "^host\\s+{{ postgres_hba_database }}\\s+{{ postgres_hba_user }}\\s+{{ item | regex_escape }}/32\\s+"
+        line: "host {{ postgres_hba_database }} {{ postgres_hba_user }} {{ item }}/32 {{ postgres_hba_method }}"
+        insertafter: EOF
+        backup: true
+      loop: "{{ allowed_postgres_clients }}"
+      notify: reload postgresql

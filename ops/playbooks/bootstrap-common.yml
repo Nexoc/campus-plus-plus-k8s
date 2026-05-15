@@ -1,0 +1,28 @@
+---
+# Execute from: gw
+# Target: managed Linux servers, excluding gw by default.
+# Purpose: install safe base tools only. No reboot and no network reconfiguration.
+
+- name: Bootstrap common packages on managed servers
+  hosts: all:!gw
+  gather_facts: true
+  become: true
+  vars:
+    common_packages:
+      - curl
+      - ca-certificates
+      - jq
+      - iproute2
+      - dnsutils
+      - htop
+      - net-tools
+      - openssh-client
+  tasks:
+    - name: managed hosts | install safe base packages
+      ansible.builtin.apt:
+        name: "{{ common_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_facts.os_family == "Debian"
+

@@ -1,0 +1,35 @@
+---
+# Execute from: gw
+# Purpose: verify that gw can reach every managed host through Ansible.
+# This playbook makes no changes.
+
+- name: Check Ansible connectivity and basic host facts
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: all | ping host through Ansible
+      ansible.builtin.ping:
+
+    - name: all | read hostname
+      ansible.builtin.command: hostname
+      register: host_hostname
+      changed_when: false
+
+    - name: all | read operating system release
+      ansible.builtin.command: cat /etc/os-release
+      register: host_os_release
+      changed_when: false
+
+    - name: all | show brief interface addresses
+      ansible.builtin.command: ip -br a
+      register: host_ip_brief
+      changed_when: false
+
+    - name: all | print non-secret host summary
+      ansible.builtin.debug:
+        msg:
+          host: "{{ inventory_hostname }}"
+          hostname: "{{ host_hostname.stdout }}"
+          os: "{{ (host_os_release.stdout_lines | select('match', '^PRETTY_NAME=') | list | first | default('PRETTY_NAME=unknown')) | regex_replace('^PRETTY_NAME=', '') | regex_replace('\"', '') }}"
+          interfaces: "{{ host_ip_brief.stdout_lines }}"
+

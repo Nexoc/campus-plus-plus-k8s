@@ -1,0 +1,93 @@
+---
+# Execute from: gw
+# Target: gw only. Helm and kubectl act on the prod k3s cluster through kubeconfig.
+# This does not install Envoy Gateway as a local service on gw.
+
+- name: Install or upgrade Envoy Gateway in prod cluster from gw
+  hosts: gw
+  gather_facts: false
+  vars:
+    repo_root: /home/nexoc/campus-plus-plus-k8s
+    prod_kubeconfig: /home/nexoc/.kube/prod.yaml
+    envoy_namespace: envoy-gateway-system
+    envoy_chart: oci://docker.io/envoyproxy/gateway-helm
+    envoy_chart_version: v1.7.2
+  tasks:
+    - name: gw | check helm exists
+      ansible.builtin.command: which helm
+      changed_when: false
+
+    - name: gw | check prod kubeconfig exists
+      ansible.builtin.stat:
+        path: "{{ prod_kubeconfig }}"
+      register: prod_kubeconfig_stat
+
+    - name: gw | require prod kubeconfig
+      ansible.builtin.assert:
+        that:
+          - prod_kubeconfig_stat.stat.exists
+          - prod_kubeconfig_stat.stat.isreg
+        fail_msg: "Missing prod kubeconfig at {{ prod_kubeconfig }}"
+
+    - name: gw | install or upgrade Envoy Gateway controller in prod cluster
+      ansible.builtin.command:
+        argv:
+          - helm
+          - upgrade
+          - --install
+          - eg
+          - "{{ envoy_chart }}"
+          - --version
+          - "{{ envoy_chart_version }}"
+          - --namespace
+          - "{{ envoy_namespace }}"
+          - --create-namespace
+          - -f
+          - "{{ repo_root }}/deploy/infra/envoy-gateway/values-prod.yaml"
+          - --kubeconfig
+          - "{{ prod_kubeconfig }}"
+          - --wait
+          - --timeout
+          - 5m
+      changed_when: true
+
+    - name: gw | apply campus GatewayClass to prod cluster
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ prod_kubeconfig }}"
+          - apply
+          - -f
+          - "{{ repo_root }}/deploy/infra/envoy-gateway/gatewayclass.yaml"
+      register: gatewayclass_apply
+      changed_when: "'configured' in gatewayclass_apply.stdout or 'created' in gatewayclass_apply.stdout"
+
+    - name: gw | verify Envoy Gateway controller rollout
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ prod_kubeconfig }}"
+          - -n
+          - "{{ envoy_namespace }}"
+          - rollout
+          - status
+          - deployment/envoy-gateway
+          - --timeout=5m
+      changed_when: false
+
+    - name: gw | verify GatewayClass campus-envoy accepted
+      ansible.builtin.shell: |
+        set -euo pipefail
+        kubectl --kubeconfig {{ prod_kubeconfig | quote }} get gatewayclass campus-envoy -o jsonpath='{range .status.conditions[?(@.type=="Accepted")]}{.status}{end}'
+      args:
+        executable: /bin/bash
+      register: gatewayclass_accepted
+      changed_when: false
+
+    - name: gw | require GatewayClass accepted=true
+      ansible.builtin.assert:
+        that:
+          - gatewayclass_accepted.stdout == "True"
+        fail_msg: "GatewayClass campus-envoy is not accepted"

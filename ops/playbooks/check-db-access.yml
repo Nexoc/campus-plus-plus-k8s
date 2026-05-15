@@ -1,0 +1,168 @@
+---
+# Execute from: gw
+# Purpose: verify PostgreSQL reachability from dev/prod hosts and the prod cluster.
+# No database passwords are used or printed.
+
+- name: Check TCP access to s4-db from dev and prod nodes
+  hosts: dev:prod
+  gather_facts: false
+  vars:
+    db_host: s4-db
+    db_port: 5432
+  tasks:
+    - name: dev/prod nodes | verify TCP connection to PostgreSQL endpoint
+      ansible.builtin.wait_for:
+        host: "{{ db_host }}"
+        port: "{{ db_port }}"
+        timeout: 5
+        state: started
+
+- name: Check PostgreSQL host configuration on s4-db
+  hosts: db
+  gather_facts: false
+  become: true
+  vars:
+    postgres_port: 5432
+    allowed_postgres_clients: >-
+      {{
+        (groups.get('dev', []) + groups.get('prod', []))
+        | map('extract', hostvars, 'ansible_host')
+        | list
+      }}
+  tasks:
+    - name: s4-db | collect service facts
+      ansible.builtin.service_facts:
+
+    - name: s4-db | require PostgreSQL service to be running
+      ansible.builtin.assert:
+        that:
+          - "ansible_facts.services | dict2items | selectattr('key', 'search', 'postgresql') | selectattr('value.state', 'equalto', 'running') | list | length > 0"
+        fail_msg: "No running PostgreSQL service was found on s4-db"
+
+    - name: s4-db | require inventory-derived PostgreSQL client list
+      ansible.builtin.assert:
+        that:
+          - allowed_postgres_clients | length > 0
+        fail_msg: "No PostgreSQL clients were derived from dev/prod inventory groups"
+
+    - name: s4-db | show TCP listeners for PostgreSQL port
+      ansible.builtin.command: "ss -ltn"
+      register: postgres_listeners
+      changed_when: false
+
+    - name: s4-db | require PostgreSQL port listener
+      ansible.builtin.assert:
+        that:
+          - "':' ~ postgres_port|string in postgres_listeners.stdout"
+        fail_msg: "PostgreSQL port {{ postgres_port }} is not listening"
+
+    - name: s4-db | read iptables INPUT rules
+      ansible.builtin.command: iptables -S INPUT
+      register: iptables_input_rules
+      changed_when: false
+      failed_when: false
+
+    - name: s4-db | require firewall allow rules for dev/prod clients when iptables is available
+      ansible.builtin.assert:
+        that:
+          - item in iptables_input_rules.stdout
+          - "--dport {{ postgres_port }}" in iptables_input_rules.stdout
+        fail_msg: "iptables rule for PostgreSQL client {{ item }} is missing"
+      loop: "{{ allowed_postgres_clients }}"
+      when: iptables_input_rules.rc == 0
+
+    - name: s4-db | locate pg_hba.conf
+      ansible.builtin.shell: |
+        set -euo pipefail
+        find /etc/postgresql -name pg_hba.conf -type f | sort | tail -n 1
+      args:
+        executable: /bin/bash
+      register: pg_hba_path
+      changed_when: false
+
+    - name: s4-db | require pg_hba.conf to exist
+      ansible.builtin.assert:
+        that:
+          - pg_hba_path.stdout | length > 0
+        fail_msg: "Could not find pg_hba.conf under /etc/postgresql"
+
+    - name: s4-db | read pg_hba.conf without printing passwords
+      ansible.builtin.command: "grep -E '^[[:space:]]*host[[:space:]]+' {{ pg_hba_path.stdout }}"
+      register: pg_hba_host_rules
+      changed_when: false
+      failed_when: false
+
+    - name: s4-db | require pg_hba rules for dev/prod clients
+      ansible.builtin.assert:
+        that:
+          - item in pg_hba_host_rules.stdout
+        fail_msg: "pg_hba.conf rule for PostgreSQL client {{ item }} is missing"
+      loop: "{{ allowed_postgres_clients }}"
+
+- name: Check prod Kubernetes database alias from gw
+  hosts: gw
+  gather_facts: false
+  vars:
+    prod_kubeconfig: /home/nexoc/.kube/prod.yaml
+    prod_namespace: campus-prod
+  tasks:
+    - name: gw | verify s4-db Service in campus-prod
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ prod_kubeconfig }}"
+          - -n
+          - "{{ prod_namespace }}"
+          - get
+          - service
+          - s4-db
+      changed_when: false
+
+    - name: gw | verify s4-db EndpointSlice in campus-prod
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ prod_kubeconfig }}"
+          - -n
+          - "{{ prod_namespace }}"
+          - get
+          - endpointslice
+          - s4-db
+      changed_when: false
+
+    - name: gw | find a running campus-nginx pod
+      ansible.builtin.shell: |
+        set -euo pipefail
+        kubectl --kubeconfig {{ prod_kubeconfig | quote }} -n {{ prod_namespace | quote }} get pods \
+          -l app.kubernetes.io/name=campus-nginx \
+          --field-selector=status.phase=Running \
+          -o jsonpath='{.items[0].metadata.name}'
+      args:
+        executable: /bin/bash
+      register: campus_nginx_pod
+      changed_when: false
+
+    - name: gw | resolve s4-db from inside the running campus-nginx pod
+      ansible.builtin.command:
+        argv:
+          - kubectl
+          - --kubeconfig
+          - "{{ prod_kubeconfig }}"
+          - -n
+          - "{{ prod_namespace }}"
+          - exec
+          - "{{ campus_nginx_pod.stdout }}"
+          - --
+          - getent
+          - hosts
+          - s4-db
+      register: pod_dns_result
+      changed_when: false
+
+    - name: gw | require Kubernetes DNS alias to resolve
+      ansible.builtin.assert:
+        that:
+          - pod_dns_result.stdout | length > 0
+        fail_msg: "s4-db did not resolve from campus-nginx pod"

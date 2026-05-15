@@ -1,0 +1,86 @@
+---
+# Execute from: gw
+# Target: gw control host only.
+# Purpose: prepare gw for ansible, kubectl and helm driven operations.
+# This playbook does not install workloads and does not create real secrets.
+
+- name: Bootstrap gw control host
+  hosts: gw
+  gather_facts: true
+  vars:
+    campus_user: nexoc
+    campus_secrets_root: /home/nexoc/campus-secrets
+    prod_kubeconfig: /home/nexoc/.kube/prod.yaml
+    gw_base_packages:
+      - git
+      - curl
+      - ca-certificates
+      - jq
+      - openssh-client
+      - ansible
+  tasks:
+    - name: gw | install control-host base packages
+      ansible.builtin.apt:
+        name: "{{ gw_base_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      become: true
+      when: ansible_facts.os_family == "Debian"
+
+    - name: gw | create campus secrets root directory without secret files
+      ansible.builtin.file:
+        path: "{{ campus_secrets_root }}"
+        state: directory
+        owner: "{{ campus_user }}"
+        group: "{{ campus_user }}"
+        mode: "0700"
+      become: true
+
+    - name: gw | create prod runtime config directory without secret files
+      ansible.builtin.file:
+        path: "{{ campus_secrets_root }}/prod"
+        state: directory
+        owner: "{{ campus_user }}"
+        group: "{{ campus_user }}"
+        mode: "0700"
+      become: true
+
+    - name: gw | check kubectl binary exists
+      ansible.builtin.command: which kubectl
+      register: kubectl_check
+      changed_when: false
+      failed_when: kubectl_check.rc != 0
+
+    - name: gw | check helm binary exists
+      ansible.builtin.command: which helm
+      register: helm_check
+      changed_when: false
+      failed_when: helm_check.rc != 0
+
+    - name: gw | check prod kubeconfig exists
+      ansible.builtin.stat:
+        path: "{{ prod_kubeconfig }}"
+      register: prod_kubeconfig_stat
+
+    - name: gw | require prod kubeconfig
+      ansible.builtin.assert:
+        that:
+          - prod_kubeconfig_stat.stat.exists
+          - prod_kubeconfig_stat.stat.isreg
+        fail_msg: "Missing prod kubeconfig at {{ prod_kubeconfig }}"
+        success_msg: "Prod kubeconfig exists at {{ prod_kubeconfig }}"
+
+    - name: gw | check required runtime files without reading values
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: runtime_file_stats
+      loop:
+        - "{{ campus_secrets_root }}/prod/db-secrets.env"
+        - "{{ campus_secrets_root }}/prod/auth-secrets.env"
+        - "{{ campus_secrets_root }}/prod/db-endpoint.env"
+
+    - name: gw | print runtime file presence only
+      ansible.builtin.debug:
+        msg: "{{ item.item }}: {{ 'ok' if item.stat.exists else 'missing' }}"
+      loop: "{{ runtime_file_stats.results }}"
