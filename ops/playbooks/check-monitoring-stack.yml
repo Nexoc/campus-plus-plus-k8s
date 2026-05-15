@@ -12,6 +12,8 @@
     grafana_port: 3000
     grafana_datasource_path: /etc/grafana/provisioning/datasources/campus-prometheus.yml
     grafana_prometheus_url: http://localhost:9090
+    grafana_dashboard_provider_path: /etc/grafana/provisioning/dashboards/campus-dashboards.yml
+    grafana_dashboard_path: /var/lib/grafana/dashboards/campus-vm-overview.json
   tasks:
     - name: s6-monitoring | verify Prometheus readiness endpoint
       ansible.builtin.uri:
@@ -73,6 +75,30 @@
           - "{{ grafana_datasource_path }}"
       changed_when: false
       become: true
+
+    - name: s6-monitoring | verify Grafana dashboard provider file exists
+      ansible.builtin.stat:
+        path: "{{ grafana_dashboard_provider_path }}"
+      register: grafana_dashboard_provider_stat
+
+    - name: s6-monitoring | require Grafana dashboard provider file
+      ansible.builtin.assert:
+        that:
+          - grafana_dashboard_provider_stat.stat.exists
+          - grafana_dashboard_provider_stat.stat.isreg
+        fail_msg: "Grafana dashboard provider file is missing"
+
+    - name: s6-monitoring | verify Campus VM Overview dashboard file exists
+      ansible.builtin.stat:
+        path: "{{ grafana_dashboard_path }}"
+      register: grafana_dashboard_stat
+
+    - name: s6-monitoring | require Campus VM Overview dashboard file
+      ansible.builtin.assert:
+        that:
+          - grafana_dashboard_stat.stat.exists
+          - grafana_dashboard_stat.stat.isreg
+        fail_msg: "Campus VM Overview dashboard file is missing"
 
 - name: Check monitoring stack from gw
   hosts: gw

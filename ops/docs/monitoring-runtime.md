@@ -192,6 +192,15 @@ iptables allows 3000 from the monitoring_scrape_host of gw.
 all other TCP traffic to 3000 is dropped.
 ```
 
+Grafana dashboard provisioning:
+
+```text
+dashboard provider: /etc/grafana/provisioning/dashboards/campus-dashboards.yml
+dashboard files: /var/lib/grafana/dashboards
+initial dashboard: Campus VM Overview
+datasource: Campus Prometheus
+```
+
 Security:
 
 ```text

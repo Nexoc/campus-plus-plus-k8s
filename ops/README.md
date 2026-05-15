@@ -129,11 +129,11 @@ Installs Prometheus on `s6-monitoring` through the Debian package, renders node-
 
 `install-grafana.yml`
 
-Installs Grafana on `s6-monitoring` through the official Grafana APT repository, provisions the local Prometheus datasource, restricts external port `3000` to `gw`, and verifies Grafana health from both `s6-monitoring` and `gw`.
+Installs Grafana on `s6-monitoring` through the official Grafana APT repository, provisions the local Prometheus datasource and the initial Campus VM Overview dashboard, restricts external port `3000` to `gw`, and verifies Grafana health from both `s6-monitoring` and `gw`.
 
 `check-monitoring-stack.yml`
 
-Verifies the central monitoring stack without requiring Grafana credentials. It checks Prometheus readiness and targets, Grafana health, and that the Grafana Prometheus datasource provisioning file points to `http://localhost:9090`.
+Verifies the central monitoring stack without requiring Grafana credentials. It checks Prometheus readiness and targets, Grafana health, the Grafana Prometheus datasource provisioning file, and the initial dashboard provisioning files.
 
 ## Design Docs
 
