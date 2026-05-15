@@ -121,7 +121,11 @@ Prepares `s6-monitoring` as the central monitoring VM. It installs safe base pac
 
 `install-node-exporter.yml`
 
-Installs `prometheus-node-exporter` on every VM through the Debian package, enables the systemd service, restricts port `9100` to `s6-monitoring`, checks the local metrics endpoint, and verifies from `s6-monitoring` that each exporter is reachable.
+Installs `prometheus-node-exporter` on every VM through the Debian package, enables the systemd service, allows loopback access, restricts external port `9100` to `s6-monitoring`, checks the local metrics endpoint, and verifies from `s6-monitoring` that each exporter is reachable.
+
+`install-prometheus.yml`
+
+Installs Prometheus on `s6-monitoring` through the Debian package, renders node-exporter scrape targets from inventory, restricts external port `9090` to `gw`, and verifies readiness from both `s6-monitoring` and `gw`.
 
 ## Design Docs
 
@@ -208,6 +212,12 @@ ansible-playbook -i ops/inventory/lab.ini ops/playbooks/bootstrap-monitoring.yml
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
 ansible-playbook -i ops/inventory/lab.ini ops/playbooks/install-node-exporter.yml
+```
+
+```bash
+# server: gw
+cd /home/nexoc/campus-plus-plus-k8s
+ansible-playbook -i ops/inventory/lab.ini ops/playbooks/install-prometheus.yml
 ```
 
 ```bash

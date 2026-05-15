@@ -347,12 +347,13 @@ Initial preflight file:
 ops/playbooks/check-monitoring.yml
 ops/playbooks/bootstrap-monitoring.yml
 ops/playbooks/install-node-exporter.yml
+ops/playbooks/install-prometheus.yml
 ```
 
 Suggested next files:
 
 ```text
-ops/playbooks/install-prometheus-grafana.yml
+ops/playbooks/install-grafana.yml
 ops/playbooks/install-postgres-exporter.yml
 ```
 

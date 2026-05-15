@@ -1,0 +1,38 @@
+# Managed by Ansible. Do not edit directly on the server.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - "127.0.0.1:9090"
+        labels:
+          environment: "{{ monitoring_environment_label }}"
+          role: monitoring
+          instance: s6-monitoring
+
+  - job_name: node-exporter
+    static_configs:
+{% for host in groups['all'] | sort %}
+      - targets:
+          - "{{ hostvars[host].monitoring_scrape_host | default(hostvars[host].ansible_host | default(host)) }}:9100"
+        labels:
+          environment: "{{ monitoring_environment_label }}"
+          instance: "{{ host }}"
+{% if host in groups.get('gw', []) %}
+          role: gw
+{% elif host in groups.get('db', []) %}
+          role: db
+{% elif host in groups.get('dev', []) %}
+          role: dev
+{% elif host in groups.get('monitoring', []) %}
+          role: monitoring
+{% elif host in groups.get('prod', []) %}
+          role: prod
+{% else %}
+          role: server
+{% endif %}
+{% endfor %}

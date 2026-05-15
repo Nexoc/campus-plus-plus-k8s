@@ -1,0 +1,199 @@
+---
+# Execute from: gw
+# Target: s6-monitoring only, with final reachability check from gw.
+# Purpose: install Prometheus as a systemd-managed service and configure
+# node-exporter scrape targets from inventory.
+
+- name: Install Prometheus on s6-monitoring
+  hosts: monitoring
+  gather_facts: true
+  become: true
+  vars:
+    prometheus_packages:
+      - prometheus
+      - iptables
+    prometheus_service: prometheus
+    prometheus_port: 9090
+    prometheus_config_path: /etc/prometheus/prometheus.yml
+    prometheus_config_template: ../templates/prometheus.yml.j2
+    monitoring_environment_label: lab
+    gw_access_host: "{{ hostvars[groups['gw'][0]].monitoring_scrape_host | default(hostvars[groups['gw'][0]].ansible_host | default(groups['gw'][0])) }}"
+  handlers:
+    - name: restart prometheus
+      ansible.builtin.service:
+        name: "{{ prometheus_service }}"
+        state: restarted
+  tasks:
+    - name: s6-monitoring | require exactly one gw host
+      ansible.builtin.assert:
+        that:
+          - groups.get('gw', []) | length == 1
+        fail_msg: "Inventory must contain exactly one host in the gw group"
+
+    - name: s6-monitoring | install Prometheus package
+      ansible.builtin.apt:
+        name: "{{ prometheus_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_facts.os_family == "Debian"
+
+    - name: s6-monitoring | ensure Prometheus config directory exists
+      ansible.builtin.file:
+        path: /etc/prometheus
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: s6-monitoring | render Prometheus scrape config
+      ansible.builtin.template:
+        src: "{{ prometheus_config_template }}"
+        dest: "{{ prometheus_config_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: restart prometheus
+
+    - name: s6-monitoring | validate Prometheus config
+      ansible.builtin.command:
+        argv:
+          - promtool
+          - check
+          - config
+          - "{{ prometheus_config_path }}"
+      changed_when: false
+
+    - name: s6-monitoring | enable and start Prometheus service
+      ansible.builtin.service:
+        name: "{{ prometheus_service }}"
+        enabled: true
+        state: started
+
+    - name: s6-monitoring | allow local loopback access to Prometheus
+      ansible.builtin.shell: |
+        set -euo pipefail
+        port={{ prometheus_port | quote }}
+
+        if iptables -C INPUT -i lo -p tcp --dport "$port" -j ACCEPT >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        drop_line="$(iptables -L INPUT --line-numbers -n | awk '$0 ~ /DROP/ { print $1; exit }')"
+        if [ -n "$drop_line" ]; then
+          iptables -I INPUT "$drop_line" -i lo -p tcp --dport "$port" -j ACCEPT
+        else
+          iptables -A INPUT -i lo -p tcp --dport "$port" -j ACCEPT
+        fi
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: prometheus_loopback_rule
+      changed_when: "'inserted' in prometheus_loopback_rule.stdout"
+
+    - name: s6-monitoring | allow Prometheus access from gw only
+      ansible.builtin.shell: |
+        set -euo pipefail
+        source_host={{ gw_access_host | quote }}
+        port={{ prometheus_port | quote }}
+
+        if iptables -C INPUT -p tcp -s "$source_host" --dport "$port" -j ACCEPT >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        drop_line="$(iptables -L INPUT --line-numbers -n | awk '$0 ~ /DROP/ { print $1; exit }')"
+        if [ -n "$drop_line" ]; then
+          iptables -I INPUT "$drop_line" -p tcp -s "$source_host" --dport "$port" -j ACCEPT
+        else
+          iptables -A INPUT -p tcp -s "$source_host" --dport "$port" -j ACCEPT
+        fi
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: prometheus_gw_rule
+      changed_when: "'inserted' in prometheus_gw_rule.stdout"
+
+    - name: s6-monitoring | drop other Prometheus traffic
+      ansible.builtin.shell: |
+        set -euo pipefail
+        port={{ prometheus_port | quote }}
+
+        if iptables -C INPUT -p tcp --dport "$port" -j DROP >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        iptables -A INPUT -p tcp --dport "$port" -j DROP
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: prometheus_drop_rule
+      changed_when: "'inserted' in prometheus_drop_rule.stdout"
+
+    - name: s6-monitoring | check netfilter-persistent availability
+      ansible.builtin.command: which netfilter-persistent
+      register: netfilter_persistent_check
+      changed_when: false
+      failed_when: false
+
+    - name: s6-monitoring | save firewall rules when netfilter-persistent is installed
+      ansible.builtin.command: netfilter-persistent save
+      changed_when: false
+      when: netfilter_persistent_check.rc == 0
+
+    - name: s6-monitoring | apply pending Prometheus restart before verification
+      ansible.builtin.meta: flush_handlers
+
+    - name: s6-monitoring | verify Prometheus service is active
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - "{{ prometheus_service }}"
+      changed_when: false
+
+    - name: s6-monitoring | verify local Prometheus readiness endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ prometheus_port }}/-/ready"
+        method: GET
+        status_code: 200
+        return_content: false
+        timeout: 5
+
+- name: Verify Prometheus from gw
+  hosts: gw
+  gather_facts: false
+  vars:
+    prometheus_port: 9090
+    prometheus_host: "{{ hostvars[groups['monitoring'][0]].monitoring_scrape_host | default(hostvars[groups['monitoring'][0]].ansible_host | default(groups['monitoring'][0])) }}"
+  tasks:
+    - name: gw | verify Prometheus readiness endpoint on s6-monitoring
+      ansible.builtin.uri:
+        url: "http://{{ prometheus_host }}:{{ prometheus_port }}/-/ready"
+        method: GET
+        status_code: 200
+        return_content: false
+        timeout: 5
+
+    - name: gw | verify Prometheus targets API on s6-monitoring
+      ansible.builtin.uri:
+        url: "http://{{ prometheus_host }}:{{ prometheus_port }}/api/v1/targets?state=active"
+        method: GET
+        status_code: 200
+        return_content: true
+        timeout: 10
+      register: prometheus_targets_api
+      retries: 8
+      delay: 5
+      until:
+        - prometheus_targets_api.json.status == "success"
+        - "(prometheus_targets_api.json.data.activeTargets | selectattr('labels.job', 'equalto', 'node-exporter') | selectattr('health', 'equalto', 'up') | list | length) == (groups['all'] | length)"
+
+    - name: gw | require all node-exporter targets to be up in Prometheus
+      ansible.builtin.assert:
+        that:
+          - prometheus_targets_api.json.status == "success"
+          - "(prometheus_targets_api.json.data.activeTargets | selectattr('labels.job', 'equalto', 'node-exporter') | selectattr('health', 'equalto', 'up') | list | length) == (groups['all'] | length)"
+        fail_msg: "Not all node-exporter targets are up in Prometheus"

@@ -45,13 +45,27 @@
       register: node_exporter_active
       changed_when: false
 
-    - name: all VMs | verify local node-exporter metrics endpoint
-      ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ node_exporter_port }}/metrics"
-        method: GET
-        status_code: 200
-        return_content: false
-        timeout: 5
+    - name: all VMs | allow local loopback access to node-exporter
+      ansible.builtin.shell: |
+        set -euo pipefail
+        port={{ node_exporter_port | quote }}
+
+        if iptables -C INPUT -i lo -p tcp --dport "$port" -j ACCEPT >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        drop_line="$(iptables -L INPUT --line-numbers -n | awk '$0 ~ /DROP/ { print $1; exit }')"
+        if [ -n "$drop_line" ]; then
+          iptables -I INPUT "$drop_line" -i lo -p tcp --dport "$port" -j ACCEPT
+        else
+          iptables -A INPUT -i lo -p tcp --dport "$port" -j ACCEPT
+        fi
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: node_exporter_loopback_rule
+      changed_when: "'inserted' in node_exporter_loopback_rule.stdout"
 
     - name: all VMs | allow node-exporter only from s6-monitoring
       ansible.builtin.shell: |
@@ -92,6 +106,14 @@
         executable: /bin/bash
       register: node_exporter_drop_rule
       changed_when: "'inserted' in node_exporter_drop_rule.stdout"
+
+    - name: all VMs | verify local node-exporter metrics endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ node_exporter_port }}/metrics"
+        method: GET
+        status_code: 200
+        return_content: false
+        timeout: 5
 
     - name: all VMs | check netfilter-persistent availability
       ansible.builtin.command: which netfilter-persistent

@@ -178,6 +178,7 @@ Node-exporter firewall contract:
 
 ```text
 node-exporter listens on port 9100 on each VM.
+iptables allows 9100 from loopback for local health checks.
 iptables allows 9100 only from the monitoring_scrape_host of s6-monitoring.
 all other TCP traffic to 9100 is dropped.
 ```
