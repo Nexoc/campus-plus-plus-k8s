@@ -1,0 +1,79 @@
+---
+# Execute from: gw
+# Target: s6-monitoring only.
+# Purpose: prepare the central monitoring VM for later monitoring services.
+# This playbook does not install Prometheus, Grafana, Alertmanager, Loki, or exporters.
+
+- name: Bootstrap central monitoring VM
+  hosts: monitoring
+  gather_facts: true
+  become: true
+  vars:
+    monitoring_user: nexoc
+    monitoring_base_packages:
+      - curl
+      - ca-certificates
+      - jq
+      - iproute2
+      - dnsutils
+      - htop
+      - net-tools
+      - openssh-client
+      - tar
+      - gzip
+      - unzip
+      - python3
+    monitoring_directories:
+      - path: /etc/campus-monitoring
+        mode: "0755"
+      - path: /opt/campus-monitoring
+        mode: "0755"
+      - path: /var/lib/campus-monitoring
+        mode: "0755"
+      - path: /var/log/campus-monitoring
+        mode: "0755"
+      - path: /home/nexoc/campus-secrets
+        mode: "0700"
+      - path: /home/nexoc/campus-secrets/monitoring
+        mode: "0700"
+  tasks:
+    - name: s6-monitoring | install safe base packages
+      ansible.builtin.apt:
+        name: "{{ monitoring_base_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_facts.os_family == "Debian"
+
+    - name: s6-monitoring | create monitoring directories without secret files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ monitoring_user }}"
+        group: "{{ monitoring_user }}"
+        mode: "{{ item.mode }}"
+      loop: "{{ monitoring_directories }}"
+
+    - name: s6-monitoring | check systemd availability
+      ansible.builtin.command: systemctl --version
+      register: monitoring_systemd_check
+      changed_when: false
+
+    - name: s6-monitoring | read hostname after bootstrap
+      ansible.builtin.command: hostname
+      register: monitoring_hostname
+      changed_when: false
+
+    - name: s6-monitoring | print non-secret bootstrap summary
+      ansible.builtin.debug:
+        msg:
+          host: "{{ inventory_hostname }}"
+          hostname: "{{ monitoring_hostname.stdout }}"
+          systemd: "{{ monitoring_systemd_check.stdout_lines | first | default('unknown') }}"
+          directories:
+            - /etc/campus-monitoring
+            - /opt/campus-monitoring
+            - /var/lib/campus-monitoring
+            - /var/log/campus-monitoring
+            - /home/nexoc/campus-secrets/monitoring
+

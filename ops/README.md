@@ -115,6 +115,10 @@ Runs the existing repository verification script and performs HTTP smoke checks 
 
 Runs preflight checks on `s6-monitoring` before monitoring installation. It verifies basic VM capacity, systemd availability, network interfaces, and whether planned monitoring ports are free. It makes no changes.
 
+`bootstrap-monitoring.yml`
+
+Prepares `s6-monitoring` as the central monitoring VM. It installs safe base packages and creates monitoring/runtime directories, but does not install Prometheus, Grafana, Alertmanager, Loki, or exporters.
+
 ## Design Docs
 
 - [Monitoring Design](docs/monitoring-design.md)
@@ -187,6 +191,12 @@ ansible-playbook -i ops/inventory/lab.ini ops/playbooks/verify-prod-release.yml
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
 ansible-playbook -i ops/inventory/lab.ini ops/playbooks/check-monitoring.yml
+```
+
+```bash
+# server: gw
+cd /home/nexoc/campus-plus-plus-k8s
+ansible-playbook -i ops/inventory/lab.ini ops/playbooks/bootstrap-monitoring.yml
 ```
 
 ```bash
