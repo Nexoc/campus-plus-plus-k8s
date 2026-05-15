@@ -12,10 +12,10 @@ around it:
 Campus++ app
   -> Docker images
   -> GHCR
-  -> k3s non-prod clusters
+  -> k3s clusters
   -> Envoy Gateway / Gateway API
   -> tag-based CI/CD
-  -> monitoring and PROD later
+  -> monitoring later
 ```
 
 ## What This Demonstrates
@@ -29,16 +29,20 @@ It currently demonstrates:
 - immutable GHCR release images tagged from Git tags
 - validation-only CI on `main`
 - controlled non-prod releases from `dev-*` and `home-*` tags
+- controlled production releases from `v*` tags with GitHub environment approval
 - self-hosted GitHub Actions runners pinned by labels
 - Kustomize-based Kubernetes deployment overlays under `deploy/app`
 - Envoy Gateway / Gateway API as the active Kubernetes entry layer
 - a dedicated `gw` nginx edge baseline in repo
-- external PostgreSQL on `s4-db`
-- monitoring and future PROD rollout planned as separate phases
+- external PostgreSQL reached through the stable `s4-db` runtime alias
+- environment-specific database endpoint config kept outside git
+- monitoring planned as a separate phase
 
 ## Current Status
 
-The active lab DEV deployment is working through Envoy Gateway on `s5-dev`.
+The active DEV deployment is working through Envoy Gateway on `s5-dev`.
+The controlled PROD release path is also in place through the `production`
+GitHub environment and the `gw-campus-prod` runner.
 
 Verified release:
 
@@ -60,7 +64,7 @@ client
   -> PostgreSQL s4-db
 ```
 
-Confirmed runtime state:
+Confirmed DEV runtime state:
 
 - `frontend`, `auth`, `backend`, and `campus-nginx` are running in Kubernetes
 - `campus-importer` completes successfully
@@ -79,14 +83,14 @@ Main application components:
 - `backend`: Spring Boot API service
 - `campus-nginx`: internal application gateway and auth boundary
 - `campus-importer`: one-shot data import job
-- PostgreSQL: external database on `s4-db`
+- PostgreSQL: external database reached through `s4-db`
 
 Delivery and platform components:
 
 - GHCR for application images
 - GitHub Actions for CI and release orchestration
 - self-hosted runners for cluster deployment
-- k3s for non-prod Kubernetes
+- k3s for DEV and PROD Kubernetes
 - Envoy Gateway / Gateway API for Kubernetes ingress
 - nginx on `gw` for the lab edge proxy
 
@@ -112,15 +116,15 @@ Stop:
 docker compose --env-file .env.dev down -v --remove-orphans
 ```
 
-### Kubernetes Non-Prod Runtime
+### Kubernetes Runtime
 
 Use `deploy/app/overlays/` for Kubernetes deployments.
 
 Active overlays:
 
-- `deploy/app/overlays/dev`: lab cluster on `s5-dev`
+- `deploy/app/overlays/dev`: lab DEV cluster on `s5-dev`
 - `deploy/app/overlays/home`: home cluster, same app model with its own edge patch
-- `deploy/app/overlays/prod`: reserved for future PROD work
+- `deploy/app/overlays/prod`: production cluster on `s1-prod`, `s2-prod`, and `s3-prod`
 
 Shared deployment helpers:
 
@@ -155,7 +159,7 @@ Current GitHub Actions behavior:
 - `pull_request` to `main`: validation only
 - `dev-*` tag: build/push images and deploy to lab `s5`
 - `home-*` tag: build/push images and deploy to the home runner
-- `v*` tags: reserved for controlled PROD releases; no active PROD workflow yet
+- `v*` tag: build/push images and deploy to PROD after `production` approval
 
 Release images are tagged exactly with the Git tag that triggered the workflow.
 
@@ -174,19 +178,36 @@ Expected result:
 - `Deploy HOME to home runner` is skipped
 - Kubernetes rollout is verified through Envoy/Gateway API checks
 
+Example PROD release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+Expected result:
+
+- `Production Release` workflow starts
+- GHCR images are published with tag `v0.1.0`
+- `Deploy PROD to k3s HA cluster` waits for `production` environment approval
+- after approval, deploy runs on runner labels `prod+gw`
+- Kubernetes rollout is verified in namespace `campus-prod`
+
 ## Runner Model
 
 GitHub Actions targets self-hosted runners by labels, not by runner names.
 
-Current non-prod label contract:
+Current runner label contract:
 
 - lab runner: `self-hosted`, `Linux`, `X64`, `dev`, `s5`
 - home runner: `self-hosted`, `Linux`, `X64`, `dev`, `home`
+- prod runner: `self-hosted`, `Linux`, `X64`, `prod`, `gw`
 
 The release workflow depends on these labels:
 
 - `dev-*` requires `dev+s5`
 - `home-*` requires `dev+home`
+- `v*` requires `prod+gw` and `production` environment approval
 
 ## Repository Layout
 
@@ -229,9 +250,10 @@ Current planned work:
 
 - apply and verify the repo-owned `gw` nginx baseline on the gateway host
 - harden the lab edge with a stable public hostname and TLS
+- harden the PROD edge path through `gw`
+- replace the initial PROD kubeconfig with an RBAC-limited deployer kubeconfig
 - bring up monitoring on `s6`
 - review the `home` overlay before the first real `home-*` release
-- prepare the documented PROD release path for `v*` tags
 
 Recommended monitoring target for `s6`:
 

@@ -1,7 +1,7 @@
 # Naming Convention
 
-This document defines the current naming rules for Campus++ across non-prod
-clusters, images, and release tags.
+This document defines the current naming rules for Campus++ across clusters,
+images, and release tags.
 
 ## Guiding Rules
 
@@ -14,18 +14,20 @@ clusters, images, and release tags.
 
 Current canonical names:
 
-- namespace: `campus-dev`
+- DEV namespace: `campus-dev`
+- PROD namespace: `campus-prod`
 - frontend deployment/service: `frontend`
 - auth deployment/service: `auth`
 - backend deployment/service: `backend`
 - internal app gateway: `campus-nginx`
 - importer job: `campus-importer`
+- external database alias: `s4-db`
 - Gateway: `campus`
 - HTTPRoute: `campus`
 - EnvoyProxy: `campus-edge`
 - ClientTrafficPolicy: `campus-edge`
 
-These names stay stable across the lab and home non-prod overlays.
+These names stay stable across the lab, home, and production overlays.
 
 ## Image Naming
 
@@ -41,16 +43,13 @@ Rules:
 
 - one image name per component
 - deployment identity belongs in the tag
-- non-prod images are tagged exactly with the Git tag that triggered the release
+- release images are tagged exactly with the Git tag that triggered the workflow
 
 Examples:
 
 - `dev-2026.04.24-1`
 - `home-2026.04.24-1`
-
-Reserved:
-
-- `v1.0.0` style tags for future PROD
+- `v1.0.0`
 
 ## Runner Label Naming
 
@@ -58,6 +57,7 @@ Current workflow targeting rules:
 
 - lab deploy job requires labels `self-hosted`, `Linux`, `dev`, `s5`
 - home deploy job requires labels `self-hosted`, `Linux`, `dev`, `home`
+- prod deploy job requires labels `self-hosted`, `Linux`, `X64`, `prod`, `gw`
 
 The workflow schedules against labels, not runner names.
 
@@ -75,7 +75,10 @@ Home non-prod:
 
 Production:
 
-- active planned route hostname: `campus-prod.davl.at`
+- active route hostname: `campus-prod.davl.at`
+- stable in-cluster database alias: `s4-db`
+- real external database endpoint: environment-specific host-local
+  `db-endpoint.env`
 
 ## Repo Alignment
 
@@ -85,3 +88,4 @@ The repo now reflects:
 - `deploy/app` as the canonical manifest tree
 - Envoy/Gateway API as the active ingress layer
 - tag-driven non-prod delivery via `dev-*` and `home-*`
+- controlled PROD delivery via `v*`

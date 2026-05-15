@@ -38,6 +38,12 @@ This tree is used by:
 - `deploy/scripts/apply-overlay.sh`
 - `deploy/scripts/verify-overlay.sh`
 - `.github/workflows/deploy-dev.yml`
+- `.github/workflows/deploy-prod.yml`
+
+For PROD, `apply-overlay.sh` also renders a temporary `s4-db` Service and
+EndpointSlice from host-local runtime config before running Kustomize. This
+keeps the external database address out of tracked manifests while preserving a
+stable `DB_HOST=s4-db` application contract.
 
 ## `infra/`
 
@@ -73,6 +79,7 @@ Example config and secret inputs:
 
 - safe starter files for local preparation
 - reference layout for the host-side secret paths
+- placeholder endpoint config for external database aliases
 - no real secrets
 
 ## `docs/`
@@ -82,4 +89,5 @@ Operational notes for:
 - environment layout
 - release naming
 - rollout flow
+- production CD design
 - deployment structure

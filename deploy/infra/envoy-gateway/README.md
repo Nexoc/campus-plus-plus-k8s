@@ -1,7 +1,7 @@
 # envoy-gateway
 
 This directory contains the infrastructure-side configuration for the active
-Envoy Gateway controller used by Campus++ non-prod environments.
+Envoy Gateway controller used by Campus++ Kubernetes environments.
 
 App routing remains in the application layer:
 
@@ -18,6 +18,10 @@ Current home path:
 
 `Home edge hostname -> NodePort 30080 -> Envoy Gateway -> campus-nginx -> services`
 
+Current production path:
+
+`gw edge -> prod nodes NodePort 30080 -> Envoy Gateway -> campus-nginx -> services`
+
 Responsibilities:
 
 - external edge host or reverse proxy: public hostname and TLS
@@ -30,7 +34,8 @@ This repo uses the standard Envoy Gateway deployment mode:
 
 - controller runs in `envoy-gateway-system`
 - managed Envoy data plane resources also run there
-- `Gateway`, `HTTPRoute`, `EnvoyProxy`, and `ClientTrafficPolicy` live in `campus-dev`
+- `Gateway`, `HTTPRoute`, `EnvoyProxy`, and `ClientTrafficPolicy` live in the
+  target application namespace, such as `campus-dev` or `campus-prod`
 - `GatewayClass` is applied separately as a cluster-scoped resource
 
 ## Repo Contents
@@ -54,6 +59,19 @@ helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
   -f deploy/infra/envoy-gateway/values-dev.yaml
 ```
 
+For PROD, run the same operation against the production kubeconfig from `gw`
+and use `values-prod.yaml`:
+
+```bash
+# server: gw
+helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
+  --version v1.7.0 \
+  --namespace envoy-gateway-system \
+  --create-namespace \
+  -f deploy/infra/envoy-gateway/values-prod.yaml \
+  --kubeconfig /home/nexoc/.kube/prod.yaml
+```
+
 Apply the shared `GatewayClass`:
 
 ```bash
@@ -61,7 +79,12 @@ Apply the shared `GatewayClass`:
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 ```
 
-## Current Non-Prod Notes
+```bash
+# server: gw
+kubectl --kubeconfig /home/nexoc/.kube/prod.yaml apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
+```
+
+## Current Notes
 
 - active app entry `NodePort`: `30080`
 - active `GatewayClass`: `campus-envoy`
@@ -78,4 +101,11 @@ If Envoy components restart or the edge stops routing correctly, verify:
 kubectl get gateway,httproute,envoyproxy,clienttrafficpolicy -n campus-dev -o wide
 kubectl get all -n envoy-gateway-system -o wide
 kubectl logs -n envoy-gateway-system deployment/envoy-gateway --tail=200
+```
+
+```bash
+# server: gw
+kubectl --kubeconfig /home/nexoc/.kube/prod.yaml get gateway,httproute,envoyproxy,clienttrafficpolicy -n campus-prod -o wide
+kubectl --kubeconfig /home/nexoc/.kube/prod.yaml get all -n envoy-gateway-system -o wide
+kubectl --kubeconfig /home/nexoc/.kube/prod.yaml logs -n envoy-gateway-system deployment/envoy-gateway --tail=200
 ```

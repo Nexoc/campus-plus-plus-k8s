@@ -1,6 +1,6 @@
 # Rollout Notes
 
-This document captures the current non-prod rollout model for Campus++.
+This document captures the current tag-driven rollout model for Campus++.
 
 ## Current Status Summary
 
@@ -12,12 +12,16 @@ Current active lab path:
 
 `Internet -> gw -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> app`
 
+Current production release path:
+
+`v* tag -> GitHub environment production approval -> gw-campus-prod runner -> prod k3s HA -> campus-prod`
+
 Key characteristics:
 
 - `main` runs validation only
 - `dev-*` tags build and release to the lab cluster
 - `home-*` tags build and release to the home cluster
-- `v*` is reserved for controlled PROD releases through the future `gw` runner
+- `v*` tags build and release to PROD after `production` approval
 - active manifests live under `deploy/app/overlays/`
 - Envoy Gateway is the active entry layer on NodePort `30080`
 
@@ -34,6 +38,7 @@ Active files:
 - `deploy/scripts/verify-overlay.sh`
 - `.github/workflows/ci.yml`
 - `.github/workflows/deploy-dev.yml`
+- `.github/workflows/deploy-prod.yml`
 - `deploy/docs/production-cd-design.md`
 
 ## Non-Prod Release Workflow
@@ -48,9 +53,25 @@ The current repo supports this flow:
 6. The workflow creates or updates `ghcr-pull`, applies the shared `GatewayClass`, renders the selected overlay, and applies it.
 7. The workflow verifies rollouts, importer completion, Gateway API resources, and Envoy NodePort `30080`.
 
+## Production Release Workflow
+
+The current repo supports this controlled production flow:
+
+1. Push a `v*` tag.
+2. `Production Release` builds and publishes GHCR images tagged exactly with `github.ref_name`.
+3. The deploy job waits on the GitHub `production` environment.
+4. After manual approval, the deploy job runs on the `prod+gw` self-hosted runner.
+5. The workflow creates or updates `ghcr-pull`, applies the shared `GatewayClass`, renders the `prod` overlay, and applies it to `campus-prod`.
+6. PROD render/apply generates the `s4-db` Service and EndpointSlice from `/home/nexoc/campus-secrets/prod/db-endpoint.env`.
+7. The workflow verifies rollouts, importer completion, Gateway API resources, and Envoy NodePort `30080`.
+
+`db-endpoint.env` is host-local runtime configuration. Its values are not
+committed, and the workflow stays unchanged when the external database address
+changes between lab and university infrastructure.
+
 ## Suggested Manual Commands
 
-Render a release manifest:
+Render a DEV release manifest:
 
 ```bash
 # server: s5-dev
@@ -80,6 +101,22 @@ bash deploy/scripts/verify-overlay.sh \
   --expected-nodeport 30080
 ```
 
+Render a PROD release manifest from `gw` without applying it:
+
+```bash
+# server: gw
+CAMPUS_SECRETS_ROOT=/home/nexoc/campus-secrets \
+KUBECONFIG=/home/nexoc/.kube/prod.yaml \
+bash deploy/scripts/apply-overlay.sh \
+  --environment prod \
+  --image-tag v-render-test \
+  --render-only \
+  --manifest-out /tmp/campus-prod-rendered.yaml
+```
+
+The PROD render must include `service/s4-db` and `endpointslice/s4-db`, both
+generated from host-local `db-endpoint.env`.
+
 ## Verification Checklist
 
 A successful verification pass should confirm:
@@ -98,4 +135,4 @@ Current open issues:
 
 - the lab `gw` nginx baseline is now in repo, but public hostname/TLS hardening is still future work
 - the home hostname is still a placeholder in the overlay
-- PROD delivery is intentionally not active yet
+- PROD edge hardening and an RBAC-limited deployer kubeconfig are still future work

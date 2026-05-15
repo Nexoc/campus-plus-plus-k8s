@@ -1,7 +1,7 @@
 # Environments
 
 This document describes the current Campus++ environment model after the move
-to tag-driven non-prod releases.
+to tag-driven releases.
 
 ## Infrastructure Roles
 
@@ -25,7 +25,7 @@ Production environment:
 
 - `s1-prod`, `s2-prod`, and `s3-prod`: k3s HA production cluster nodes
 - `gw`: production deployment control host for the `v*` workflow
-- intended application hostname: `campus-prod.davl.at`
+- application hostname: `campus-prod.davl.at`
 - `s4-db`: stable Kubernetes DNS alias for external PostgreSQL in `campus-prod`
 
 ## Deployment Model
@@ -39,17 +39,18 @@ Campus++ keeps application code and deployment code separate:
 
 ## Runtime Environments
 
-Current active non-prod environments:
+Current active environments:
 
 - `dev`: lab cluster on `s5-dev`, namespace `campus-dev`
 - `home`: home cluster, same namespace layout on a separate cluster
+- `prod`: HA cluster on `s1-prod`, `s2-prod`, and `s3-prod`, namespace `campus-prod`
 
 Current release channels:
 
 - `dev-*` deploys to the lab cluster on runner labels `dev+s5`
 - `home-*` deploys to the home cluster on runner labels `dev+home`
 - `main` runs validation only
-- `v*` is reserved for controlled PROD releases through `gw`
+- `v*` deploys to PROD through the `production` environment and `prod+gw` runner
 
 ## Current Request Paths
 
@@ -76,9 +77,10 @@ Notes:
 
 ## Configuration Strategy
 
-Current non-prod delivery uses:
+Current delivery uses:
 
 - Kustomize overlays in `deploy/app/overlays/dev` and `deploy/app/overlays/home`
+- the production overlay in `deploy/app/overlays/prod`
 - Envoy Gateway baselines in `deploy/infra/envoy-gateway/`
 - versioned non-secret config files under each overlay
 - ignored secret env files under each overlay
@@ -109,5 +111,5 @@ The following remain future or partially external work:
 
 - TLS/public hostname hardening for the lab edge
 - the final public hostname for the home overlay
-- PROD workflow implementation; the design is captured in `deploy/docs/production-cd-design.md`
+- PROD edge hardening and an RBAC-limited deployer kubeconfig
 - broader cluster hardening and monitoring

@@ -1,6 +1,6 @@
 # Production CD Design
 
-This document defines the intended production release model for Campus++.
+This document defines the production release model for Campus++.
 
 Production delivery is deliberately separated from DEV delivery. The DEV
 runner must not hold production cluster credentials.
@@ -13,7 +13,7 @@ DEV tag-based CD is already active:
 dev-* tag -> GitHub Actions -> s5-campus-dev runner -> dev k3s -> campus-dev -> Envoy NodePort 30080
 ```
 
-The production Kubernetes target already exists:
+The production Kubernetes target:
 
 ```text
 s1-prod / s2-prod / s3-prod -> k3s HA cluster
@@ -48,7 +48,7 @@ v* tag
 -> workloads: s1-prod, s2-prod, s3-prod
 ```
 
-The production runner should use these labels:
+The production runner uses these labels:
 
 ```text
 self-hosted, linux, x64, prod, gw
@@ -62,7 +62,7 @@ Production traffic is separate from the CD control path:
 client -> gw edge -> prod nodes NodePort 30080 -> Envoy Gateway -> campus-prod
 ```
 
-The intended production application hostname is:
+The production application hostname is:
 
 ```text
 campus-prod.davl.at
@@ -154,6 +154,8 @@ DB_ENDPOINT_PORT=5432
 
 This file is not committed. A university deployment keeps the same workflow and
 overlay contract, but provides its own `db-endpoint.env` on the deployment host.
+PROD render-only fails before Kustomize if this file is missing or if either
+`DB_ENDPOINT_ADDRESS` or `DB_ENDPOINT_PORT` is absent.
 
 ## Render-Only Gate
 
@@ -165,6 +167,7 @@ without applying it:
 cd ~/campus-plus-plus-k8s
 
 CAMPUS_SECRETS_ROOT=/home/nexoc/campus-secrets \
+KUBECONFIG=/home/nexoc/.kube/prod.yaml \
 bash deploy/scripts/apply-overlay.sh \
   --environment prod \
   --image-tag v-render-test \
@@ -217,6 +220,10 @@ overlay: deploy/app/overlays/prod
 namespace: campus-prod
 expected NodePort: 30080
 ```
+
+The workflow does not carry the external database address. It only sets
+`CAMPUS_SECRETS_ROOT`, and `apply-overlay.sh` reads the environment-specific
+endpoint from the deployment host.
 
 Production release tags should only be created after the runner, secrets,
 environment approval, tag protection, and render-only gate are in place.

@@ -12,26 +12,30 @@ Application code remains in:
 
 Deployment code lives in:
 
-- `deploy/app/overlays/` for the active non-prod manifests
+- `deploy/app/overlays/` for active application manifests
 - `deploy/infra/` for shared infrastructure baselines
 - `deploy/templates/` for example config and secret inputs
 - `deploy/docs/` for operational notes
 
-## Current Active Architecture
+## Current Architecture
 
-The current working lab request path is:
+The current working DEV request path is:
 
 `Internet -> gw -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> frontend/auth/backend -> PostgreSQL s4-db`
+
+The current controlled PROD release path is:
+
+`v* tag -> production approval -> gw-campus-prod -> prod k3s HA -> campus-prod`
 
 Key points:
 
 - Kubernetes distro is `k3s`
-- `campus-dev` is the active namespace
+- `campus-dev` and `campus-prod` are active application namespaces
 - app manifests are managed with Kustomize from `deploy/app/overlays/`
-- Envoy Gateway is the active DEV entry layer
+- Envoy Gateway is the active Kubernetes entry layer
 - `campus-nginx` remains the internal app gateway and auth boundary
 - PostgreSQL stays outside Kubernetes
-- `main` runs validation only, while non-prod releases are tag-driven
+- `main` runs validation only, while environment releases are tag-driven
 
 ## Structure
 
@@ -227,15 +231,18 @@ Verify the stack:
 bash deploy/scripts/verify-overlay.sh --environment dev --expected-nodeport 30080
 ```
 
-## GitHub-Assisted Non-Prod Release
+## GitHub-Assisted Releases
 
 Current workflow behavior:
 
 - `.github/workflows/ci.yml` runs on `main`
 - CI runs validation only on `push` and `pull_request`
 - `.github/workflows/deploy-dev.yml` is the non-prod release workflow
+- `.github/workflows/deploy-prod.yml` is the production release workflow
 - `dev-*` tags build and push GHCR images, then deploy to the `dev+s5` runner
 - `home-*` tags build and push GHCR images, then deploy to the `dev+home` runner
+- `v*` tags build and push GHCR images, wait for the `production` environment
+  approval, then deploy to the `prod+gw` runner
 - release image tags are exactly the Git tag that triggered the workflow
 - deploy jobs create `ghcr-pull`, apply `deploy/app` overlays, and verify the
   Envoy/Gateway API rollout
@@ -247,7 +254,13 @@ Current release namespaces:
 
 - `dev-*` for the lab `s5` cluster
 - `home-*` for the home cluster
-- `v*` reserved for controlled PROD releases through the `gw` runner
+- `v*` for the PROD HA cluster, namespace `campus-prod`
+
+PROD keeps `DB_HOST=s4-db`. During `prod` render/apply,
+`deploy/scripts/apply-overlay.sh` renders the `service/s4-db` and
+`endpointslice/s4-db` resources from `/home/nexoc/campus-secrets/prod/db-endpoint.env`.
+Only that host-local file changes between the current lab and a future
+university environment.
 
 ## Verification
 
@@ -283,6 +296,22 @@ Expected result:
 - `httproute/campus` is accepted
 - lab edge requests respond through Envoy
 
+Check the PROD render contract from `gw` without applying it:
+
+```bash
+# server: gw
+CAMPUS_SECRETS_ROOT=/home/nexoc/campus-secrets \
+KUBECONFIG=/home/nexoc/.kube/prod.yaml \
+bash deploy/scripts/apply-overlay.sh \
+  --environment prod \
+  --image-tag v-render-test \
+  --render-only \
+  --manifest-out /tmp/campus-prod-rendered.yaml
+
+grep -nE "namespace: campus-prod|campus-prod.davl.at|nodePort: 30080|imagePullSecrets|ghcr-pull|kind: Service|kind: EndpointSlice|name: s4-db" /tmp/campus-prod-rendered.yaml -A3 -B3
+rm -f /tmp/campus-prod-rendered.yaml
+```
+
 ## Known Gaps
 
 Current open issues:
@@ -291,7 +320,7 @@ Current open issues:
 - Envoy-related components have had probe failures and restarts during host/API
   hiccups
 - the current `gw` nginx baseline is HTTP-only lab configuration
-- PROD delivery is still not the active rollout path
+- PROD edge hardening and an RBAC-limited deployer kubeconfig are still future work
 
 ## Related Docs
 
