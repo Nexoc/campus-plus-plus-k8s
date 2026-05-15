@@ -346,12 +346,12 @@ Initial preflight file:
 ```text
 ops/playbooks/check-monitoring.yml
 ops/playbooks/bootstrap-monitoring.yml
+ops/playbooks/install-node-exporter.yml
 ```
 
 Suggested next files:
 
 ```text
-ops/playbooks/install-node-exporter.yml
 ops/playbooks/install-prometheus-grafana.yml
 ops/playbooks/install-postgres-exporter.yml
 ```

@@ -165,6 +165,23 @@ s6-monitoring can scrape node-exporter on all VMs
 s6-monitoring can scrape postgres exporter on s4-db
 ```
 
+Inventory scrape addresses:
+
+```text
+monitoring_scrape_host defines the address that s6-monitoring uses for each VM.
+This is separate from ansible_host because gw may use ansible_connection=local.
+Lab IP values belong in ops/inventory/lab.ini only.
+University deployments should keep the same variable names and replace addresses.
+```
+
+Node-exporter firewall contract:
+
+```text
+node-exporter listens on port 9100 on each VM.
+iptables allows 9100 only from the monitoring_scrape_host of s6-monitoring.
+all other TCP traffic to 9100 is dropped.
+```
+
 Security:
 
 ```text
@@ -172,4 +189,3 @@ exporter ports are not public
 secrets stay under /home/nexoc/campus-secrets/monitoring
 no monitoring passwords or tokens are printed by playbooks
 ```
-

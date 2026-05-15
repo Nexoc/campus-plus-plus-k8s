@@ -1,0 +1,131 @@
+---
+# Execute from: gw
+# Target: all inventory hosts.
+# Purpose: install node-exporter as a systemd service on every VM and verify
+# that s6-monitoring can reach each exporter.
+
+- name: Install node-exporter on all VMs
+  hosts: all
+  gather_facts: true
+  become: true
+  vars:
+    node_exporter_packages:
+      - prometheus-node-exporter
+      - iptables
+    node_exporter_service: prometheus-node-exporter
+    node_exporter_port: 9100
+    monitoring_source_host: "{{ hostvars[groups['monitoring'][0]].monitoring_scrape_host | default(hostvars[groups['monitoring'][0]].ansible_host | default(groups['monitoring'][0])) }}"
+  tasks:
+    - name: all VMs | require exactly one monitoring host
+      ansible.builtin.assert:
+        that:
+          - groups.get('monitoring', []) | length == 1
+        fail_msg: "Inventory must contain exactly one host in the monitoring group"
+
+    - name: all VMs | install node-exporter package
+      ansible.builtin.apt:
+        name: "{{ node_exporter_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_facts.os_family == "Debian"
+
+    - name: all VMs | enable and start node-exporter service
+      ansible.builtin.service:
+        name: "{{ node_exporter_service }}"
+        enabled: true
+        state: started
+
+    - name: all VMs | verify node-exporter service is active
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - "{{ node_exporter_service }}"
+      register: node_exporter_active
+      changed_when: false
+
+    - name: all VMs | verify local node-exporter metrics endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ node_exporter_port }}/metrics"
+        method: GET
+        status_code: 200
+        return_content: false
+        timeout: 5
+
+    - name: all VMs | allow node-exporter only from s6-monitoring
+      ansible.builtin.shell: |
+        set -euo pipefail
+        source_host={{ monitoring_source_host | quote }}
+        port={{ node_exporter_port | quote }}
+
+        if iptables -C INPUT -p tcp -s "$source_host" --dport "$port" -j ACCEPT >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        drop_line="$(iptables -L INPUT --line-numbers -n | awk '$0 ~ /DROP/ { print $1; exit }')"
+        if [ -n "$drop_line" ]; then
+          iptables -I INPUT "$drop_line" -p tcp -s "$source_host" --dport "$port" -j ACCEPT
+        else
+          iptables -A INPUT -p tcp -s "$source_host" --dport "$port" -j ACCEPT
+        fi
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: node_exporter_allow_rule
+      changed_when: "'inserted' in node_exporter_allow_rule.stdout"
+
+    - name: all VMs | drop other node-exporter traffic
+      ansible.builtin.shell: |
+        set -euo pipefail
+        port={{ node_exporter_port | quote }}
+
+        if iptables -C INPUT -p tcp --dport "$port" -j DROP >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        iptables -A INPUT -p tcp --dport "$port" -j DROP
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: node_exporter_drop_rule
+      changed_when: "'inserted' in node_exporter_drop_rule.stdout"
+
+    - name: all VMs | check netfilter-persistent availability
+      ansible.builtin.command: which netfilter-persistent
+      register: netfilter_persistent_check
+      changed_when: false
+      failed_when: false
+
+    - name: all VMs | save firewall rules when netfilter-persistent is installed
+      ansible.builtin.command: netfilter-persistent save
+      changed_when: false
+      when: netfilter_persistent_check.rc == 0
+
+- name: Verify node-exporter reachability from s6-monitoring
+  hosts: all
+  gather_facts: false
+  vars:
+    node_exporter_port: 9100
+    node_exporter_scrape_host: "{{ hostvars[inventory_hostname].monitoring_scrape_host | default(hostvars[inventory_hostname].ansible_host | default(inventory_hostname)) }}"
+  tasks:
+    - name: s6-monitoring | verify node-exporter target is reachable
+      ansible.builtin.wait_for:
+        host: "{{ node_exporter_scrape_host }}"
+        port: "{{ node_exporter_port }}"
+        timeout: 5
+        state: started
+      delegate_to: s6-monitoring
+      changed_when: false
+
+    - name: s6-monitoring | verify node-exporter metrics endpoint returns HTTP 200
+      ansible.builtin.uri:
+        url: "http://{{ node_exporter_scrape_host }}:{{ node_exporter_port }}/metrics"
+        method: GET
+        status_code: 200
+        return_content: false
+        timeout: 5
+      delegate_to: s6-monitoring
+      changed_when: false

@@ -119,6 +119,10 @@ Runs preflight checks on `s6-monitoring` before monitoring installation. It veri
 
 Prepares `s6-monitoring` as the central monitoring VM. It installs safe base packages and creates monitoring/runtime directories, but does not install Prometheus, Grafana, Alertmanager, Loki, or exporters.
 
+`install-node-exporter.yml`
+
+Installs `prometheus-node-exporter` on every VM through the Debian package, enables the systemd service, restricts port `9100` to `s6-monitoring`, checks the local metrics endpoint, and verifies from `s6-monitoring` that each exporter is reachable.
+
 ## Design Docs
 
 - [Monitoring Design](docs/monitoring-design.md)
@@ -198,6 +202,12 @@ ansible-playbook -i ops/inventory/lab.ini ops/playbooks/check-monitoring.yml
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
 ansible-playbook -i ops/inventory/lab.ini ops/playbooks/bootstrap-monitoring.yml
+```
+
+```bash
+# server: gw
+cd /home/nexoc/campus-plus-plus-k8s
+ansible-playbook -i ops/inventory/lab.ini ops/playbooks/install-node-exporter.yml
 ```
 
 ```bash
