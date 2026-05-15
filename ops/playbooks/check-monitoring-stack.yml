@@ -1,0 +1,122 @@
+---
+# Execute from: gw
+# Target: gw and s6-monitoring.
+# Purpose: verify the central monitoring stack without requiring Grafana login
+# credentials and without changing state.
+
+- name: Check monitoring stack from s6-monitoring
+  hosts: monitoring
+  gather_facts: false
+  vars:
+    prometheus_port: 9090
+    grafana_port: 3000
+    grafana_datasource_path: /etc/grafana/provisioning/datasources/campus-prometheus.yml
+    grafana_prometheus_url: http://localhost:9090
+  tasks:
+    - name: s6-monitoring | verify Prometheus readiness endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ prometheus_port }}/-/ready"
+        method: GET
+        status_code: 200
+        return_content: false
+        timeout: 5
+
+    - name: s6-monitoring | verify Prometheus query API
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ prometheus_port }}/api/v1/query?query=up"
+        method: GET
+        status_code: 200
+        return_content: true
+        timeout: 10
+      register: prometheus_query_api
+
+    - name: s6-monitoring | require Prometheus query API success
+      ansible.builtin.assert:
+        that:
+          - prometheus_query_api.json.status == "success"
+          - prometheus_query_api.json.data.result | length > 0
+        fail_msg: "Prometheus query API did not return any up metrics"
+
+    - name: s6-monitoring | verify Grafana health endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ grafana_port }}/api/health"
+        method: GET
+        status_code: 200
+        return_content: true
+        timeout: 10
+      register: grafana_health
+
+    - name: s6-monitoring | require Grafana database status ok
+      ansible.builtin.assert:
+        that:
+          - grafana_health.json.database == "ok"
+        fail_msg: "Grafana health check did not report database=ok"
+
+    - name: s6-monitoring | verify Grafana Prometheus datasource provisioning file exists
+      ansible.builtin.stat:
+        path: "{{ grafana_datasource_path }}"
+      register: grafana_datasource_stat
+
+    - name: s6-monitoring | require Grafana datasource provisioning file
+      ansible.builtin.assert:
+        that:
+          - grafana_datasource_stat.stat.exists
+          - grafana_datasource_stat.stat.isreg
+        fail_msg: "Grafana Prometheus datasource provisioning file is missing"
+
+    - name: s6-monitoring | verify Grafana datasource points at local Prometheus
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -F
+          - "{{ grafana_prometheus_url }}"
+          - "{{ grafana_datasource_path }}"
+      changed_when: false
+
+- name: Check monitoring stack from gw
+  hosts: gw
+  gather_facts: false
+  vars:
+    prometheus_port: 9090
+    grafana_port: 3000
+    monitoring_host: "{{ hostvars[groups['monitoring'][0]].monitoring_scrape_host | default(hostvars[groups['monitoring'][0]].ansible_host | default(groups['monitoring'][0])) }}"
+  tasks:
+    - name: gw | verify Prometheus readiness endpoint on s6-monitoring
+      ansible.builtin.uri:
+        url: "http://{{ monitoring_host }}:{{ prometheus_port }}/-/ready"
+        method: GET
+        status_code: 200
+        return_content: false
+        timeout: 5
+
+    - name: gw | verify all node-exporter targets are up in Prometheus
+      ansible.builtin.uri:
+        url: "http://{{ monitoring_host }}:{{ prometheus_port }}/api/v1/targets?state=active"
+        method: GET
+        status_code: 200
+        return_content: true
+        timeout: 10
+      register: prometheus_targets_api
+
+    - name: gw | require all node-exporter targets up
+      ansible.builtin.assert:
+        that:
+          - prometheus_targets_api.json.status == "success"
+          - "(prometheus_targets_api.json.data.activeTargets | selectattr('labels.job', 'equalto', 'node-exporter') | selectattr('health', 'equalto', 'up') | list | length) == (groups['all'] | length)"
+        fail_msg: "Not all node-exporter targets are up in Prometheus"
+
+    - name: gw | verify Grafana health endpoint on s6-monitoring
+      ansible.builtin.uri:
+        url: "http://{{ monitoring_host }}:{{ grafana_port }}/api/health"
+        method: GET
+        status_code: 200
+        return_content: true
+        timeout: 10
+      register: grafana_gw_health
+
+    - name: gw | require Grafana database status ok
+      ansible.builtin.assert:
+        that:
+          - grafana_gw_health.json.database == "ok"
+        fail_msg: "Grafana health check from gw did not report database=ok"
+

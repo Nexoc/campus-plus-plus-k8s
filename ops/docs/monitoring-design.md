@@ -349,6 +349,7 @@ ops/playbooks/bootstrap-monitoring.yml
 ops/playbooks/install-node-exporter.yml
 ops/playbooks/install-prometheus.yml
 ops/playbooks/install-grafana.yml
+ops/playbooks/check-monitoring-stack.yml
 ```
 
 Suggested next files:
