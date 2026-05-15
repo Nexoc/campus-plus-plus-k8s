@@ -4,4 +4,4 @@ metadata:
   name: campus
 spec:
   hostnames:
-    - campus.example.com
+    - campus-prod.davl.at

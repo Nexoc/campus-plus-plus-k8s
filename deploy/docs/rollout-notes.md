@@ -17,7 +17,7 @@ Key characteristics:
 - `main` runs validation only
 - `dev-*` tags build and release to the lab cluster
 - `home-*` tags build and release to the home cluster
-- `v*` is reserved for future PROD only
+- `v*` is reserved for controlled PROD releases through the future `gw` runner
 - active manifests live under `deploy/app/overlays/`
 - Envoy Gateway is the active entry layer on NodePort `30080`
 
@@ -34,6 +34,7 @@ Active files:
 - `deploy/scripts/verify-overlay.sh`
 - `.github/workflows/ci.yml`
 - `.github/workflows/deploy-dev.yml`
+- `deploy/docs/production-cd-design.md`
 
 ## Non-Prod Release Workflow
 

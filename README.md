@@ -155,7 +155,7 @@ Current GitHub Actions behavior:
 - `pull_request` to `main`: validation only
 - `dev-*` tag: build/push images and deploy to lab `s5`
 - `home-*` tag: build/push images and deploy to the home runner
-- `v*` tags: reserved for future PROD; no active PROD workflow yet
+- `v*` tags: reserved for controlled PROD releases; no active PROD workflow yet
 
 Release images are tagged exactly with the Git tag that triggered the workflow.
 
@@ -218,6 +218,7 @@ campus-plus-plus/
 - [Environments](deploy/docs/environments.md)
 - [Naming Convention](deploy/docs/naming-convention.md)
 - [Rollout Notes](deploy/docs/rollout-notes.md)
+- [Production CD Design](deploy/docs/production-cd-design.md)
 - [Deployment Structure](deploy/docs/structure.md)
 - [GW nginx baseline](deploy/infra/gw-nginx/README.md)
 - [Envoy Gateway baseline](deploy/infra/envoy-gateway/README.md)
@@ -230,7 +231,7 @@ Current planned work:
 - harden the lab edge with a stable public hostname and TLS
 - bring up monitoring on `s6`
 - review the `home` overlay before the first real `home-*` release
-- design the future PROD release path for `v*` tags
+- prepare the documented PROD release path for `v*` tags
 
 Recommended monitoring target for `s6`:
 

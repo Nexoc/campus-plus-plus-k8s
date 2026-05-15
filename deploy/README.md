@@ -227,7 +227,7 @@ Current release namespaces:
 
 - `dev-*` for the lab `s5` cluster
 - `home-*` for the home cluster
-- `v*` reserved for future PROD work
+- `v*` reserved for controlled PROD releases through the future `gw` runner
 
 ## Verification
 
@@ -278,6 +278,7 @@ Current open issues:
 - `deploy/docs/environments.md`
 - `deploy/docs/naming-convention.md`
 - `deploy/docs/rollout-notes.md`
+- `deploy/docs/production-cd-design.md`
 - `deploy/docs/structure.md`
 - `deploy/infra/envoy-gateway/README.md`
 - `deploy/infra/gw-nginx/README.md`

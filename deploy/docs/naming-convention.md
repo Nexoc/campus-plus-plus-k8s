@@ -73,6 +73,10 @@ Home non-prod:
 - overlay placeholder hostname: `campus-home.local`
 - replace this with the real home edge hostname when that edge is finalized
 
+Production:
+
+- active planned route hostname: `campus-prod.davl.at`
+
 ## Repo Alignment
 
 The repo now reflects:

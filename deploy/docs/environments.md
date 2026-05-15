@@ -21,9 +21,11 @@ Home environment:
 - same application layout as lab
 - its own edge hostname patch and runner labels
 
-Reserved for later:
+Production environment:
 
-- `v*` tags and a future PROD rollout path
+- `s1-prod`, `s2-prod`, and `s3-prod`: k3s HA production cluster nodes
+- `gw`: production deployment control host for the future `v*` workflow
+- intended application hostname: `campus-prod.davl.at`
 
 ## Deployment Model
 
@@ -46,7 +48,7 @@ Current release channels:
 - `dev-*` deploys to the lab cluster on runner labels `dev+s5`
 - `home-*` deploys to the home cluster on runner labels `dev+home`
 - `main` runs validation only
-- `v*` is reserved for future PROD work
+- `v*` is reserved for controlled PROD releases through `gw`
 
 ## Current Request Paths
 
@@ -58,9 +60,13 @@ Home path:
 
 `Home edge hostname -> home cluster NodePort 30080 -> Envoy Gateway -> campus-nginx -> services`
 
+Production path:
+
+`Internet -> gw -> prod nodes NodePort 30080 -> Envoy Gateway -> campus-prod -> services -> PostgreSQL s4-db`
+
 Notes:
 
-- Envoy Gateway is the active entry layer for both non-prod environments
+- Envoy Gateway is the active entry layer for non-prod and planned PROD environments
 - `campus-nginx` remains the internal app gateway and auth boundary
 - PostgreSQL stays outside Kubernetes for the lab environment
 
@@ -94,5 +100,5 @@ The following remain future or partially external work:
 
 - TLS/public hostname hardening for the lab edge
 - the final public hostname for the home overlay
-- future PROD rollout design
+- PROD workflow implementation; the design is captured in `deploy/docs/production-cd-design.md`
 - broader cluster hardening and monitoring
