@@ -80,6 +80,16 @@
       changed_when: false
       become: true
 
+    - name: s6-monitoring | verify Grafana datasource uid used by dashboards
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -F
+          - "uid: campus-prometheus"
+          - "{{ grafana_datasource_path }}"
+      changed_when: false
+      become: true
+
     - name: s6-monitoring | verify Grafana dashboard provider file exists
       ansible.builtin.stat:
         path: "{{ grafana_dashboard_provider_path }}"
