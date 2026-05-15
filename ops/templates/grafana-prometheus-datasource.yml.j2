@@ -1,0 +1,12 @@
+# Managed by Ansible. Do not edit directly on the server.
+
+apiVersion: 1
+
+datasources:
+  - name: Campus Prometheus
+    type: prometheus
+    access: proxy
+    url: "{{ grafana_prometheus_url }}"
+    isDefault: true
+    editable: false
+

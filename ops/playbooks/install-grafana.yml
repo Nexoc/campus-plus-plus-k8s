@@ -1,0 +1,263 @@
+---
+# Execute from: gw
+# Target: s6-monitoring only, with final reachability check from gw.
+# Purpose: install Grafana as a systemd-managed service and provision the
+# local Prometheus datasource.
+
+- name: Install Grafana on s6-monitoring
+  hosts: monitoring
+  gather_facts: true
+  become: true
+  vars:
+    grafana_prerequisite_packages:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gpg
+      - iptables
+      - python3-apt
+    grafana_package: grafana
+    grafana_service: grafana-server
+    grafana_port: 3000
+    grafana_keyring_path: /etc/apt/keyrings/grafana.asc
+    grafana_apt_repo: "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main"
+    grafana_env_file: /home/nexoc/campus-secrets/monitoring/grafana.env
+    grafana_datasource_template: ../templates/grafana-prometheus-datasource.yml.j2
+    grafana_datasource_path: /etc/grafana/provisioning/datasources/campus-prometheus.yml
+    grafana_prometheus_url: http://localhost:9090
+    gw_access_host: "{{ hostvars[groups['gw'][0]].monitoring_scrape_host | default(hostvars[groups['gw'][0]].ansible_host | default(groups['gw'][0])) }}"
+  handlers:
+    - name: reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: restart grafana
+      ansible.builtin.service:
+        name: "{{ grafana_service }}"
+        state: restarted
+  tasks:
+    - name: s6-monitoring | require exactly one gw host
+      ansible.builtin.assert:
+        that:
+          - groups.get('gw', []) | length == 1
+        fail_msg: "Inventory must contain exactly one host in the gw group"
+
+    - name: s6-monitoring | install Grafana apt prerequisites
+      ansible.builtin.apt:
+        name: "{{ grafana_prerequisite_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_facts.os_family == "Debian"
+
+    - name: s6-monitoring | ensure apt keyring directory exists
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: s6-monitoring | install Grafana apt repository key
+      ansible.builtin.get_url:
+        url: https://apt.grafana.com/gpg-full.key
+        dest: "{{ grafana_keyring_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: s6-monitoring | configure Grafana apt repository
+      ansible.builtin.apt_repository:
+        repo: "{{ grafana_apt_repo }}"
+        filename: grafana
+        state: present
+        update_cache: true
+
+    - name: s6-monitoring | install Grafana package
+      ansible.builtin.apt:
+        name: "{{ grafana_package }}"
+        state: present
+        update_cache: true
+      when: ansible_facts.os_family == "Debian"
+
+    - name: s6-monitoring | set Grafana HTTP port
+      ansible.builtin.lineinfile:
+        path: /etc/grafana/grafana.ini
+        regexp: '^;?http_port\s*='
+        line: "http_port = {{ grafana_port }}"
+        insertafter: '^\[server\]'
+      notify: restart grafana
+
+    - name: s6-monitoring | create Grafana systemd override directory
+      ansible.builtin.file:
+        path: /etc/systemd/system/grafana-server.service.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: s6-monitoring | configure optional Grafana runtime env file
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/grafana-server.service.d/campus-monitoring.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Service]
+          EnvironmentFile=-{{ grafana_env_file }}
+      notify:
+        - reload systemd
+        - restart grafana
+
+    - name: s6-monitoring | ensure Grafana datasource provisioning directory exists
+      ansible.builtin.file:
+        path: /etc/grafana/provisioning/datasources
+        state: directory
+        owner: root
+        group: grafana
+        mode: "0755"
+
+    - name: s6-monitoring | provision Prometheus datasource
+      ansible.builtin.template:
+        src: "{{ grafana_datasource_template }}"
+        dest: "{{ grafana_datasource_path }}"
+        owner: root
+        group: grafana
+        mode: "0640"
+      notify: restart grafana
+
+    - name: s6-monitoring | verify Prometheus datasource provisioning file
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -F
+          - "{{ grafana_prometheus_url }}"
+          - "{{ grafana_datasource_path }}"
+      changed_when: false
+
+    - name: s6-monitoring | enable and start Grafana service
+      ansible.builtin.service:
+        name: "{{ grafana_service }}"
+        enabled: true
+        state: started
+
+    - name: s6-monitoring | allow local loopback access to Grafana
+      ansible.builtin.shell: |
+        set -euo pipefail
+        port={{ grafana_port | quote }}
+
+        if iptables -C INPUT -i lo -p tcp --dport "$port" -j ACCEPT >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        drop_line="$(iptables -L INPUT --line-numbers -n | awk '$0 ~ /DROP/ { print $1; exit }')"
+        if [ -n "$drop_line" ]; then
+          iptables -I INPUT "$drop_line" -i lo -p tcp --dport "$port" -j ACCEPT
+        else
+          iptables -A INPUT -i lo -p tcp --dport "$port" -j ACCEPT
+        fi
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: grafana_loopback_rule
+      changed_when: "'inserted' in grafana_loopback_rule.stdout"
+
+    - name: s6-monitoring | allow Grafana access from gw only
+      ansible.builtin.shell: |
+        set -euo pipefail
+        source_host={{ gw_access_host | quote }}
+        port={{ grafana_port | quote }}
+
+        if iptables -C INPUT -p tcp -s "$source_host" --dport "$port" -j ACCEPT >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        drop_line="$(iptables -L INPUT --line-numbers -n | awk '$0 ~ /DROP/ { print $1; exit }')"
+        if [ -n "$drop_line" ]; then
+          iptables -I INPUT "$drop_line" -p tcp -s "$source_host" --dport "$port" -j ACCEPT
+        else
+          iptables -A INPUT -p tcp -s "$source_host" --dport "$port" -j ACCEPT
+        fi
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: grafana_gw_rule
+      changed_when: "'inserted' in grafana_gw_rule.stdout"
+
+    - name: s6-monitoring | drop other Grafana traffic
+      ansible.builtin.shell: |
+        set -euo pipefail
+        port={{ grafana_port | quote }}
+
+        if iptables -C INPUT -p tcp --dport "$port" -j DROP >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        iptables -A INPUT -p tcp --dport "$port" -j DROP
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: grafana_drop_rule
+      changed_when: "'inserted' in grafana_drop_rule.stdout"
+
+    - name: s6-monitoring | check netfilter-persistent availability
+      ansible.builtin.command: which netfilter-persistent
+      register: netfilter_persistent_check
+      changed_when: false
+      failed_when: false
+
+    - name: s6-monitoring | save firewall rules when netfilter-persistent is installed
+      ansible.builtin.command: netfilter-persistent save
+      changed_when: false
+      when: netfilter_persistent_check.rc == 0
+
+    - name: s6-monitoring | apply pending Grafana restart before verification
+      ansible.builtin.meta: flush_handlers
+
+    - name: s6-monitoring | verify Grafana service is active
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - "{{ grafana_service }}"
+      changed_when: false
+
+    - name: s6-monitoring | verify local Grafana health endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ grafana_port }}/api/health"
+        method: GET
+        status_code: 200
+        return_content: true
+        timeout: 10
+      register: grafana_local_health
+
+    - name: s6-monitoring | require local Grafana database status ok
+      ansible.builtin.assert:
+        that:
+          - grafana_local_health.json.database == "ok"
+        fail_msg: "Local Grafana health check did not report database=ok"
+
+- name: Verify Grafana from gw
+  hosts: gw
+  gather_facts: false
+  vars:
+    grafana_port: 3000
+    grafana_host: "{{ hostvars[groups['monitoring'][0]].monitoring_scrape_host | default(hostvars[groups['monitoring'][0]].ansible_host | default(groups['monitoring'][0])) }}"
+  tasks:
+    - name: gw | verify Grafana health endpoint on s6-monitoring
+      ansible.builtin.uri:
+        url: "http://{{ grafana_host }}:{{ grafana_port }}/api/health"
+        method: GET
+        status_code: 200
+        return_content: true
+        timeout: 10
+      register: grafana_gw_health
+
+    - name: gw | require Grafana database status ok
+      ansible.builtin.assert:
+        that:
+          - grafana_gw_health.json.database == "ok"
+        fail_msg: "Grafana health check from gw did not report database=ok"

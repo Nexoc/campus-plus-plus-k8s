@@ -127,6 +127,10 @@ Installs `prometheus-node-exporter` on every VM through the Debian package, enab
 
 Installs Prometheus on `s6-monitoring` through the Debian package, renders node-exporter scrape targets from inventory, restricts external port `9090` to `gw`, and verifies readiness from both `s6-monitoring` and `gw`.
 
+`install-grafana.yml`
+
+Installs Grafana on `s6-monitoring` through the official Grafana APT repository, provisions the local Prometheus datasource, restricts external port `3000` to `gw`, and verifies Grafana health from both `s6-monitoring` and `gw`.
+
 ## Design Docs
 
 - [Monitoring Design](docs/monitoring-design.md)
@@ -218,6 +222,12 @@ ansible-playbook -i ops/inventory/lab.ini ops/playbooks/install-node-exporter.ym
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
 ansible-playbook -i ops/inventory/lab.ini ops/playbooks/install-prometheus.yml
+```
+
+```bash
+# server: gw
+cd /home/nexoc/campus-plus-plus-k8s
+ansible-playbook -i ops/inventory/lab.ini ops/playbooks/install-grafana.yml
 ```
 
 ```bash

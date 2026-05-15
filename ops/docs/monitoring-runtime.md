@@ -183,6 +183,15 @@ iptables allows 9100 only from the monitoring_scrape_host of s6-monitoring.
 all other TCP traffic to 9100 is dropped.
 ```
 
+Grafana firewall contract:
+
+```text
+Grafana listens on port 3000 on s6-monitoring.
+iptables allows 3000 from loopback for local health checks.
+iptables allows 3000 from the monitoring_scrape_host of gw.
+all other TCP traffic to 3000 is dropped.
+```
+
 Security:
 
 ```text
