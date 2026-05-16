@@ -47,8 +47,8 @@ Rules:
 
 Examples:
 
-- `dev-2026.04.24-1`
-- `home-2026.04.24-1`
+- `dev-example`
+- `home-example`
 - `v1.0.0`
 
 ## Runner Label Naming
@@ -80,6 +80,33 @@ Production:
 - real external database endpoint: environment-specific host-local
   `db-endpoint.env`
 
+## Ops And Monitoring Naming
+
+Current ops hostnames:
+
+- control host: `gw`
+- database host: `s4-db`
+- dev cluster host: `s5-dev`
+- monitoring host: `s6-monitoring`
+- prod cluster hosts: `s1-prod`, `s2-prod`, `s3-prod`
+
+Current monitoring service names:
+
+- node-exporter systemd service: `prometheus-node-exporter`
+- Prometheus systemd service: `prometheus`
+- Grafana systemd service: `grafana-server`
+- Prometheus scrape job for VMs: `node-exporter`
+- Grafana datasource name: `Campus Prometheus`
+- Grafana datasource UID: `campus-prometheus`
+- Grafana dashboard folder: `Campus++`
+- initial Grafana dashboard: `Campus VM Overview`
+
+Monitoring labels use stable host identity:
+
+- `instance`: logical hostname from inventory, such as `s1-prod`
+- `role`: `gw`, `db`, `dev`, `monitoring`, or `prod`
+- `environment`: inventory-defined monitoring environment label
+
 ## Repo Alignment
 
 The repo now reflects:
@@ -89,3 +116,4 @@ The repo now reflects:
 - Envoy/Gateway API as the active ingress layer
 - tag-driven non-prod delivery via `dev-*` and `home-*`
 - controlled PROD delivery via `v*`
+- `ops/` as the canonical Ansible and monitoring automation tree

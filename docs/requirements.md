@@ -5,11 +5,14 @@
 This file is a requirements snapshot, not the runtime/deployment source of
 truth.
 
-For the current deployed DEV setup as of April 20, 2026, use:
+For the current deployed architecture, release model, operations layer, and
+monitoring state, use:
 
 - `README.md`
 - `deploy/README.md`
 - `deploy/docs/*`
+- `ops/README.md`
+- `ops/docs/*`
 
 All functional requirements below follow the MoSCoW prioritization and are formulated using a Rupp-style structure (“The system shall…”).
 

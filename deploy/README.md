@@ -36,6 +36,10 @@ Key points:
 - `campus-nginx` remains the internal app gateway and auth boundary
 - PostgreSQL stays outside Kubernetes
 - `main` runs validation only, while environment releases are tag-driven
+- host bootstrap, monitoring, and infrastructure checks live under `ops/`
+- central monitoring runs on `s6-monitoring`, outside the app CD workflow
+- concrete lab IP addresses are runtime inventory/config values, not
+  architecture or workflow constants
 
 ## Structure
 
@@ -67,6 +71,8 @@ Before applying the active DEV manifests, make sure:
 - DEV secret env files are available either locally or on the runner host
 
 ## Config And Secrets
+
+For the full file checklist, see `docs/runtime-inputs.md`.
 
 Active DEV runtime inputs:
 
@@ -105,9 +111,11 @@ For PROD, `DB_HOST` remains `s4-db`. The deploy script renders `service/s4-db`
 and `endpointslice/s4-db` from `db-endpoint.env`, so the real external database
 address stays environment-specific and out of git.
 
-Prepare the fixed host path:
+Prepare the fixed DEV host path:
 
 ```bash
+# server: s5-dev
+cd /home/nexoc/campus-plus-plus-k8s
 mkdir -p /home/nexoc/campus-secrets/dev
 cp deploy/templates/secrets/db-secrets.env.example /home/nexoc/campus-secrets/dev/db-secrets.env
 cp deploy/templates/secrets/auth-secrets.env.example /home/nexoc/campus-secrets/dev/auth-secrets.env
@@ -116,21 +124,19 @@ chmod 700 /home/nexoc/campus-secrets /home/nexoc/campus-secrets/dev
 chmod 600 /home/nexoc/campus-secrets/dev/*.env
 ```
 
-Prepare the same layout for `home` before running the first `home-*` release:
+Prepare the same layout on the future home runner before running the first
+`home-*` release. The required files are:
 
-```bash
-mkdir -p /home/nexoc/campus-secrets/home
-cp deploy/templates/secrets/db-secrets.env.example /home/nexoc/campus-secrets/home/db-secrets.env
-cp deploy/templates/secrets/auth-secrets.env.example /home/nexoc/campus-secrets/home/auth-secrets.env
-chown -R nexoc:nexoc /home/nexoc/campus-secrets/home
-chmod 700 /home/nexoc/campus-secrets/home
-chmod 600 /home/nexoc/campus-secrets/home/*.env
+```text
+/home/nexoc/campus-secrets/home/db-secrets.env
+/home/nexoc/campus-secrets/home/auth-secrets.env
 ```
 
 Prepare the `prod` host path on `gw` before running a `v*` release:
 
 ```bash
 # server: gw
+cd /home/nexoc/campus-plus-plus-k8s
 mkdir -p /home/nexoc/campus-secrets/prod
 cp deploy/templates/secrets/db-secrets.env.example /home/nexoc/campus-secrets/prod/db-secrets.env
 cp deploy/templates/secrets/auth-secrets.env.example /home/nexoc/campus-secrets/prod/auth-secrets.env
@@ -142,16 +148,26 @@ chmod 600 /home/nexoc/campus-secrets/prod/*.env
 
 ## Install Or Update Envoy Gateway
 
-Install or upgrade the controller:
+Install or upgrade the controller on DEV:
 
 ```bash
+# server: s5-dev
+cd /home/nexoc/campus-plus-plus-k8s
 helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
-  --version v1.7.0 \
+  --version v1.7.2 \
   --namespace envoy-gateway-system \
   --create-namespace \
   -f deploy/infra/envoy-gateway/values-dev.yaml
 
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
+```
+
+For PROD, prefer the Ansible wrapper from `gw`:
+
+```bash
+# server: gw
+cd /home/nexoc/campus-plus-plus-k8s
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/install-envoy-prod.yml
 ```
 
 ## Configure Lab GW Reverse Proxy
@@ -192,7 +208,7 @@ Render the manifests:
 # server: s5-dev
 bash deploy/scripts/apply-overlay.sh \
   --environment dev \
-  --image-tag dev-2026.04.24-1 \
+  --image-tag dev-example \
   --render-only
 ```
 
@@ -218,7 +234,7 @@ Apply the shared GatewayClass and the DEV stack:
 
 ```bash
 # server: s5-dev
-IMAGE_TAG=dev-2026.04.24-1
+IMAGE_TAG=dev-example
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 kubectl delete job campus-importer -n campus-dev --ignore-not-found
 bash deploy/scripts/apply-overlay.sh --environment dev --image-tag "${IMAGE_TAG}"
@@ -316,11 +332,10 @@ rm -f /tmp/campus-prod-rendered.yaml
 
 Current open issues:
 
-- the single-node DEV cluster still shows intermittent instability
-- Envoy-related components have had probe failures and restarts during host/API
-  hiccups
 - the current `gw` nginx baseline is HTTP-only lab configuration
 - PROD edge hardening and an RBAC-limited deployer kubeconfig are still future work
+- the `home` hostname is still a placeholder until the home edge is finalized
+- PostgreSQL exporter, kube-state-metrics, Alertmanager, and logs are monitoring follow-up work
 
 ## Related Docs
 
@@ -331,3 +346,5 @@ Current open issues:
 - `deploy/docs/structure.md`
 - `deploy/infra/envoy-gateway/README.md`
 - `deploy/infra/gw-nginx/README.md`
+- `ops/README.md`
+- `ops/docs/monitoring-design.md`

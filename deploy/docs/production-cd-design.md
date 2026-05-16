@@ -5,6 +5,10 @@ This document defines the production release model for Campus++.
 Production delivery is deliberately separated from DEV delivery. The DEV
 runner must not hold production cluster credentials.
 
+Production delivery is also separate from host operations and monitoring.
+Ansible playbooks in `ops/` can verify or prepare infrastructure, but `v*`
+tags remain the release mechanism for Campus++ application images.
+
 ## Current Baseline
 
 DEV tag-based CD is already active:

@@ -2,13 +2,22 @@
 
 This document fixes the runtime choice for the first monitoring implementation.
 
-Decision:
+## Decision
+
+Current implemented runtime:
 
 ```text
-s6-monitoring runs the central monitoring stack as systemd-managed services.
+s6-monitoring runs Prometheus and Grafana as systemd-managed services.
 node-exporter runs as a systemd service on every VM.
-postgres exporter runs as a systemd service on s4-db.
 Kubernetes add-ons are installed later through Helm from gw.
+```
+
+Planned runtime extensions:
+
+```text
+postgres exporter runs as a systemd service on s4-db.
+Alertmanager and Loki run as systemd-managed services on s6-monitoring.
+kube-state-metrics runs inside dev/prod clusters through Helm.
 ```
 
 ## Chosen Model
@@ -19,14 +28,14 @@ Use native Linux services for the central VM layer:
 s6-monitoring:
   prometheus.service
   grafana-server.service
-  alertmanager.service
+  alertmanager.service later
   loki.service later
 
 all VMs:
-  node-exporter.service
+  prometheus-node-exporter.service
 
 s4-db:
-  postgres-exporter.service
+  postgres-exporter.service later
 ```
 
 Use Helm only for Kubernetes-side components:
@@ -43,9 +52,10 @@ prod cluster:
 
 ## Why Not Docker Compose First
 
-Docker Compose is valid, but it would introduce another runtime dependency on `s6-monitoring`.
+Docker Compose is valid, but it would introduce another runtime dependency on
+`s6-monitoring`.
 
-Current `s6-monitoring` preflight shows:
+The original `s6-monitoring` preflight showed:
 
 ```text
 docker: not installed
@@ -53,7 +63,8 @@ podman: not installed
 systemd: available
 ```
 
-Using systemd services keeps the first monitoring phase closer to the current host baseline and makes idempotent Ansible checks straightforward.
+Using systemd services keeps the monitoring phase close to the current host
+baseline and makes idempotent Ansible checks straightforward.
 
 ## Why Not Helm For Central Monitoring
 
@@ -67,7 +78,8 @@ prod workloads = s1-prod/s2-prod/s3-prod k3s cluster
 dev workloads = s5-dev k3s cluster
 ```
 
-Installing the central Prometheus/Grafana stack through Helm would require putting it inside a cluster, which changes the architecture.
+Installing the central Prometheus/Grafana stack through Helm would require
+putting it inside a cluster, which changes the architecture.
 
 ## Runtime Paths
 
@@ -81,22 +93,36 @@ Central monitoring paths on `s6-monitoring`:
 /home/nexoc/campus-secrets/monitoring
 ```
 
-Planned config files:
+Implemented config files:
 
 ```text
 /etc/campus-monitoring/prometheus/prometheus.yml
+/etc/grafana/grafana.ini
+/etc/grafana/provisioning/datasources/campus-prometheus.yml
+/etc/grafana/provisioning/dashboards/campus-dashboards.yml
+/var/lib/grafana/dashboards/campus-vm-overview.json
+```
+
+Planned config files:
+
+```text
 /etc/campus-monitoring/alertmanager/alertmanager.yml
 /etc/campus-monitoring/loki/loki.yml
-/etc/grafana/grafana.ini
+```
+
+Implemented data directories:
+
+```text
+/var/lib/campus-monitoring/prometheus
+/var/lib/grafana
+/var/lib/grafana/dashboards
 ```
 
 Planned data directories:
 
 ```text
-/var/lib/campus-monitoring/prometheus
 /var/lib/campus-monitoring/alertmanager
 /var/lib/campus-monitoring/loki
-/var/lib/grafana
 ```
 
 ## Runtime Secrets
@@ -119,33 +145,45 @@ ops/templates/postgres-exporter.env.example
 ops/templates/alertmanager.env.example
 ```
 
-## First Install Order
+## Install Order
 
-Recommended order:
+Completed order:
 
 ```text
 1. check-monitoring.yml
 2. bootstrap-monitoring.yml
 3. install-node-exporter.yml
-4. check node-exporter targets from s6-monitoring
-5. install-prometheus.yml
-6. configure Prometheus scrape targets
-7. install-grafana.yml
-8. install-postgres-exporter.yml
-9. check-monitoring-stack.yml
+4. install-prometheus.yml
+5. install-grafana.yml
+6. check-monitoring-stack.yml
 ```
 
-This order gives useful host metrics before adding cluster metrics or logs.
+Next order:
 
-## Success Criteria
+```text
+7. install-postgres-exporter.yml
+8. extend Prometheus scrape config for PostgreSQL exporter
+9. add database dashboard panels
+10. extend check-monitoring-stack.yml or add a database-specific check
+```
+
+Future order:
+
+```text
+11. install kube-state-metrics in dev/prod clusters
+12. add cluster metrics scrape path
+13. add alert rules and Alertmanager
+14. add Loki and log agents
+```
+
+## Current Success Criteria
 
 Systemd services:
 
 ```text
 prometheus.service active on s6-monitoring
 grafana-server.service active on s6-monitoring
-node-exporter.service active on all VMs
-postgres-exporter.service active on s4-db
+prometheus-node-exporter.service active on all VMs
 ```
 
 Ports:
@@ -154,7 +192,6 @@ Ports:
 s6-monitoring:9090 Prometheus
 s6-monitoring:3000 Grafana
 all VMs:9100 node-exporter
-s4-db:9187 postgres exporter
 ```
 
 Access:
@@ -162,17 +199,44 @@ Access:
 ```text
 gw can reach Prometheus and Grafana on s6-monitoring
 s6-monitoring can scrape node-exporter on all VMs
+```
+
+Prometheus targets:
+
+```text
+1 prometheus self-target
+7 node-exporter targets
+8 total targets in the current core stack
+```
+
+## Planned Success Criteria
+
+Database metrics:
+
+```text
+postgres-exporter.service active on s4-db
+s4-db:9187 postgres exporter
 s6-monitoring can scrape postgres exporter on s4-db
 ```
 
-Inventory scrape addresses:
+Cluster metrics:
+
+```text
+kube-state-metrics active in dev cluster
+kube-state-metrics active in prod cluster
+central Prometheus can read selected cluster metrics
+```
+
+## Inventory Scrape Addresses
 
 ```text
 monitoring_scrape_host defines the address that s6-monitoring uses for each VM.
 This is separate from ansible_host because gw may use ansible_connection=local.
-Lab IP values belong in ops/inventory/lab.ini only.
+Lab IP values belong in ops/inventory/lab.local.ini only.
 University deployments should keep the same variable names and replace addresses.
 ```
+
+## Firewall Contracts
 
 Node-exporter firewall contract:
 
@@ -181,6 +245,15 @@ node-exporter listens on port 9100 on each VM.
 iptables allows 9100 from loopback for local health checks.
 iptables allows 9100 only from the monitoring_scrape_host of s6-monitoring.
 all other TCP traffic to 9100 is dropped.
+```
+
+Prometheus firewall contract:
+
+```text
+Prometheus listens on port 9090 on s6-monitoring.
+iptables allows 9090 from loopback for local health checks.
+iptables allows 9090 from the monitoring_scrape_host of gw.
+all other TCP traffic to 9090 is dropped.
 ```
 
 Grafana firewall contract:
@@ -192,19 +265,28 @@ iptables allows 3000 from the monitoring_scrape_host of gw.
 all other TCP traffic to 3000 is dropped.
 ```
 
-Grafana dashboard provisioning:
+## Grafana Provisioning
+
+Current Grafana dashboard provisioning:
 
 ```text
 dashboard provider: /etc/grafana/provisioning/dashboards/campus-dashboards.yml
 dashboard files: /var/lib/grafana/dashboards
 initial dashboard: Campus VM Overview
-datasource: Campus Prometheus
+datasource name: Campus Prometheus
+datasource UID: campus-prometheus
+datasource URL: http://localhost:9090
 ```
 
-Security:
+The datasource provisioning file includes `deleteDatasources` for
+`Campus Prometheus`. This allows Grafana to replace an older datasource created
+without the stable UID and keeps the dashboard references working.
+
+## Security
 
 ```text
 exporter ports are not public
+Prometheus and Grafana are reachable only through trusted lab paths
 secrets stay under /home/nexoc/campus-secrets/monitoring
 no monitoring passwords or tokens are printed by playbooks
 ```

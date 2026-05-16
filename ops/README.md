@@ -10,6 +10,30 @@ local pc -> gw -> ansible/ssh/kubectl/helm -> all servers/prod cluster
 
 `gw` is the control host. It runs Ansible, `kubectl`, and `helm`, but it is not a workload node. Production workloads run only on the prod k3s HA nodes: `s1-prod`, `s2-prod`, and `s3-prod`.
 
+## Current Ops Status
+
+Completed:
+
+- connectivity checks across all lab hosts
+- PROD cluster verification from `gw`
+- PROD database access checks
+- Envoy Gateway install/upgrade wrapper for PROD
+- PROD release smoke verification
+- `s6-monitoring` bootstrap
+- node-exporter on all 7 lab VMs
+- Prometheus on `s6-monitoring`
+- Grafana on `s6-monitoring`
+- Grafana datasource `Campus Prometheus` with UID `campus-prometheus`
+- initial Grafana dashboard `Campus VM Overview`
+- central monitoring stack verification
+
+Next monitoring work:
+
+- PostgreSQL exporter on `s4-db`
+- database dashboard panels
+- kube-state-metrics for dev/prod clusters
+- alerting and logs
+
 ## Inventory Contract
 
 The logical hostnames stay stable across environments:
@@ -24,21 +48,33 @@ s2-prod
 s3-prod
 ```
 
-The lab inventory is stored in:
+Tracked inventory examples:
 
 ```text
-ops/inventory/lab.ini
-```
-
-The university template is stored in:
-
-```text
+ops/inventory/lab.example.ini
 ops/inventory/university.example.ini
 ```
 
-Only host addresses should change between lab and university environments. Kubernetes manifests and GitHub workflows should continue to use the same deployment contract.
+Untracked runtime inventories:
+
+```text
+ops/inventory/lab.local.ini
+ops/inventory/university.local.ini
+```
+
+Real IP addresses belong only in `*.local.ini` files on the deployment host.
+The local inventory files are ignored by git. Only logical hostnames and
+example placeholders are committed.
+
+Only host addresses should change between lab and university environments.
+Kubernetes manifests and GitHub workflows should continue to use the same
+deployment contract.
+
+See `ops/inventory/README.md` for the local inventory workflow.
 
 ## Secrets And Runtime Files
+
+For the full project runtime file checklist, see `docs/runtime-inputs.md`.
 
 Real secrets are not stored in this repository.
 
@@ -135,6 +171,9 @@ Installs Grafana on `s6-monitoring` through the official Grafana APT repository,
 
 Verifies the central monitoring stack without requiring Grafana credentials. It checks Prometheus readiness and targets, Grafana health, the Grafana Prometheus datasource provisioning file, and the initial dashboard provisioning files.
 
+The current core stack has 8 Prometheus targets: 7 node-exporter targets and 1
+Prometheus self-target.
+
 ## Design Docs
 
 - [Monitoring Design](docs/monitoring-design.md)
@@ -145,49 +184,49 @@ Verifies the central monitoring stack without requiring Grafana credentials. It 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible all -i ops/inventory/lab.ini -m ping
+ansible all -i ops/inventory/lab.local.ini -m ping
 ```
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible-playbook -i ops/inventory/lab.ini ops/playbooks/check-connectivity.yml
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/check-connectivity.yml
 ```
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible-playbook -i ops/inventory/lab.ini ops/playbooks/bootstrap-gw.yml
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/bootstrap-gw.yml
 ```
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible-playbook -i ops/inventory/lab.ini ops/playbooks/bootstrap-common.yml
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/bootstrap-common.yml
 ```
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible-playbook -i ops/inventory/lab.ini ops/playbooks/check-prod-cluster.yml
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/check-prod-cluster.yml
 ```
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible-playbook -i ops/inventory/lab.ini ops/playbooks/check-prod-cluster.yml -e expected_tag=v0.1.1
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/check-prod-cluster.yml -e expected_tag=v0.1.1
 ```
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible-playbook -i ops/inventory/lab.ini ops/playbooks/check-db-access.yml
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/check-db-access.yml
 ```
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible-playbook -i ops/inventory/lab.ini ops/playbooks/configure-s4-db-access.yml
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/configure-s4-db-access.yml
 ```
 
 Run `configure-s4-db-access.yml` only when host-level PostgreSQL access needs to be repaired or prepared for a new environment.
@@ -195,49 +234,49 @@ Run `configure-s4-db-access.yml` only when host-level PostgreSQL access needs to
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible-playbook -i ops/inventory/lab.ini ops/playbooks/install-envoy-prod.yml
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/install-envoy-prod.yml
 ```
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible-playbook -i ops/inventory/lab.ini ops/playbooks/verify-prod-release.yml
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/verify-prod-release.yml
 ```
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible-playbook -i ops/inventory/lab.ini ops/playbooks/check-monitoring.yml
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/check-monitoring.yml
 ```
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible-playbook -i ops/inventory/lab.ini ops/playbooks/bootstrap-monitoring.yml
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/bootstrap-monitoring.yml
 ```
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible-playbook -i ops/inventory/lab.ini ops/playbooks/install-node-exporter.yml
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/install-node-exporter.yml
 ```
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible-playbook -i ops/inventory/lab.ini ops/playbooks/install-prometheus.yml
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/install-prometheus.yml
 ```
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible-playbook -i ops/inventory/lab.ini ops/playbooks/install-grafana.yml
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/install-grafana.yml
 ```
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible-playbook -i ops/inventory/lab.ini ops/playbooks/check-monitoring-stack.yml
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/check-monitoring-stack.yml
 ```
 
 ```bash

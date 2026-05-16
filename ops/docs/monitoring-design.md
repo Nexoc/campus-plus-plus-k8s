@@ -1,15 +1,40 @@
 # Monitoring Design
 
-This document defines the monitoring phase for the Campus++ Kubernetes migration project.
+This document defines the monitoring phase for the Campus++ Kubernetes
+migration project.
 
-Current baseline:
+## Current Baseline
+
+The current platform baseline is:
 
 ```text
 dev CD: ready
 prod CD: ready
 portable prod DB endpoint: ready
 Ansible ops/check layer: ready
-next phase: monitoring on s6-monitoring
+central monitoring core: ready
+```
+
+Implemented monitoring core:
+
+```text
+s6-monitoring bootstrap: ready
+node-exporter on all 7 lab VMs: ready
+Prometheus on s6-monitoring: ready
+Grafana on s6-monitoring: ready
+Grafana datasource Campus Prometheus: ready
+Grafana dashboard Campus VM Overview: ready
+check-monitoring-stack.yml: ready
+```
+
+Not implemented yet:
+
+```text
+postgres exporter for s4-db
+kube-state-metrics for dev/prod clusters
+Prometheus alert rules
+Alertmanager
+Loki / log collection
 ```
 
 ## Role Separation
@@ -26,7 +51,7 @@ Ansible
 Helm
   -> install Kubernetes monitoring add-ons inside dev/prod clusters
   -> kube-state-metrics
-  -> cluster agents/exporters
+  -> optional cluster agents/exporters
   -> optional log agents such as promtail or Grafana Alloy
 
 GitHub Actions
@@ -46,11 +71,12 @@ s6-monitoring is a central monitoring VM.
 Kubernetes add-ons live inside the dev/prod clusters.
 ```
 
-Prometheus, Grafana, Alertmanager, and Loki are not application release artifacts. They should not be deployed through the Campus++ app CD workflow.
+Prometheus, Grafana, Alertmanager, and Loki are not application release
+artifacts. They should not be deployed through the Campus++ app CD workflow.
 
 ## Monitoring Topology
 
-Target architecture:
+Current implemented topology:
 
 ```text
 local pc
@@ -58,18 +84,25 @@ local pc
   -> s6-monitoring
       -> Prometheus
       -> Grafana
-      -> Alertmanager
-      -> optional Loki
 
 s6-monitoring
   -> scrape node-exporter on all VMs
+```
+
+Planned topology extensions:
+
+```text
+s6-monitoring
   -> scrape postgres exporter on s4-db
   -> scrape or query dev k3s monitoring add-ons
   -> scrape or query prod k3s monitoring add-ons
   -> run HTTP smoke checks against Envoy NodePort endpoints
+  -> Alertmanager
+  -> optional Loki
 ```
 
-`gw` remains the control host. It runs Ansible, `kubectl`, and `helm`, but it does not become a monitoring workload node.
+`gw` remains the control host. It runs Ansible, `kubectl`, and `helm`, but it
+does not become a monitoring workload node.
 
 ## Monitoring Targets
 
@@ -116,19 +149,23 @@ VM exporters: systemd-managed services
 Kubernetes add-ons inside dev/prod clusters: Helm
 ```
 
-See [Monitoring Runtime Model](monitoring-runtime.md) for the detailed decision.
+See [Monitoring Runtime Model](monitoring-runtime.md) for the detailed runtime
+decision.
 
-Initial VM-level components:
+Implemented VM-level components:
 
 ```text
 s6-monitoring:
   prometheus
   grafana
-  alertmanager
 
 all VMs:
   node-exporter
+```
 
+Next VM-level component:
+
+```text
 s4-db:
   postgres exporter
 ```
@@ -147,10 +184,11 @@ prod cluster:
   optional log agent
 ```
 
-Logging components, deferred until after metrics:
+Logging and alerting components, deferred until after core metrics:
 
 ```text
 s6-monitoring:
+  alertmanager
   loki
 
 VMs and clusters:
@@ -159,27 +197,37 @@ VMs and clusters:
 
 ## Network And Ports
 
-Recommended service ports:
+Current implemented service ports:
 
 ```text
 Prometheus:       9090
 Grafana:          3000
-Alertmanager:     9093
-Loki:             3100
 node-exporter:    9100
-postgres exporter:9187
 Envoy NodePort:   30080
 PostgreSQL:       5432
+```
+
+Planned monitoring ports:
+
+```text
+Alertmanager:     9093
+Loki:             3100
+postgres exporter:9187
 ```
 
 Access model:
 
 ```text
 s6-monitoring -> node-exporter:9100 on all VMs
-s6-monitoring -> postgres exporter:9187 on s4-db
-s6-monitoring -> Envoy NodePort 30080 on s5-dev and prod nodes
 admin/gw      -> Grafana on s6-monitoring
 admin/gw      -> Prometheus on s6-monitoring
+```
+
+Planned access model:
+
+```text
+s6-monitoring -> postgres exporter:9187 on s4-db
+s6-monitoring -> Envoy NodePort 30080 on s5-dev and prod nodes
 ```
 
 Firewall principle:
@@ -193,7 +241,8 @@ PostgreSQL 5432 stays restricted to approved app clients
 
 ## Kubernetes Metrics Design
 
-Because Prometheus is planned as a central service on `s6-monitoring`, Kubernetes metrics need an explicit bridge between the central VM and each cluster.
+Because Prometheus is a central service on `s6-monitoring`, Kubernetes metrics
+need an explicit bridge between the central VM and each cluster.
 
 Acceptable options:
 
@@ -211,23 +260,35 @@ Option C:
   add deep cluster metrics later
 ```
 
-Recommended first implementation:
+Recommended next implementation:
 
 ```text
-Phase 1:
-  host metrics on all VMs
-  PostgreSQL exporter on s4-db
-  HTTP smoke checks for dev/prod Envoy routes
-
-Phase 2:
-  kube-state-metrics in dev/prod clusters through Helm
-  choose restricted NodePort or agent/federation path
-
-Phase 3:
-  logs with Loki and promtail/Grafana Alloy
+1. add PostgreSQL exporter on s4-db
+2. add database dashboard panels
+3. add kube-state-metrics in dev/prod clusters through Helm
+4. choose restricted NodePort or agent/federation path for cluster metrics
+5. add alerting and logs
 ```
 
-This avoids pretending that a central Prometheus can automatically scrape in-cluster `ClusterIP` services from outside the cluster.
+This avoids pretending that a central Prometheus can automatically scrape
+in-cluster `ClusterIP` services from outside the cluster.
+
+## Grafana Provisioning
+
+Current Grafana provisioning:
+
+```text
+datasource name: Campus Prometheus
+datasource UID: campus-prometheus
+dashboard folder: Campus++
+dashboard provider: /etc/grafana/provisioning/dashboards/campus-dashboards.yml
+dashboard file: /var/lib/grafana/dashboards/campus-vm-overview.json
+initial dashboard: Campus VM Overview
+```
+
+The datasource provisioning intentionally deletes and recreates the datasource
+by name before applying the UID. This keeps the dashboard stable after the
+`campus-prometheus` UID migration.
 
 ## Secrets Policy
 
@@ -254,11 +315,12 @@ Runtime-only monitoring files should live on the appropriate host, for example:
 /home/nexoc/campus-secrets/monitoring/alertmanager.env
 ```
 
-The exact runtime secret contract should be documented before implementing exporters that need credentials.
+The exact runtime secret contract should be documented before implementing
+exporters or alerts that need credentials.
 
 ## Success Criteria
 
-Phase 1 success:
+Completed core monitoring success criteria:
 
 ```text
 s6-monitoring is reachable from gw
@@ -266,13 +328,23 @@ Prometheus is running on s6-monitoring
 Grafana is running on s6-monitoring
 node-exporter is running on all VMs
 Prometheus target status is up for all node-exporter targets
-postgres exporter is running on s4-db
-Prometheus target status is up for postgres exporter
-HTTP smoke checks for dev and prod routes are visible in Prometheus
+Prometheus self-target is up
+Grafana can reach Prometheus through the provisioned datasource
+Campus VM Overview dashboard displays node-exporter data
+check-monitoring-stack.yml passes
 no monitoring secret values are committed or printed
 ```
 
-Phase 2 success:
+Next database monitoring success criteria:
+
+```text
+postgres exporter is running on s4-db
+Prometheus target status is up for postgres exporter
+database dashboard panels show PostgreSQL uptime and activity
+no database passwords are committed or printed
+```
+
+Future cluster metrics success criteria:
 
 ```text
 kube-state-metrics is installed in dev cluster
@@ -282,7 +354,7 @@ dashboards show workload health for campus-dev and campus-prod
 Gateway API and Envoy status checks are represented
 ```
 
-Phase 3 success:
+Future logs success criteria:
 
 ```text
 logs from selected services are collected
@@ -292,56 +364,56 @@ log agents do not expose credentials in repo
 
 ## Implementation Phases
 
-Phase 0: design and inventory
+Completed:
 
 ```text
-document monitoring architecture
-confirm ports and access paths
-confirm host-level versus cluster-level boundaries
-confirm secret file contract
+Phase 0:
+  documented monitoring architecture and runtime model
+
+Phase 1a:
+  bootstrapped s6-monitoring
+  installed node-exporter on all VMs
+  installed Prometheus on s6-monitoring
+  installed Grafana on s6-monitoring
+  provisioned Campus Prometheus datasource
+  provisioned Campus VM Overview dashboard
+  added check-monitoring-stack.yml
 ```
 
-Phase 1: central VM and host exporters
+Next:
 
 ```text
-bootstrap s6-monitoring
-install Prometheus and Grafana on s6-monitoring
-install node-exporter on all VMs
-install postgres exporter on s4-db
-configure firewall rules for exporter ports
-add Ansible checks for monitoring services and targets
+Phase 1b:
+  install postgres exporter on s4-db
+  add database dashboard panels
+  add exporter-specific checks
 ```
 
-Phase 2: Kubernetes add-ons
+Later:
 
 ```text
-install kube-state-metrics in dev cluster through Helm from gw
-install kube-state-metrics in prod cluster through Helm from gw
-choose scrape exposure pattern for central Prometheus
-add kubectl verification checks
+Phase 2:
+  install kube-state-metrics in dev cluster through Helm from gw
+  install kube-state-metrics in prod cluster through Helm from gw
+  choose scrape exposure pattern for central Prometheus
+  add kubectl verification checks
+
+Phase 3:
+  add Grafana dashboards for Kubernetes and Gateway API
+  add Prometheus alert rules
+  add Alertmanager routes
+  document alert severity and expected response
+
+Phase 4:
+  install Loki on s6-monitoring
+  install promtail or Grafana Alloy on selected hosts/clusters
+  add log dashboards
+  document retention policy
 ```
 
-Phase 3: dashboards and alerts
+## Playbooks
 
-```text
-add Grafana dashboards
-add Prometheus alert rules
-add Alertmanager routes
-document alert severity and expected response
-```
-
-Phase 4: logs
-
-```text
-install Loki on s6-monitoring
-install promtail or Grafana Alloy on selected hosts/clusters
-add log dashboards
-document retention policy
-```
-
-## First Playbooks
-
-Initial preflight file:
+Implemented playbooks:
 
 ```text
 ops/playbooks/check-monitoring.yml
@@ -352,18 +424,15 @@ ops/playbooks/install-grafana.yml
 ops/playbooks/check-monitoring-stack.yml
 ```
 
-Suggested next files:
+Suggested next playbook:
 
 ```text
 ops/playbooks/install-postgres-exporter.yml
 ```
 
-Suggested future docs:
+Suggested future templates:
 
 ```text
-ops/templates/prometheus.yml.example
-ops/templates/grafana.env.example
 ops/templates/postgres-exporter.env.example
+ops/templates/alertmanager.env.example
 ```
-
-No monitoring installation should start until the phase 1 runtime secret and port contract is confirmed.

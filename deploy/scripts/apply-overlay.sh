@@ -23,7 +23,7 @@ Usage:
 
 Required:
   --environment   Target overlay: dev, home, or prod
-  --image-tag     Immutable image tag to inject, for example dev-2026.04.24-1
+  --image-tag     Immutable image tag to inject, for example dev-example
 
 Optional:
   --render-only   Render the overlay but do not run kubectl apply

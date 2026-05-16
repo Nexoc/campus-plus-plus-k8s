@@ -11,11 +11,14 @@ Document history:
 This file is the product-level requirements baseline.
 
 It is intentionally different from the operational runtime documentation. For
-the currently deployed architecture and rollout path as of April 20, 2026, use:
+the current deployed architecture, rollout path, operations layer, and
+monitoring state, use:
 
 - `README.md`
 - `deploy/README.md`
 - `deploy/docs/*`
+- `ops/README.md`
+- `ops/docs/*`
 - `backend/ARCHITECTURE.md`
 
 # 1. Introduction

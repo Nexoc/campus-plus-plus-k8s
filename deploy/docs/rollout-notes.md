@@ -24,6 +24,8 @@ Key characteristics:
 - `v*` tags build and release to PROD after `production` approval
 - active manifests live under `deploy/app/overlays/`
 - Envoy Gateway is the active entry layer on NodePort `30080`
+- monitoring and host-level operations are handled through `ops/`, not through
+  application release tags
 
 ## Relevant Repo Files
 
@@ -69,15 +71,20 @@ The current repo supports this controlled production flow:
 committed, and the workflow stays unchanged when the external database address
 changes between lab and university infrastructure.
 
+Lab and university deployments should differ only by ignored inventories and
+runtime files. Workflows and tracked Kubernetes manifests must stay unchanged
+when moving between those environments.
+
 ## Suggested Manual Commands
 
 Render a DEV release manifest:
 
 ```bash
 # server: s5-dev
+cd /home/nexoc/campus-plus-plus-k8s
 bash deploy/scripts/apply-overlay.sh \
   --environment dev \
-  --image-tag dev-2026.04.24-1 \
+  --image-tag dev-example \
   --render-only
 ```
 
@@ -85,17 +92,19 @@ Apply a non-prod overlay:
 
 ```bash
 # server: s5-dev
+cd /home/nexoc/campus-plus-plus-k8s
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 kubectl delete job campus-importer -n campus-dev --ignore-not-found
 bash deploy/scripts/apply-overlay.sh \
   --environment dev \
-  --image-tag dev-2026.04.24-1
+  --image-tag dev-example
 ```
 
 Verify a non-prod overlay:
 
 ```bash
 # server: s5-dev
+cd /home/nexoc/campus-plus-plus-k8s
 bash deploy/scripts/verify-overlay.sh \
   --environment dev \
   --expected-nodeport 30080
@@ -105,6 +114,7 @@ Render a PROD release manifest from `gw` without applying it:
 
 ```bash
 # server: gw
+cd /home/nexoc/campus-plus-plus-k8s
 CAMPUS_SECRETS_ROOT=/home/nexoc/campus-secrets \
 KUBECONFIG=/home/nexoc/.kube/prod.yaml \
 bash deploy/scripts/apply-overlay.sh \
@@ -136,3 +146,4 @@ Current open issues:
 - the lab `gw` nginx baseline is now in repo, but public hostname/TLS hardening is still future work
 - the home hostname is still a placeholder in the overlay
 - PROD edge hardening and an RBAC-limited deployer kubeconfig are still future work
+- PostgreSQL exporter, kube-state-metrics, alerting, and logs are handled in the monitoring roadmap

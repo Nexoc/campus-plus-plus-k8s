@@ -20,4 +20,8 @@ target/
 deploy/app/overlays/*/secrets/*.env
 deploy/.tmp/
 
+# Local Ansible inventories with real environment addresses
+ops/inventory/*.local.ini
+ops/inventory/lab.ini
+
 *.pdf

@@ -45,6 +45,10 @@ EndpointSlice from host-local runtime config before running Kustomize. This
 keeps the external database address out of tracked manifests while preserving a
 stable `DB_HOST=s4-db` application contract.
 
+The external database address is not part of `deploy/app`. The tracked
+manifest contract is the stable Kubernetes name `s4-db`; the actual endpoint is
+resolved at render/apply time from host-local runtime config.
+
 ## `infra/`
 
 Shared infrastructure-side baselines.
@@ -91,3 +95,13 @@ Operational notes for:
 - rollout flow
 - production CD design
 - deployment structure
+
+## Boundary With `ops/`
+
+The `deploy/` tree owns Kubernetes application manifests, Gateway API
+resources, deploy scripts, and deployment documentation.
+
+The `ops/` tree owns Ansible inventory, host bootstrap, infrastructure checks,
+monitoring installation, and monitoring documentation. Application releases
+stay tag-driven through GitHub Actions; Ansible is not used to redeploy
+Campus++ app images.

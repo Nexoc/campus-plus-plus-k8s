@@ -53,7 +53,7 @@ Install or upgrade the controller:
 ```bash
 # server: s5-dev
 helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
-  --version v1.7.0 \
+  --version v1.7.2 \
   --namespace envoy-gateway-system \
   --create-namespace \
   -f deploy/infra/envoy-gateway/values-dev.yaml
@@ -65,7 +65,7 @@ and use `values-prod.yaml`:
 ```bash
 # server: gw
 helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
-  --version v1.7.0 \
+  --version v1.7.2 \
   --namespace envoy-gateway-system \
   --create-namespace \
   -f deploy/infra/envoy-gateway/values-prod.yaml \
