@@ -54,6 +54,10 @@ Do not commit `lab.local.ini`.
 
 For the current lab, `lab.local.ini` can be created like this:
 
+This is documentation-only for the current lab. It is not a portable
+architecture contract, and the generated `lab.local.ini` file remains ignored
+by git.
+
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
@@ -130,7 +134,8 @@ network address.
 
 ## Rules
 
-- real IP addresses stay in `*.local.ini`
+- runtime real addresses stay in `*.local.ini`
+- the current lab snippet above is documentation-only for recreating the ignored local inventory
 - tracked `*.example.ini` files use placeholders only
 - Kubernetes manifests and GitHub workflows must not depend on inventory IPs
 - stable logical names are the contract across lab and university environments
