@@ -22,10 +22,10 @@ The technical baseline is complete:
 
 `gw`
 
-- control host for production operations
+- control host for DEV and PROD operations
 - entry point for server access
-- production deployment runner host
-- location of the production kubeconfig
+- deployment runner host
+- location of the DEV and PROD kubeconfigs
 - host that runs Ansible, kubectl, and Helm operations
 
 `s4-db`
@@ -37,8 +37,7 @@ The technical baseline is complete:
 `s5-dev`
 
 - DEV k3s cluster
-- DEV GitHub Actions runner host
-- target for `uni-dev-*` releases
+- target cluster for `uni-dev-*` releases
 - owner of the `campus-dev` runtime
 
 `s6-monitoring`
@@ -62,7 +61,8 @@ DEV delivery:
 ```text
 uni-dev-* tag
 -> GitHub Actions
--> s5-campus-dev runner
+-> university gw control runner
+-> /home/nexoc/.kube/dev.yaml
 -> s5-dev k3s
 -> campus-dev
 -> Envoy Gateway NodePort 30080
@@ -75,7 +75,8 @@ uni-v* tag
 -> GitHub Actions
 -> GitHub environment: production
 -> manual approval
--> gw-campus-prod runner
+-> university gw control runner
+-> /home/nexoc/.kube/prod.yaml
 -> prod k3s HA cluster
 -> campus-prod
 -> Envoy Gateway NodePort 30080

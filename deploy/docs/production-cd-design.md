@@ -2,8 +2,10 @@
 
 This document defines the production release model for Campus++.
 
-Production delivery is deliberately separated from DEV delivery. The DEV
-runner must not hold production cluster credentials.
+Production delivery is deliberately separated from DEV delivery by workflow
+logic, kubeconfig paths, GitHub environments, and release tags. The current
+runner model uses one control runner per physical environment instead of one
+runner per target cluster.
 
 Production delivery is also separate from host operations and monitoring.
 Ansible playbooks in `ops/` can verify or prepare infrastructure, but `uni-v*`
@@ -14,7 +16,7 @@ tags remain the release mechanism for Campus++ application images.
 DEV tag-based CD is already active:
 
 ```text
-uni-dev-* tag -> GitHub Actions -> s5-campus-dev runner -> dev k3s -> campus-dev -> Envoy NodePort 30080
+uni-dev-* tag -> GitHub Actions -> uni gw control runner -> dev k3s -> campus-dev -> Envoy NodePort 30080
 ```
 
 The production Kubernetes target:
@@ -46,7 +48,8 @@ DEV releases:
 
 ```text
 uni-dev-* tag
--> runner: s5-campus-dev
+-> runner labels: self-hosted, linux, x64, uni, gw, deploy
+-> kubeconfig: /home/nexoc/.kube/dev.yaml
 -> target: s5-dev k3s
 -> namespace: campus-dev
 ```
@@ -57,17 +60,16 @@ Production releases:
 uni-v* tag
 -> GitHub environment: production
 -> manual approval required
--> runner: gw-campus-prod
+-> runner labels: self-hosted, linux, x64, uni, gw, deploy
+-> kubeconfig: /home/nexoc/.kube/prod.yaml
 -> target: prod k3s HA cluster
 -> namespace: campus-prod
 -> workloads: s1-prod, s2-prod, s3-prod
 ```
 
-The production runner uses these labels:
-
-```text
-self-hosted, linux, x64, prod, gw, uni
-```
+The same university control runner can deploy DEV and PROD. The safety boundary
+is the tag pattern, GitHub `production` environment approval, explicit
+kubeconfig path, namespace checks, and render/apply validation.
 
 ## Production Traffic Path
 
@@ -228,8 +230,8 @@ Deployment job:
 
 ```text
 environment: production
-runner: gw-campus-prod
-runner labels: self-hosted, linux, x64, prod, gw, uni
+runner: university gw control runner
+runner labels: self-hosted, linux, x64, uni, gw, deploy
 KUBECONFIG: /home/nexoc/.kube/prod.yaml
 CAMPUS_SECRETS_ROOT: /home/nexoc/campus-secrets
 overlay: deploy/app/overlays/prod

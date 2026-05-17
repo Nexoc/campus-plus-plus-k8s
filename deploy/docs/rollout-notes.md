@@ -14,7 +14,7 @@ Current active lab path:
 
 Current production release path:
 
-`uni-v* tag -> GitHub environment production approval -> gw-campus-prod runner -> prod k3s HA -> campus-prod`
+`uni-v* tag -> GitHub environment production approval -> uni gw control runner -> prod k3s HA -> campus-prod`
 
 Key characteristics:
 
@@ -52,7 +52,7 @@ The current repo supports this flow:
 2. `CI Pipeline` runs validation only.
 3. Push a `uni-dev-*` or `home-dev-*` tag.
 4. `Non-Prod Release` builds and publishes GHCR images tagged exactly with `github.ref_name`.
-5. The matching deploy job runs on the label-pinned self-hosted runner.
+5. The matching deploy job runs on the environment-specific `gw+deploy` self-hosted runner.
 6. The workflow creates or updates `ghcr-pull`, applies the shared `GatewayClass`, renders the selected overlay, and applies it.
 7. The workflow verifies rollouts, importer completion, Gateway API resources, and Envoy NodePort `30080`.
 
@@ -63,7 +63,7 @@ The current repo supports this controlled production flow:
 1. Push a `uni-v*` tag.
 2. `UNI Production Release` builds and publishes GHCR images tagged exactly with `github.ref_name`.
 3. The deploy job waits on the GitHub `production` environment.
-4. After manual approval, the deploy job runs on the `prod+gw+uni` self-hosted runner.
+4. After manual approval, the deploy job runs on the `uni+gw+deploy` self-hosted runner.
 5. The workflow creates or updates `ghcr-pull`, applies the shared `GatewayClass`, renders the `prod` overlay, and applies it to `campus-prod`.
 6. PROD render/apply generates the `s4-db` Service and EndpointSlice from `/home/nexoc/campus-secrets/prod/db-endpoint.env`.
 7. The workflow verifies rollouts, importer completion, Gateway API resources, and Envoy NodePort `30080`.

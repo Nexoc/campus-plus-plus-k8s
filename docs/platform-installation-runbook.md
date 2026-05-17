@@ -33,10 +33,10 @@ this repository does not store real secrets, tokens, passwords, or infrastructur
 expected final platform state:
 
 ```text
-uni-dev-* tag -> s5-dev -> campus-dev -> envoy nodeport 30080
-uni-v* tag -> github production approval -> gw -> campus-prod -> envoy nodeport 30080
-home-dev-* tag -> home s5-dev -> campus-dev -> envoy nodeport 30080
-home-v* tag -> home github production approval -> home gw -> campus-prod -> envoy nodeport 30080
+uni-dev-* tag -> uni gw control runner -> dev kubeconfig -> s5-dev -> campus-dev -> envoy nodeport 30080
+uni-v* tag -> github production approval -> uni gw control runner -> prod kubeconfig -> campus-prod -> envoy nodeport 30080
+home-dev-* tag -> home gw control runner -> dev kubeconfig -> home s5-dev -> campus-dev -> envoy nodeport 30080
+home-v* tag -> home github production approval -> home gw control runner -> prod kubeconfig -> campus-prod -> envoy nodeport 30080
 s4-db -> external postgresql through stable runtime alias
 s6-monitoring -> prometheus, grafana, exporters, dashboards
 ```
@@ -54,13 +54,15 @@ home grafana: home-grafana.davl.at
 
 ## runtime automation wrappers
 
-the step-by-step phases below are the source of truth. the repo also provides thin wrappers for the repeatable parts:
+The step-by-step phases below explain the full installation context. The
+executable source of truth for repeatable PROD bootstrap/recovery and monitoring
+automation is:
 
 ```text
 ops/scripts/runtime/
 ```
 
-wrapper defaults:
+The wrapper defaults are defined in `ops/scripts/runtime/common.sh`:
 
 ```text
 ANSIBLE_INVENTORY=ops/inventory/uni.local.ini
@@ -112,6 +114,7 @@ wrappers intentionally do not:
 * install or reinstall k3s
 * create real secrets
 * register github runners
+* run normal DEV application deploys
 * approve github production deployments
 * choose a release tag for you
 * run destructive cleanup on prod nodes
@@ -268,7 +271,7 @@ ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'
 ansible_python_interpreter=/usr/bin/python3
 ```
 
-note: `ansible_become=false` for `gw` is important because repo playbooks use local `kubectl`, `helm`, and `/home/nexoc/.kube/prod.yaml` from the `nexoc` user context.
+note: `ansible_become=false` for `gw` is important because repo playbooks use local `kubectl`, `helm`, and kubeconfig files from the `nexoc` user context.
 
 verify inventory parsing and ssh reachability:
 
@@ -421,21 +424,31 @@ s2-prod Ready control-plane,etcd
 s3-prod Ready control-plane,etcd
 ```
 
-## phase 6: prepare kubeconfig on gw
+## phase 6: prepare kubeconfigs on gw
 
-prod operations from this repo use:
+DEV and PROD deployments are controlled from the environment `gw` runner.
+
+DEV operations from this repo use:
+
+```text
+/home/nexoc/.kube/dev.yaml
+```
+
+PROD operations from this repo use:
 
 ```text
 /home/nexoc/.kube/prod.yaml
 ```
 
-after k3s is installed, place the prod kubeconfig on `gw` and make sure it points at the prod api endpoint reachable from `gw`.
+after k3s is installed, place the dev and prod kubeconfigs on `gw` and make sure they point at api endpoints reachable from `gw`.
 
 verify:
 
 ```bash
 # server: gw
+test -f /home/nexoc/.kube/dev.yaml
 test -f /home/nexoc/.kube/prod.yaml
+KUBECONFIG=/home/nexoc/.kube/dev.yaml kubectl get nodes -o wide
 KUBECONFIG=/home/nexoc/.kube/prod.yaml kubectl get nodes -o wide
 ```
 
@@ -561,27 +574,24 @@ in github ui:
 * create or verify environment `production`
 * enable required reviewers for `production`
 * keep `ghcr_pull_username` and `ghcr_pull_token` configured
-* register `s5-campus-dev` runner for dev
-* register `gw-campus-prod` runner for prod
+* register one university `gw` control runner for `uni-dev-*` and `uni-v*`
+* register one home `gw` control runner for `home-dev-*` and `home-v*`, if using the home environment
 
 expected runner labels:
 
 ```text
-s5-campus-dev: self-hosted, linux, x64, dev, s5
-gw-campus-prod: self-hosted, linux, x64, prod, gw
+uni-gw-runner: self-hosted, linux, x64, uni, gw, deploy
+home-gw-runner: self-hosted, linux, x64, home, gw, deploy
 ```
 
 check runner services without printing tokens:
 
 ```bash
 # server: gw
-systemctl status actions.runner.Nexoc-campus-plus-plus-k8s.gw-campus-prod.service --no-pager -l
+systemctl list-units 'actions.runner.*.service' --all --no-pager
 ```
 
-```bash
-# server: gw
-ssh nexoc@s5-dev 'systemctl status actions.runner.Nexoc-campus-plus-plus-k8s.s5-campus-dev.service --no-pager -l'
-```
+Runner service names depend on the runner name chosen during registration.
 
 ## phase 11: deploy dev
 
@@ -600,8 +610,8 @@ then verify from `gw`:
 
 ```bash
 # server: gw
-ssh nexoc@s5-dev 'kubectl get pods -n campus-dev -o wide'
-ssh nexoc@s5-dev 'kubectl get gateway,httproute,envoyproxy,clienttrafficpolicy -n campus-dev -o wide'
+KUBECONFIG=/home/nexoc/.kube/dev.yaml kubectl get pods -n campus-dev -o wide
+KUBECONFIG=/home/nexoc/.kube/dev.yaml kubectl get gateway,httproute,envoyproxy,clienttrafficpolicy -n campus-dev -o wide
 ```
 
 ## phase 12: deploy prod
@@ -613,7 +623,7 @@ create a `uni-v*` tag only after:
 * envoy gateway is installed
 * prod runtime files exist
 * `production` environment approval is configured
-* `gw-campus-prod` runner is online
+* the university `gw` control runner is online with `uni+gw+deploy` labels
 
 create and push the release tag:
 
@@ -908,7 +918,7 @@ fix: run the command with KUBECONFIG=/home/nexoc/.kube/prod.yaml or update the p
 
 ```text
 symptom: github actions job waits for self-hosted runner
-fix: check the matching runner service on s5-dev or gw and verify labels in github ui
+fix: check the matching environment gw runner service and verify labels in github ui
 ```
 
 ### ghcr pull failure

@@ -48,8 +48,8 @@ Current platform baseline:
 
 - technical baseline is complete in the current lab infrastructure
 - final implemented platform summary: [Campus++ Final Platform Status](docs/final-platform-status.md)
-- DEV CD is routed through `uni-dev-*` and `home-dev-*` tags with environment-specific runner labels
-- PROD CD is routed through `uni-v*` and `home-v*` tags with environment approval and `prod+gw+uni/home` runner labels
+- DEV CD is routed through `uni-dev-*` and `home-dev-*` tags on environment-specific `gw` control runners
+- PROD CD is routed through `uni-v*` and `home-v*` tags with environment approval on the same environment-specific `gw` control runners
 - the documented PROD release baseline is `v0.1.1`
 - the portable PROD database alias is working through generated `service/s4-db` and `endpointslice/s4-db`
 - the Ansible ops/check layer is ready
@@ -227,8 +227,8 @@ Current GitHub Actions behavior:
 
 - `push` to `main`: validation only
 - `pull_request` to `main`: validation only
-- `uni-dev-*` tag: build/push images and deploy to the university DEV runner
-- `home-dev-*` tag: build/push images and deploy to the home DEV runner
+- `uni-dev-*` tag: build/push images and deploy to university DEV from the university `gw` runner
+- `home-dev-*` tag: build/push images and deploy to home DEV from the home `gw` runner
 - `uni-v*` tag: build/push images and deploy to university PROD after `production` approval
 - `home-v*` tag: build/push images and deploy to home PROD after `home-production` approval
 
@@ -247,8 +247,8 @@ Expected result:
 
 - `Non-Prod Release` workflow starts
 - GHCR images are published with tag `uni-dev-example`
-- `Deploy UNI DEV to s5` runs on runner labels `dev+s5+uni`
-- `Deploy HOME DEV to home runner` is skipped
+- `Deploy UNI DEV from gw` runs on runner labels `uni+gw+deploy`
+- `Deploy HOME DEV from gw` is skipped
 - Kubernetes rollout is verified through Envoy/Gateway API checks
 
 Example PROD release:
@@ -265,7 +265,7 @@ Expected result:
 - `UNI Production Release` workflow starts
 - GHCR images are published with tag `uni-v0.1.2`
 - `Deploy UNI PROD to k3s HA cluster` waits for `production` environment approval
-- after approval, deploy runs on runner labels `prod+gw+uni`
+- after approval, deploy runs on runner labels `uni+gw+deploy`
 - Kubernetes rollout is verified in namespace `campus-prod`
 
 ## Runner Model
@@ -274,17 +274,17 @@ GitHub Actions targets self-hosted runners by labels, not by runner names.
 
 Current runner routing:
 
-- `uni-dev-*` requires `self-hosted`, `Linux`, `X64`, `dev`, `s5`, `uni`
-- `home-dev-*` requires `self-hosted`, `Linux`, `X64`, `dev`, `s5`, `home`
-- `uni-v*` requires `self-hosted`, `Linux`, `X64`, `prod`, `gw`, `uni`
-- `home-v*` requires `self-hosted`, `Linux`, `X64`, `prod`, `gw`, `home`
+- `uni-dev-*` and `uni-v*` require `self-hosted`, `Linux`, `X64`, `uni`, `gw`, `deploy`
+- `home-dev-*` and `home-v*` require `self-hosted`, `Linux`, `X64`, `home`, `gw`, `deploy`
 
-Current runner names:
+Recommended runner names:
 
-- university DEV runner: `s5-campus-dev`
-- university PROD runner: `gw-campus-prod`
-- home DEV runner: `home-s5-campus-dev`
-- home PROD runner: `home-gw-campus-prod`
+- university control runner: `uni-gw-runner`
+- home control runner: `home-gw-runner`
+
+The runner names are descriptive only. GitHub Actions routes jobs by labels.
+Each control runner needs the correct kubeconfigs and runtime secret files for
+its own environment.
 
 Production hostnames:
 

@@ -84,16 +84,16 @@ jobs:
           tags: ghcr.io/nexoc/campus-importer:${{ steps.release-meta.outputs.image_tag }}
 
   deploy-dev:
-    name: Deploy UNI DEV to s5
+    name: Deploy UNI DEV from gw
     if: startsWith(github.ref_name, 'uni-dev-')
     needs: build-and-push-images
     runs-on:
       - self-hosted
       - Linux
       - X64
-      - dev
-      - s5
       - uni
+      - gw
+      - deploy
     concurrency:
       group: campus-uni-dev-release
       cancel-in-progress: false
@@ -102,7 +102,7 @@ jobs:
       contents: read
       packages: read
     env:
-      KUBECONFIG: /home/nexoc/.kube/config
+      KUBECONFIG: /home/nexoc/.kube/dev.yaml
       CAMPUS_SECRETS_ROOT: /home/nexoc/campus-secrets
       RELEASE_ENV: dev
       DEPLOY_NAMESPACE: campus-dev
@@ -117,7 +117,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "Release tag: ${{ needs.build-and-push-images.outputs.image_tag }}"
-          echo "Target runner: dev+s5+uni"
+          echo "Target runner: uni+gw+deploy"
           echo "Target overlay: $RELEASE_ENV"
           echo "Target namespace: $DEPLOY_NAMESPACE"
 
@@ -200,16 +200,16 @@ jobs:
           kubectl get svc -n envoy-gateway-system
 
   deploy-home:
-    name: Deploy HOME DEV to home runner
+    name: Deploy HOME DEV from gw
     if: startsWith(github.ref_name, 'home-dev-')
     needs: build-and-push-images
     runs-on:
       - self-hosted
       - Linux
       - X64
-      - dev
-      - s5
       - home
+      - gw
+      - deploy
     concurrency:
       group: campus-home-dev-release
       cancel-in-progress: false
@@ -218,7 +218,7 @@ jobs:
       contents: read
       packages: read
     env:
-      KUBECONFIG: /home/nexoc/.kube/config
+      KUBECONFIG: /home/nexoc/.kube/dev.yaml
       CAMPUS_SECRETS_ROOT: /home/nexoc/campus-secrets
       RELEASE_ENV: home
       DEPLOY_NAMESPACE: campus-dev
@@ -233,7 +233,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "Release tag: ${{ needs.build-and-push-images.outputs.image_tag }}"
-          echo "Target runner: dev+s5+home"
+          echo "Target runner: home+gw+deploy"
           echo "Target overlay: $RELEASE_ENV"
           echo "Target namespace: $DEPLOY_NAMESPACE"
 

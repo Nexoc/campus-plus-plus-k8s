@@ -2,7 +2,7 @@
 
 This directory is used by the active `deploy/app/overlays/home` flow.
 
-During automated deploys, the self-hosted home runner stages secrets here from:
+During automated deploys, the home `gw` control runner stages secrets here from:
 
 - `/home/nexoc/campus-secrets/home/`
 
@@ -14,6 +14,6 @@ Expected files:
 Current assumptions for the `home` overlay:
 
 - it mirrors the lab namespace and service layout
-- it uses the placeholder hostname from `httproute-patch.yaml`
+- it uses the home DEV hostname from `httproute-patch.yaml`
 - config defaults were copied from `dev` and should be reviewed before the
   first real `home-dev-*` release if the home environment differs

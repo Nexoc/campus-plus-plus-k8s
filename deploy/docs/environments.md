@@ -5,10 +5,10 @@ to tag-driven releases and the addition of the Ansible/monitoring layer.
 
 ## Infrastructure Roles
 
-Lab environment:
+University/lab environment:
 
-- `gw`: gateway, NAT, SSH jump host, Ansible control host, and PROD deploy control host
-- `s5-dev`: single-node k3s DEV cluster and lab self-hosted runner
+- `gw`: gateway, NAT, SSH jump host, Ansible control host, and DEV/PROD deploy control host
+- `s5-dev`: single-node k3s DEV cluster
 - `s4-db`: PostgreSQL outside Kubernetes
 - `s6-monitoring`: central monitoring VM
 - `s1-prod`, `s2-prod`, `s3-prod`: k3s HA production cluster nodes
@@ -20,14 +20,14 @@ future environment without editing tracked Kubernetes files.
 
 Home environment:
 
-- separate self-hosted runner and k3s cluster
+- separate `gw` control runner and k3s cluster
 - same application layout as lab
 - its own edge hostname patch and runner labels
 
 Production environment:
 
 - `s1-prod`, `s2-prod`, and `s3-prod`: k3s HA production cluster nodes
-- `gw`: production deployment control host for the `uni-v*` workflow
+- `gw`: deployment control host for the `uni-dev-*` and `uni-v*` workflows
 - application hostname: `campus-prod.10-123-127-29.sslip.io`
 - `s4-db`: stable Kubernetes DNS alias for external PostgreSQL in `campus-prod`
 
@@ -59,11 +59,11 @@ Current active app environments:
 
 Current release channels:
 
-- `uni-dev-*` deploys to the university DEV cluster on runner labels `dev+s5+uni`
-- `home-dev-*` deploys to the home DEV cluster on runner labels `dev+s5+home`
+- `uni-dev-*` deploys to the university DEV cluster from the `uni+gw+deploy` control runner
+- `home-dev-*` deploys to the home DEV cluster from the `home+gw+deploy` control runner
 - `main` runs validation only
-- `uni-v*` deploys to university PROD through the `production` environment and `prod+gw+uni` runner
-- `home-v*` deploys to home PROD through the `home-production` environment and `prod+gw+home` runner
+- `uni-v*` deploys to university PROD through the `production` environment and the `uni+gw+deploy` control runner
+- `home-v*` deploys to home PROD through the `home-production` environment and the `home+gw+deploy` control runner
 
 Home PROD uses its own hostname:
 

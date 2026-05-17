@@ -89,9 +89,9 @@ jobs:
       - self-hosted
       - Linux
       - X64
-      - prod
-      - gw
       - uni
+      - gw
+      - deploy
     environment:
       name: production
     concurrency:
@@ -120,7 +120,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "Release tag: ${{ needs.build-and-push-images.outputs.image_tag }}"
-          echo "Target runner: prod+gw+uni"
+          echo "Target runner: uni+gw+deploy"
           echo "Target overlay: $RELEASE_ENV"
           echo "Target namespace: $DEPLOY_NAMESPACE"
           echo "Expected nodeport: $EXPECTED_NODEPORT"

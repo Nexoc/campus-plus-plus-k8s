@@ -1,11 +1,15 @@
 # Runtime Automation Wrappers
 
-These scripts are thin wrappers for the university/lab bootstrap flow.
+These scripts are thin wrappers for repeatable PROD bootstrap/recovery and
+monitoring operations in the university/lab flow.
 
 They are intended to be executed from `gw` after the repository is cloned there.
 They do not store secrets, do not register GitHub runners, and do not install or
 reinstall k3s. k3s cluster installation remains a runtime-only step outside the
 repo-owned ops layer.
+
+They are not the normal DEV deployment path. DEV releases are handled by the
+GitHub Actions `uni-dev-*` and `home-dev-*` workflows.
 
 Default runtime values:
 

@@ -166,7 +166,7 @@ DEV runtime files on `s5-dev`:
 /home/nexoc/campus-secrets/dev/auth-secrets.env
 ```
 
-HOME runtime files on the home runner:
+HOME runtime files on the home `gw` control runner:
 
 ```text
 /home/nexoc/campus-secrets/home/db-secrets.env
@@ -190,10 +190,10 @@ chmod 700 /home/nexoc/campus-secrets /home/nexoc/campus-secrets/prod
 chmod 600 /home/nexoc/campus-secrets/prod/*.env
 ```
 
-Use the same pattern on `s5-dev` for DEV:
+Use the same pattern on the environment `gw` control host for DEV:
 
 ```bash
-# server: s5-dev
+# server: gw
 mkdir -p /home/nexoc/campus-secrets/dev
 chmod 700 /home/nexoc/campus-secrets /home/nexoc/campus-secrets/dev
 chmod 600 /home/nexoc/campus-secrets/dev/*.env
@@ -203,22 +203,23 @@ Do not print the contents of these files in logs or chat.
 
 ## Kubernetes Access Files
 
-DEV deploy runner on `s5-dev` expects:
+DEV deploy from the environment `gw` control runner expects:
 
 ```text
-/home/nexoc/.kube/config
+/home/nexoc/.kube/dev.yaml
 ```
 
-PROD deploy runner on `gw` expects:
+PROD deploy from the same environment `gw` control runner expects:
 
 ```text
 /home/nexoc/.kube/prod.yaml
 ```
 
-The production workflow uses the explicit kubeconfig path:
+The workflows use explicit kubeconfig paths:
 
 ```text
-KUBECONFIG=/home/nexoc/.kube/prod.yaml
+DEV:  KUBECONFIG=/home/nexoc/.kube/dev.yaml
+PROD: KUBECONFIG=/home/nexoc/.kube/prod.yaml
 ```
 
 ## GHCR Pull Credentials
@@ -237,24 +238,24 @@ Do not print token values.
 
 ## GitHub Environments And Runners
 
-Production release requires:
+University releases require:
 
 ```text
-GitHub environment: production
-required reviewers: enabled
-runner labels: self-hosted, Linux, X64, prod, gw
+DEV tag: uni-dev-*
+PROD tag: uni-v*
+PROD GitHub environment: production
+required reviewers: enabled for production
+runner labels: self-hosted, Linux, X64, uni, gw, deploy
 ```
 
-DEV release requires:
+Home releases require:
 
 ```text
-runner labels: self-hosted, Linux, dev, s5
-```
-
-HOME release requires:
-
-```text
-runner labels: self-hosted, Linux, dev, home
+DEV tag: home-dev-*
+PROD tag: home-v*
+PROD GitHub environment: home-production
+required reviewers: enabled for home-production
+runner labels: self-hosted, Linux, X64, home, gw, deploy
 ```
 
 ## Ansible Inventory
@@ -395,11 +396,11 @@ Campus Kubernetes Overview
 For DEV deploy:
 
 ```text
-1. s5-dev has /home/nexoc/.kube/config
-2. s5-dev has /home/nexoc/campus-secrets/dev/db-secrets.env
-3. s5-dev has /home/nexoc/campus-secrets/dev/auth-secrets.env
+1. gw has /home/nexoc/.kube/dev.yaml
+2. gw has /home/nexoc/campus-secrets/dev/db-secrets.env
+3. gw has /home/nexoc/campus-secrets/dev/auth-secrets.env
 4. GitHub has GHCR_PULL_USERNAME and GHCR_PULL_TOKEN
-5. runner s5-campus-dev is online with dev+s5+uni labels
+5. the university gw runner is online with uni+gw+deploy labels
 6. s5-dev can reach PostgreSQL as s4-db:5432
 ```
 
@@ -412,7 +413,7 @@ For PROD deploy:
 4. gw has /home/nexoc/campus-secrets/prod/db-endpoint.env
 5. GitHub environment production exists with required reviewers
 6. GitHub has GHCR_PULL_USERNAME and GHCR_PULL_TOKEN
-7. runner gw-campus-prod is online with prod+gw+uni labels
+7. the university gw runner is online with uni+gw+deploy labels
 8. prod cluster has or can install Envoy Gateway
 ```
 

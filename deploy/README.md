@@ -25,7 +25,7 @@ The current working DEV request path is:
 
 The current controlled PROD release path is:
 
-`uni-v* tag -> production approval -> gw-campus-prod -> prod k3s HA -> campus-prod`
+`uni-v* tag -> production approval -> uni gw control runner -> prod k3s HA -> campus-prod`
 
 Key points:
 
@@ -68,7 +68,7 @@ Before applying the active DEV manifests, make sure:
 - the cluster can reach PostgreSQL at `s4-db:5432`
 - the hostnames `gw`, `s5-dev`, and `s4-db` resolve through DNS or `/etc/hosts`
   on the servers that use them
-- DEV secret env files are available on the runner host under `/home/nexoc/campus-secrets/dev`
+- DEV secret env files are available on the environment `gw` control runner under `/home/nexoc/campus-secrets/dev`
 
 ## Config And Secrets
 
@@ -116,10 +116,10 @@ For PROD, `DB_HOST` remains `s4-db`. The deploy script renders `service/s4-db`
 and `endpointslice/s4-db` from `db-endpoint.env`, so the real external database
 address stays environment-specific and out of git.
 
-Prepare the fixed DEV host path:
+Prepare the fixed DEV host path on the environment `gw` control runner:
 
 ```bash
-# server: s5-dev
+# server: gw
 cd /home/nexoc/campus-plus-plus-k8s
 mkdir -p /home/nexoc/campus-secrets/dev
 cp deploy/templates/secrets/db-secrets.env.example /home/nexoc/campus-secrets/dev/db-secrets.env
@@ -129,7 +129,7 @@ chmod 700 /home/nexoc/campus-secrets /home/nexoc/campus-secrets/dev
 chmod 600 /home/nexoc/campus-secrets/dev/*.env
 ```
 
-Prepare the same layout on the future home runner before running the first
+Prepare the same layout on the future home `gw` control runner before running the first
 `home-dev-*` release. The required files are:
 
 ```text
@@ -260,12 +260,12 @@ Current workflow behavior:
 - CI runs validation only on `push` and `pull_request`
 - `.github/workflows/deploy-dev.yml` is the non-prod release workflow
 - `.github/workflows/deploy-prod.yml` is the production release workflow
-- `uni-dev-*` tags build and push GHCR images, then deploy to the `dev+s5+uni` runner
-- `home-dev-*` tags build and push GHCR images, then deploy to the `dev+s5+home` runner
+- `uni-dev-*` tags build and push GHCR images, then deploy from the `uni+gw+deploy` runner
+- `home-dev-*` tags build and push GHCR images, then deploy from the `home+gw+deploy` runner
 - `uni-v*` tags build and push GHCR images, wait for the `production` environment
-  approval, then deploy to the `prod+gw+uni` runner
+  approval, then deploy from the `uni+gw+deploy` runner
 - `home-v*` tags build and push GHCR images, wait for the `home-production`
-  environment approval, then deploy to the `prod+gw+home` runner
+  environment approval, then deploy from the `home+gw+deploy` runner
 
 Production hostnames are environment-specific:
 
