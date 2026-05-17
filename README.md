@@ -318,6 +318,7 @@ campus-plus-plus/
 Deployment docs:
 
 - [Final Platform Status](docs/final-platform-status.md)
+- [Platform Installation Runbook](docs/platform-installation-runbook.md)
 - [Deployment Runbook](deploy/README.md)
 - [Runtime Inputs](docs/runtime-inputs.md)
 - [Environments](deploy/docs/environments.md)
@@ -331,6 +332,7 @@ Deployment docs:
 Ops and monitoring docs:
 
 - [Ops Automation](ops/README.md)
+- [Runtime Automation Wrappers](ops/scripts/runtime/README.md)
 - [Monitoring Design](ops/docs/monitoring-design.md)
 - [Monitoring Runtime Model](ops/docs/monitoring-runtime.md)
 
