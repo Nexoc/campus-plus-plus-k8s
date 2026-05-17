@@ -131,7 +131,7 @@
         return_content: false
         timeout: 5
 
-    - name: gw | verify all node-exporter targets are up in Prometheus
+    - name: gw | wait for all node-exporter targets to be up in Prometheus
       ansible.builtin.uri:
         url: "http://{{ monitoring_host }}:{{ prometheus_port }}/api/v1/targets?state=active"
         method: GET
@@ -139,6 +139,12 @@
         return_content: true
         timeout: 10
       register: prometheus_targets_api
+      no_log: true
+      retries: 12
+      delay: 5
+      until:
+        - prometheus_targets_api.json.status == "success"
+        - "(prometheus_targets_api.json.data.activeTargets | selectattr('labels.job', 'equalto', 'node-exporter') | selectattr('health', 'equalto', 'up') | list | length) == (groups['all'] | length)"
 
     - name: gw | require all node-exporter targets up
       ansible.builtin.assert:
@@ -147,11 +153,26 @@
           - "(prometheus_targets_api.json.data.activeTargets | selectattr('labels.job', 'equalto', 'node-exporter') | selectattr('health', 'equalto', 'up') | list | length) == (groups['all'] | length)"
         fail_msg: "Not all node-exporter targets are up in Prometheus"
 
+    - name: gw | wait for postgres-exporter target to be up in Prometheus
+      ansible.builtin.uri:
+        url: "http://{{ monitoring_host }}:{{ prometheus_port }}/api/v1/targets?state=active"
+        method: GET
+        status_code: 200
+        return_content: true
+        timeout: 10
+      register: postgres_exporter_targets_api
+      no_log: true
+      retries: 12
+      delay: 5
+      until:
+        - postgres_exporter_targets_api.json.status == "success"
+        - "(postgres_exporter_targets_api.json.data.activeTargets | selectattr('labels.job', 'equalto', postgres_exporter_job) | selectattr('health', 'equalto', 'up') | list | length) == (groups['db'] | length)"
+
     - name: gw | require postgres-exporter target up
       ansible.builtin.assert:
         that:
-          - prometheus_targets_api.json.status == "success"
-          - "(prometheus_targets_api.json.data.activeTargets | selectattr('labels.job', 'equalto', postgres_exporter_job) | selectattr('health', 'equalto', 'up') | list | length) == (groups['db'] | length)"
+          - postgres_exporter_targets_api.json.status == "success"
+          - "(postgres_exporter_targets_api.json.data.activeTargets | selectattr('labels.job', 'equalto', postgres_exporter_job) | selectattr('health', 'equalto', 'up') | list | length) == (groups['db'] | length)"
         fail_msg: "postgres-exporter target is not up in Prometheus"
 
     - name: gw | verify Grafana health endpoint on s6-monitoring
