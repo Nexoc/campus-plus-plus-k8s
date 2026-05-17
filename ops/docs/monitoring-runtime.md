@@ -137,6 +137,11 @@ Runtime-only files:
 /home/nexoc/campus-secrets/monitoring/alertmanager.env
 ```
 
+`postgres-exporter.env` is generated on `s4-db` by
+`render-postgres-exporter-env.yml`. Its DSN host and port come from the PROD
+runtime endpoint file first, then tracked PROD config, with `s4-db` as the final
+host fallback. The generated DSN is not printed by the playbook.
+
 Example templates live in:
 
 ```text

@@ -323,7 +323,10 @@ ops/playbooks/render-postgres-exporter-env.yml
 ```
 
 The playbook derives the exporter `DATA_SOURCE_NAME` from existing PROD
-database runtime inputs without printing the password or the final DSN.
+database runtime inputs without printing the password or the final DSN. The
+database host and port prefer `/home/nexoc/campus-secrets/prod/db-endpoint.env`
+(`DB_ENDPOINT_ADDRESS`, `DB_ENDPOINT_PORT`), then tracked PROD config
+(`DB_HOST`, `DB_PORT`), then the stable fallback host `s4-db`.
 
 Install the exporter after rendering the env file:
 

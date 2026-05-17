@@ -179,7 +179,9 @@ is installed and Prometheus is re-rendered, the expected target count is 9.
 
 Runs from `gw`, reads existing PROD database runtime inputs without printing
 secret values, and creates `/home/nexoc/campus-secrets/monitoring/postgres-exporter.env`
-on `s4-db` for the future PostgreSQL exporter service.
+on `s4-db` for the PostgreSQL exporter service. The exporter database host and
+port prefer `/home/nexoc/campus-secrets/prod/db-endpoint.env`, then tracked
+PROD config, with `s4-db` as the stable hostname fallback.
 
 `install-postgres-exporter.yml`
 

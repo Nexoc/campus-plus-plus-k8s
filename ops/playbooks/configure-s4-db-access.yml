@@ -51,6 +51,28 @@
           - "':' ~ postgres_port|string in postgres_listeners.stdout"
         fail_msg: "PostgreSQL port {{ postgres_port }} is not listening"
 
+    - name: s4-db | allow local loopback access to PostgreSQL
+      ansible.builtin.shell: |
+        set -euo pipefail
+        port={{ postgres_port | quote }}
+
+        if iptables -C INPUT -i lo -p tcp --dport "$port" -j ACCEPT >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        drop_line="$(iptables -L INPUT --line-numbers -n | awk -v port="$port" '$0 ~ /DROP/ && $0 ~ /tcp/ && $0 ~ ("dpt:" port) { print $1; exit }')"
+        if [ -n "$drop_line" ]; then
+          iptables -I INPUT "$drop_line" -i lo -p tcp --dport "$port" -j ACCEPT
+        else
+          iptables -A INPUT -i lo -p tcp --dport "$port" -j ACCEPT
+        fi
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: postgres_loopback_rule
+      changed_when: "'inserted' in postgres_loopback_rule.stdout"
+
     - name: s4-db | add idempotent PostgreSQL allow rules before drop rule
       ansible.builtin.shell: |
         set -euo pipefail
@@ -124,4 +146,13 @@
         insertafter: EOF
         backup: true
       loop: "{{ allowed_postgres_clients }}"
+      notify: reload postgresql
+
+    - name: s4-db | add pg_hba rule for same-host clients
+      ansible.builtin.lineinfile:
+        path: "{{ pg_hba_path.stdout }}"
+        regexp: "^host\\s+{{ postgres_hba_database }}\\s+{{ postgres_hba_user }}\\s+samehost\\s+"
+        line: "host {{ postgres_hba_database }} {{ postgres_hba_user }} samehost {{ postgres_hba_method }}"
+        insertafter: EOF
+        backup: true
       notify: reload postgresql

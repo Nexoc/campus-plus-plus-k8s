@@ -14,6 +14,10 @@
       - iptables
     postgres_exporter_service: prometheus-postgres-exporter
     postgres_exporter_port: 9187
+    postgres_port: 5432
+    postgres_hba_database: all
+    postgres_hba_user: all
+    postgres_hba_method: scram-sha-256
     postgres_exporter_env_file: /home/nexoc/campus-secrets/monitoring/postgres-exporter.env
     postgres_exporter_override_dir: /etc/systemd/system/prometheus-postgres-exporter.service.d
     postgres_exporter_override_file: /etc/systemd/system/prometheus-postgres-exporter.service.d/campus-monitoring.conf
@@ -27,6 +31,11 @@
       ansible.builtin.service:
         name: "{{ postgres_exporter_service }}"
         state: restarted
+
+    - name: reload postgresql
+      ansible.builtin.service:
+        name: postgresql
+        state: reloaded
   tasks:
     - name: s4-db | require exactly one monitoring host
       ansible.builtin.assert:
@@ -91,6 +100,55 @@
           - is-active
           - "{{ postgres_exporter_service }}"
       changed_when: false
+
+    - name: s4-db | allow local loopback access to PostgreSQL for exporter
+      ansible.builtin.shell: |
+        set -euo pipefail
+        port={{ postgres_port | quote }}
+
+        if iptables -C INPUT -i lo -p tcp --dport "$port" -j ACCEPT >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        drop_line="$(iptables -L INPUT --line-numbers -n | awk -v port="$port" '$0 ~ /DROP/ && $0 ~ /tcp/ && $0 ~ ("dpt:" port) { print $1; exit }')"
+        if [ -n "$drop_line" ]; then
+          iptables -I INPUT "$drop_line" -i lo -p tcp --dport "$port" -j ACCEPT
+        else
+          iptables -A INPUT -i lo -p tcp --dport "$port" -j ACCEPT
+        fi
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: postgres_loopback_rule
+      changed_when: "'inserted' in postgres_loopback_rule.stdout"
+
+    - name: s4-db | locate pg_hba.conf
+      ansible.builtin.shell: |
+        set -euo pipefail
+        find /etc/postgresql -name pg_hba.conf -type f | sort | tail -n 1
+      args:
+        executable: /bin/bash
+      register: pg_hba_path
+      changed_when: false
+
+    - name: s4-db | require pg_hba.conf to exist
+      ansible.builtin.assert:
+        that:
+          - pg_hba_path.stdout | length > 0
+        fail_msg: "Could not find pg_hba.conf under /etc/postgresql"
+
+    - name: s4-db | allow local same-host PostgreSQL access for exporter
+      ansible.builtin.lineinfile:
+        path: "{{ pg_hba_path.stdout }}"
+        regexp: "^host\\s+{{ postgres_hba_database }}\\s+{{ postgres_hba_user }}\\s+samehost\\s+"
+        line: "host {{ postgres_hba_database }} {{ postgres_hba_user }} samehost {{ postgres_hba_method }}"
+        insertafter: EOF
+        backup: true
+      notify: reload postgresql
+
+    - name: s4-db | apply pending PostgreSQL access changes before metrics check
+      ansible.builtin.meta: flush_handlers
 
     - name: s4-db | allow local loopback access to postgres exporter
       ansible.builtin.shell: |

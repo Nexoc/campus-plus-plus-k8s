@@ -11,6 +11,7 @@
   vars:
     repo_root: /home/nexoc/campus-plus-plus-k8s
     prod_db_secrets_file: /home/nexoc/campus-secrets/prod/db-secrets.env
+    prod_db_endpoint_file: /home/nexoc/campus-secrets/prod/db-endpoint.env
     prod_db_config_file: "{{ repo_root }}/deploy/app/overlays/prod/config/backend-config.env"
     postgres_exporter_env_dir: /home/nexoc/campus-secrets/monitoring
     postgres_exporter_env_file: /home/nexoc/campus-secrets/monitoring/postgres-exporter.env
@@ -29,6 +30,13 @@
           - prod_db_secrets_stat.stat.exists
           - prod_db_secrets_stat.stat.isreg
         fail_msg: "Prod DB secrets file is missing on gw"
+
+    - name: s4-db | check optional prod db endpoint file on gw
+      ansible.builtin.stat:
+        path: "{{ prod_db_endpoint_file }}"
+      delegate_to: gw
+      become: false
+      register: prod_db_endpoint_stat
 
     - name: s4-db | require source prod db config file on gw
       ansible.builtin.stat:
@@ -52,6 +60,15 @@
       register: prod_db_secrets_slurp
       no_log: true
 
+    - name: s4-db | read prod db endpoint from gw without logging values
+      ansible.builtin.slurp:
+        src: "{{ prod_db_endpoint_file }}"
+      delegate_to: gw
+      become: false
+      register: prod_db_endpoint_slurp
+      when: prod_db_endpoint_stat.stat.exists
+      no_log: true
+
     - name: s4-db | read prod db config from gw
       ansible.builtin.slurp:
         src: "{{ prod_db_config_file }}"
@@ -63,6 +80,7 @@
     - name: s4-db | parse postgres exporter source values without logging
       ansible.builtin.set_fact:
         db_env_content: "{{ prod_db_secrets_slurp.content | b64decode }}"
+        db_endpoint_content: "{{ (prod_db_endpoint_slurp.content | default('') | b64decode) if prod_db_endpoint_stat.stat.exists else '' }}"
         db_config_content: "{{ prod_db_config_slurp.content | b64decode }}"
       no_log: true
 
@@ -70,21 +88,26 @@
       ansible.builtin.set_fact:
         db_name_from_secrets: "{{ (db_env_content | regex_search('(?m)^DB_NAME=(.+)$', '\\1') | default([], true) | first | default('')) | trim }}"
         db_name_from_config: "{{ (db_config_content | regex_search('(?m)^DB_NAME=(.+)$', '\\1') | default([], true) | first | default('')) | trim }}"
+        db_host_from_endpoint: "{{ (db_endpoint_content | regex_search('(?m)^DB_ENDPOINT_ADDRESS=(.+)$', '\\1') | default([], true) | first | default('')) | trim }}"
+        db_host_from_config: "{{ (db_config_content | regex_search('(?m)^DB_HOST=(.+)$', '\\1') | default([], true) | first | default('')) | trim }}"
         db_username: "{{ (db_env_content | regex_search('(?m)^DB_USERNAME=(.+)$', '\\1') | default([], true) | first | default('')) | trim }}"
         db_password: "{{ (db_env_content | regex_search('(?m)^DB_PASSWORD=(.+)$', '\\1') | default([], true) | first | default('')) | trim }}"
         db_port_from_secrets: "{{ (db_env_content | regex_search('(?m)^DB_PORT=(.+)$', '\\1') | default([], true) | first | default('')) | trim }}"
+        db_port_from_endpoint: "{{ (db_endpoint_content | regex_search('(?m)^DB_ENDPOINT_PORT=(.+)$', '\\1') | default([], true) | first | default('')) | trim }}"
         db_port_from_config: "{{ (db_config_content | regex_search('(?m)^DB_PORT=(.+)$', '\\1') | default([], true) | first | default('')) | trim }}"
       no_log: true
 
-    - name: s4-db | select database name and port without logging
+    - name: s4-db | select database host, name, and port without logging
       ansible.builtin.set_fact:
+        db_host: "{{ db_host_from_endpoint if (db_host_from_endpoint | length > 0) else (db_host_from_config if (db_host_from_config | length > 0) else 's4-db') }}"
         db_name: "{{ db_name_from_secrets if (db_name_from_secrets | length > 0) else db_name_from_config }}"
-        db_port: "{{ db_port_from_secrets if (db_port_from_secrets | length > 0) else (db_port_from_config if (db_port_from_config | length > 0) else '5432') }}"
+        db_port: "{{ db_port_from_endpoint if (db_port_from_endpoint | length > 0) else (db_port_from_config if (db_port_from_config | length > 0) else (db_port_from_secrets if (db_port_from_secrets | length > 0) else '5432')) }}"
       no_log: true
 
     - name: s4-db | require required DB variables
       ansible.builtin.assert:
         that:
+          - db_host | length > 0
           - db_name | length > 0
           - db_username | length > 0
           - db_password | length > 0
@@ -97,6 +120,7 @@
         db_username_urlencoded: "{{ db_username | urlencode | replace('/', '%2F') }}"
         db_password_urlencoded: "{{ db_password | urlencode | replace('/', '%2F') }}"
         db_name_urlencoded: "{{ db_name | urlencode | replace('/', '%2F') }}"
+        db_host_urlencoded: "{{ db_host | urlencode | replace('/', '%2F') }}"
       no_log: true
 
     - name: s4-db | ensure monitoring secrets directory exists
@@ -116,8 +140,20 @@
         content: |
           # Runtime-only file. Do not commit.
           # Managed by Ansible from existing prod DB runtime inputs.
-          DATA_SOURCE_NAME=postgresql://{{ db_username_urlencoded }}:{{ db_password_urlencoded }}@localhost:{{ db_port }}/{{ db_name_urlencoded }}?sslmode=disable
+          DATA_SOURCE_NAME=postgresql://{{ db_username_urlencoded }}:{{ db_password_urlencoded }}@{{ db_host_urlencoded }}:{{ db_port }}/{{ db_name_urlencoded }}?sslmode=disable
+      register: postgres_exporter_env_copy
       no_log: true
+
+    - name: s4-db | collect service facts before optional exporter restart
+      ansible.builtin.service_facts:
+
+    - name: s4-db | restart postgres exporter when runtime env changed
+      ansible.builtin.service:
+        name: prometheus-postgres-exporter
+        state: restarted
+      when:
+        - postgres_exporter_env_copy.changed
+        - "'prometheus-postgres-exporter.service' in ansible_facts.services or 'prometheus-postgres-exporter' in ansible_facts.services"
 
     - name: s4-db | verify postgres exporter env file exists
       ansible.builtin.stat:

@@ -322,6 +322,12 @@ Runtime-only monitoring files should live on the appropriate host, for example:
 The exact runtime secret contract should be documented before implementing
 exporters or alerts that need credentials.
 
+For PostgreSQL exporter, `render-postgres-exporter-env.yml` generates
+`postgres-exporter.env` on `s4-db` from existing PROD runtime inputs. The
+database endpoint prefers `DB_ENDPOINT_ADDRESS` and `DB_ENDPOINT_PORT` from
+`/home/nexoc/campus-secrets/prod/db-endpoint.env`, then falls back to tracked
+PROD `DB_HOST` and `DB_PORT`, and finally to `s4-db`.
+
 ## Success Criteria
 
 Completed core monitoring success criteria:
