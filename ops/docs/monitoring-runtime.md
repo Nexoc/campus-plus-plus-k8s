@@ -101,6 +101,8 @@ Implemented config files:
 /etc/grafana/provisioning/datasources/campus-prometheus.yml
 /etc/grafana/provisioning/dashboards/campus-dashboards.yml
 /var/lib/grafana/dashboards/campus-vm-overview.json
+/var/lib/grafana/dashboards/campus-postgres-overview.json
+/var/lib/grafana/dashboards/campus-k8s-overview.json
 ```
 
 Planned config files:
@@ -171,8 +173,8 @@ Next order:
 9. install-prometheus.yml
 10. install-kube-state-metrics.yml
 11. install-prometheus.yml
-12. check-monitoring-stack.yml
-13. add database and Kubernetes dashboard panels
+12. install-grafana.yml
+13. check-monitoring-stack.yml
 ```
 
 Future order:
@@ -305,7 +307,10 @@ Current Grafana dashboard provisioning:
 ```text
 dashboard provider: /etc/grafana/provisioning/dashboards/campus-dashboards.yml
 dashboard files: /var/lib/grafana/dashboards
-initial dashboard: Campus VM Overview
+dashboards:
+  Campus VM Overview
+  Campus PostgreSQL Overview
+  Campus Kubernetes Overview
 datasource name: Campus Prometheus
 datasource UID: campus-prometheus
 datasource URL: http://localhost:9090

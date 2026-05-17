@@ -24,14 +24,13 @@ Completed:
 - Prometheus on `s6-monitoring`
 - Grafana on `s6-monitoring`
 - Grafana datasource `Campus Prometheus` with UID `campus-prometheus`
-- initial Grafana dashboard `Campus VM Overview`
+- Grafana dashboards `Campus VM Overview`, `Campus PostgreSQL Overview`, and `Campus Kubernetes Overview`
 - central monitoring stack verification
 - PostgreSQL exporter automation for `s4-db`
 - kube-state-metrics manifests and install playbook for dev/prod clusters
 
 Next monitoring work:
 
-- database dashboard panels
 - alerting and logs
 
 ## Inventory Contract
@@ -165,11 +164,11 @@ Installs Prometheus on `s6-monitoring` through the Debian package, renders node-
 
 `install-grafana.yml`
 
-Installs Grafana on `s6-monitoring` through the official Grafana APT repository, provisions the local Prometheus datasource and the initial Campus VM Overview dashboard, restricts external port `3000` to `gw`, and verifies Grafana health from both `s6-monitoring` and `gw`.
+Installs Grafana on `s6-monitoring` through the official Grafana APT repository, provisions the local Prometheus datasource and the Campus++ dashboards, restricts external port `3000` to `gw`, and verifies Grafana health from both `s6-monitoring` and `gw`.
 
 `check-monitoring-stack.yml`
 
-Verifies the central monitoring stack without requiring Grafana credentials. It checks Prometheus readiness and targets, node-exporter target health, postgres-exporter target health, kube-state-metrics dev/prod target health, Grafana health, the Grafana Prometheus datasource provisioning file, and the initial dashboard provisioning files.
+Verifies the central monitoring stack without requiring Grafana credentials. It checks Prometheus readiness and targets, node-exporter target health, postgres-exporter target health, kube-state-metrics dev/prod target health, Grafana health, the Grafana Prometheus datasource provisioning file, and the provisioned dashboard files.
 
 The monitoring stack has 9 targets after PostgreSQL exporter is installed:
 7 node-exporter targets, 1 Prometheus self-target, and 1 postgres-exporter

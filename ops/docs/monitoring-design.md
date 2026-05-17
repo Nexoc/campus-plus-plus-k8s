@@ -24,6 +24,8 @@ Prometheus on s6-monitoring: ready
 Grafana on s6-monitoring: ready
 Grafana datasource Campus Prometheus: ready
 Grafana dashboard Campus VM Overview: ready
+Grafana dashboard Campus PostgreSQL Overview: ready
+Grafana dashboard Campus Kubernetes Overview: ready
 check-monitoring-stack.yml: ready
 PostgreSQL exporter automation: ready
 kube-state-metrics dev/prod manifests and install playbook: ready
@@ -273,11 +275,10 @@ Recommended next implementation:
 ```text
 1. run PostgreSQL exporter env render and install playbooks
 2. re-render Prometheus config so it scrapes postgres-exporter
-3. add database dashboard panels
-4. run install-kube-state-metrics.yml for dev/prod clusters
-5. re-render Prometheus config so it scrapes kube-state-metrics
-6. add Kubernetes dashboard panels
-7. add alerting and logs
+3. run install-kube-state-metrics.yml for dev/prod clusters
+4. re-render Prometheus config so it scrapes kube-state-metrics
+5. run install-grafana.yml to provision VM, PostgreSQL, and Kubernetes dashboards
+6. add alerting and logs
 ```
 
 This avoids pretending that a central Prometheus can automatically scrape
@@ -292,8 +293,14 @@ datasource name: Campus Prometheus
 datasource UID: campus-prometheus
 dashboard folder: Campus++
 dashboard provider: /etc/grafana/provisioning/dashboards/campus-dashboards.yml
-dashboard file: /var/lib/grafana/dashboards/campus-vm-overview.json
-initial dashboard: Campus VM Overview
+dashboard files:
+  /var/lib/grafana/dashboards/campus-vm-overview.json
+  /var/lib/grafana/dashboards/campus-postgres-overview.json
+  /var/lib/grafana/dashboards/campus-k8s-overview.json
+dashboards:
+  Campus VM Overview
+  Campus PostgreSQL Overview
+  Campus Kubernetes Overview
 ```
 
 The datasource provisioning intentionally deletes and recreates the datasource
@@ -347,11 +354,13 @@ Prometheus target status is up for all node-exporter targets
 Prometheus self-target is up
 Grafana can reach Prometheus through the provisioned datasource
 Campus VM Overview dashboard displays node-exporter data
+Campus PostgreSQL Overview dashboard displays postgres-exporter data
+Campus Kubernetes Overview dashboard displays kube-state-metrics data
 check-monitoring-stack.yml passes
 no monitoring secret values are committed or printed
 ```
 
-Next database monitoring success criteria:
+Database monitoring success criteria:
 
 ```text
 postgres exporter is running on s4-db
@@ -394,6 +403,8 @@ Phase 1a:
   installed Grafana on s6-monitoring
   provisioned Campus Prometheus datasource
   provisioned Campus VM Overview dashboard
+  provisioned Campus PostgreSQL Overview dashboard
+  provisioned Campus Kubernetes Overview dashboard
   added check-monitoring-stack.yml
 ```
 
@@ -404,7 +415,6 @@ Phase 1b:
   render postgres exporter runtime env on s4-db
   install postgres exporter on s4-db
   re-render Prometheus scrape config
-  add database dashboard panels
   add exporter-specific checks
   install kube-state-metrics in dev/prod clusters through Kustomize manifests
   re-render Prometheus scrape config for kube-state-metrics
@@ -414,7 +424,6 @@ Later:
 
 ```text
 Phase 2:
-  add Kubernetes dashboard panels
   add Gateway API / Envoy status checks
 
 Phase 3:

@@ -26,9 +26,17 @@
     grafana_datasource_path: /etc/grafana/provisioning/datasources/campus-prometheus.yml
     grafana_dashboard_provider_template: ../templates/grafana-dashboard-provider.yml.j2
     grafana_dashboard_provider_path: /etc/grafana/provisioning/dashboards/campus-dashboards.yml
-    grafana_dashboard_source: ../templates/grafana-dashboard-vm-overview.json
-    grafana_dashboard_path: /var/lib/grafana/dashboards/campus-vm-overview.json
     grafana_dashboard_dir: /var/lib/grafana/dashboards
+    grafana_dashboards:
+      - name: Campus VM Overview
+        source: ../templates/grafana-dashboard-vm-overview.json
+        path: /var/lib/grafana/dashboards/campus-vm-overview.json
+      - name: Campus PostgreSQL Overview
+        source: ../templates/grafana-dashboard-postgres-overview.json
+        path: /var/lib/grafana/dashboards/campus-postgres-overview.json
+      - name: Campus Kubernetes Overview
+        source: ../templates/grafana-dashboard-k8s-overview.json
+        path: /var/lib/grafana/dashboards/campus-k8s-overview.json
     grafana_prometheus_url: http://localhost:9090
     gw_access_host: "{{ hostvars[groups['gw'][0]].monitoring_scrape_host | default(hostvars[groups['gw'][0]].ansible_host | default(groups['gw'][0])) }}"
   handlers:
@@ -165,13 +173,16 @@
         mode: "0640"
       notify: restart grafana
 
-    - name: s6-monitoring | install Campus VM overview dashboard
+    - name: s6-monitoring | install Grafana dashboards
       ansible.builtin.copy:
-        src: "{{ grafana_dashboard_source }}"
-        dest: "{{ grafana_dashboard_path }}"
+        src: "{{ item.source }}"
+        dest: "{{ item.path }}"
         owner: grafana
         group: grafana
         mode: "0644"
+      loop: "{{ grafana_dashboards }}"
+      loop_control:
+        label: "{{ item.name }}"
       notify: restart grafana
 
     - name: s6-monitoring | enable and start Grafana service

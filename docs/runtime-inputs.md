@@ -308,6 +308,8 @@ node-exporter on all VMs
 Prometheus on s6-monitoring
 Grafana on s6-monitoring
 Campus VM Overview dashboard
+Campus PostgreSQL Overview dashboard
+Campus Kubernetes Overview dashboard
 ```
 
 PostgreSQL exporter runtime input is:
@@ -363,6 +365,21 @@ changing tracked manifests or workflows. After installing kube-state-metrics,
 re-run `ops/playbooks/install-prometheus.yml` and then
 `ops/playbooks/check-monitoring-stack.yml`.
 
+Grafana dashboards are static tracked JSON files installed by:
+
+```text
+ops/playbooks/install-grafana.yml
+```
+
+They use datasource UID `campus-prometheus` and are provisioned under the
+provider-controlled `Campus++` folder:
+
+```text
+Campus VM Overview
+Campus PostgreSQL Overview
+Campus Kubernetes Overview
+```
+
 ## Minimal Startup Checklist
 
 For DEV deploy:
@@ -399,5 +416,6 @@ For ops/monitoring:
 5. postgres-exporter is rendered/installed if database metrics are enabled
 6. kube-state-metrics is installed if cluster metrics are enabled
 7. install-prometheus.yml has been re-run after changing scrape jobs
-8. check-monitoring-stack.yml passes
+8. install-grafana.yml has been re-run after changing dashboards
+9. check-monitoring-stack.yml passes
 ```

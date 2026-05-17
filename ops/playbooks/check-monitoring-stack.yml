@@ -13,7 +13,13 @@
     grafana_datasource_path: /etc/grafana/provisioning/datasources/campus-prometheus.yml
     grafana_prometheus_url: http://localhost:9090
     grafana_dashboard_provider_path: /etc/grafana/provisioning/dashboards/campus-dashboards.yml
-    grafana_dashboard_path: /var/lib/grafana/dashboards/campus-vm-overview.json
+    grafana_dashboards:
+      - name: Campus VM Overview
+        path: /var/lib/grafana/dashboards/campus-vm-overview.json
+      - name: Campus PostgreSQL Overview
+        path: /var/lib/grafana/dashboards/campus-postgres-overview.json
+      - name: Campus Kubernetes Overview
+        path: /var/lib/grafana/dashboards/campus-k8s-overview.json
   tasks:
     - name: s6-monitoring | verify Prometheus readiness endpoint
       ansible.builtin.uri:
@@ -102,17 +108,23 @@
           - grafana_dashboard_provider_stat.stat.isreg
         fail_msg: "Grafana dashboard provider file is missing"
 
-    - name: s6-monitoring | verify Campus VM Overview dashboard file exists
+    - name: s6-monitoring | verify provisioned Grafana dashboard files exist
       ansible.builtin.stat:
-        path: "{{ grafana_dashboard_path }}"
+        path: "{{ item.path }}"
       register: grafana_dashboard_stat
+      loop: "{{ grafana_dashboards }}"
+      loop_control:
+        label: "{{ item.name }}"
 
-    - name: s6-monitoring | require Campus VM Overview dashboard file
+    - name: s6-monitoring | require provisioned Grafana dashboard files
       ansible.builtin.assert:
         that:
-          - grafana_dashboard_stat.stat.exists
-          - grafana_dashboard_stat.stat.isreg
-        fail_msg: "Campus VM Overview dashboard file is missing"
+          - item.stat.exists
+          - item.stat.isreg
+        fail_msg: "Grafana dashboard file is missing: {{ item.item.path }}"
+      loop: "{{ grafana_dashboard_stat.results }}"
+      loop_control:
+        label: "{{ item.item.name }}"
 
 - name: Check monitoring stack from gw
   hosts: gw
