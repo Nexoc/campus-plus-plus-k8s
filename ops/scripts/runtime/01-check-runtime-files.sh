@@ -25,16 +25,26 @@ for file in "${prod_files[@]}"; do
 done
 
 log "checking required prod runtime keys"
-grep -q '^DB_USERNAME=' "$CAMPUS_SECRETS_ROOT/prod/db-secrets.env"
-grep -q '^DB_PASSWORD=' "$CAMPUS_SECRETS_ROOT/prod/db-secrets.env"
-grep -q '^JWT_SECRET=' "$CAMPUS_SECRETS_ROOT/prod/auth-secrets.env"
-grep -q '^JWT_EXPIRATION=' "$CAMPUS_SECRETS_ROOT/prod/auth-secrets.env"
-grep -q '^DB_ENDPOINT_ADDRESS=' "$CAMPUS_SECRETS_ROOT/prod/db-endpoint.env"
-grep -q '^DB_ENDPOINT_PORT=' "$CAMPUS_SECRETS_ROOT/prod/db-endpoint.env"
+
+require_key() {
+  local file="$1"
+  local key="$2"
+
+  if ! grep -Eq "^${key}=.+" "$file"; then
+    echo "Missing or empty key $key in $file" >&2
+    exit 1
+  fi
+}
+
+require_key "$CAMPUS_SECRETS_ROOT/prod/db-secrets.env" "DB_USERNAME"
+require_key "$CAMPUS_SECRETS_ROOT/prod/db-secrets.env" "DB_PASSWORD"
+require_key "$CAMPUS_SECRETS_ROOT/prod/auth-secrets.env" "JWT_SECRET"
+require_key "$CAMPUS_SECRETS_ROOT/prod/auth-secrets.env" "JWT_EXPIRATION"
+require_key "$CAMPUS_SECRETS_ROOT/prod/db-endpoint.env" "DB_ENDPOINT_ADDRESS"
+require_key "$CAMPUS_SECRETS_ROOT/prod/db-endpoint.env" "DB_ENDPOINT_PORT"
 
 log "checking kubeconfig"
 require_kubeconfig
 kubectl --kubeconfig "$KUBECONFIG_PATH" get nodes -o wide
 
-log "checking bootstrap-gw expectations"
-run_playbook ops/playbooks/bootstrap-gw.yml
+log "runtime files check ok"

@@ -39,7 +39,7 @@ s4-db -> external postgresql through stable runtime alias
 s6-monitoring -> prometheus, grafana, exporters, dashboards
 ```
 
-## optional runtime automation wrappers
+## runtime automation wrappers
 
 the step-by-step phases below are the source of truth. the repo also provides thin wrappers for the repeatable parts:
 
@@ -47,7 +47,27 @@ the step-by-step phases below are the source of truth. the repo also provides th
 ops/scripts/runtime/
 ```
 
-recommended wrapper order:
+wrapper defaults:
+
+```text
+ANSIBLE_INVENTORY=ops/inventory/uni.local.ini
+KUBECONFIG=/home/nexoc/.kube/prod.yaml
+CAMPUS_SECRETS_ROOT=/home/nexoc/campus-secrets
+PROD_NAMESPACE=campus-prod
+EXPECTED_NODEPORT=30080
+EXPECTED_HOST=campus-prod.davl.at
+```
+
+wrapper preconditions:
+
+* repo exists on `gw`
+* `ops/inventory/uni.local.ini` exists
+* `gw` has ansible, kubectl, helm, envsubst, curl
+* prod k3s exists if running prod/envoy/deploy checks
+* `/home/nexoc/.kube/prod.yaml` exists if running prod/envoy/deploy checks
+* runtime files exist before rendering/applying prod
+
+recommended wrapper order after the runtime-only prerequisites are done:
 
 ```bash
 # server: gw
@@ -62,7 +82,37 @@ TAG=vX.Y.Z bash ops/scripts/runtime/05-verify-prod.sh
 bash ops/scripts/runtime/06-install-monitoring.sh
 ```
 
+wrapper map:
+
+```text
+00-preflight.sh              checks gw tools, inventory, ssh/ansible reachability, optional kubeconfig
+01-check-runtime-files.sh    checks prod runtime files and kubeconfig without printing values
+02-install-envoy-prod.sh     creates campus-prod namespace and installs Envoy Gateway
+03-render-prod.sh            renders prod overlay and runs kubectl server dry-run
+04-apply-prod.sh             applies prod overlay only with explicit CONFIRM_PROD_APPLY=apply-prod
+05-verify-prod.sh            runs prod verification and node smoke checks
+06-install-monitoring.sh     installs/reconciles monitoring and runs check-monitoring-stack.yml
+```
+
+wrappers intentionally do not:
+
+* install or reinstall k3s
+* create real secrets
+* register github runners
+* approve github production deployments
+* choose a release tag for you
+* run destructive cleanup on prod nodes
+
 for normal production releases, prefer the github actions `v*` workflow with `production` approval. `04-apply-prod.sh` is only for controlled bootstrap or recovery situations.
+
+to use another inventory or kubeconfig:
+
+```bash
+# server: gw
+ANSIBLE_INVENTORY=ops/inventory/lab.local.ini \
+KUBECONFIG=/home/nexoc/.kube/prod.yaml \
+bash ops/scripts/runtime/00-preflight.sh
+```
 
 ## access model
 
@@ -217,6 +267,14 @@ ansible all -i ops/inventory/uni.local.ini -m ping
 ansible-playbook -i ops/inventory/uni.local.ini ops/playbooks/check-connectivity.yml
 ```
 
+wrapper equivalent after `uni.local.ini` exists:
+
+```bash
+# server: gw
+cd /home/nexoc/campus-plus-plus-k8s
+bash ops/scripts/runtime/00-preflight.sh
+```
+
 ## phase 3: prepare passwordless sudo for ansible
 
 ansible needs sudo rights on all managed hosts.
@@ -305,6 +363,14 @@ do
     { print $1 ": length=" length($2) }
   ' "$f"
 done
+```
+
+wrapper equivalent after prod runtime files and kubeconfig exist:
+
+```bash
+# server: gw
+cd /home/nexoc/campus-plus-plus-k8s
+bash ops/scripts/runtime/01-check-runtime-files.sh
 ```
 
 ## phase 5: prepare k3s clusters
@@ -467,6 +533,14 @@ expected:
 gatewayclass.gateway.networking.k8s.io/campus-envoy accepted true
 ```
 
+wrapper equivalent:
+
+```bash
+# server: gw
+cd /home/nexoc/campus-plus-plus-k8s
+bash ops/scripts/runtime/02-install-envoy-prod.sh
+```
+
 ## phase 10: prepare github controls
 
 in github ui:
@@ -585,6 +659,16 @@ KUBECONFIG=/home/nexoc/.kube/prod.yaml kubectl apply \
   --dry-run=server
 ```
 
+wrapper equivalents:
+
+```bash
+# server: gw
+cd /home/nexoc/campus-plus-plus-k8s
+
+TAG=vX.Y.Z bash ops/scripts/runtime/03-render-prod.sh
+TAG=vX.Y.Z CONFIRM_PROD_APPLY=apply-prod bash ops/scripts/runtime/04-apply-prod.sh
+```
+
 ## phase 13: verify prod deployment
 
 check workloads:
@@ -659,6 +743,14 @@ ansible-playbook \
   ops/playbooks/check-prod-cluster.yml
 ```
 
+wrapper equivalent:
+
+```bash
+# server: gw
+cd /home/nexoc/campus-plus-plus-k8s
+TAG=vX.Y.Z bash ops/scripts/runtime/05-verify-prod.sh
+```
+
 ## phase 14: install monitoring
 
 bootstrap monitoring vm:
@@ -705,6 +797,14 @@ final monitoring check:
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
 ansible-playbook -i ops/inventory/uni.local.ini ops/playbooks/check-monitoring-stack.yml
+```
+
+wrapper equivalent for the full monitoring sequence:
+
+```bash
+# server: gw
+cd /home/nexoc/campus-plus-plus-k8s
+bash ops/scripts/runtime/06-install-monitoring.sh
 ```
 
 expected prometheus target count:
