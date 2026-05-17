@@ -7,6 +7,9 @@ operating the lab infrastructure.
 Real secrets, tokens, passwords, and environment-specific IP addresses must not
 be committed.
 
+For the implemented platform summary, see
+[Campus++ Final Platform Status](final-platform-status.md).
+
 ## Source Of Truth
 
 Tracked examples and templates:

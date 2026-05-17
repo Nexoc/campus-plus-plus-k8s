@@ -47,6 +47,7 @@ It currently demonstrates:
 Current platform baseline:
 
 - technical baseline is complete in the current lab infrastructure
+- final implemented platform summary: [Campus++ Final Platform Status](docs/final-platform-status.md)
 - DEV CD is working through `dev-*` tags, `s5-campus-dev`, `campus-dev`, and Envoy NodePort `30080`
 - PROD CD is working through `v*` tags, GitHub `production` approval, `gw-campus-prod`, `campus-prod`, and Envoy NodePort `30080`
 - the documented PROD release baseline is `v0.1.1`
@@ -316,6 +317,7 @@ campus-plus-plus/
 
 Deployment docs:
 
+- [Final Platform Status](docs/final-platform-status.md)
 - [Deployment Runbook](deploy/README.md)
 - [Runtime Inputs](docs/runtime-inputs.md)
 - [Environments](deploy/docs/environments.md)
