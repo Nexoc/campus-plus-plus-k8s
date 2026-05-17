@@ -1,0 +1,397 @@
+---
+# Execute from: gw.
+# Targets:
+# - s5-dev for the dev k3s cluster.
+# - the first k3s_prod host for applying prod cluster resources.
+# - all k3s_prod hosts for prod NodePort firewall rules.
+# Purpose: install kube-state-metrics in dev/prod clusters and expose restricted
+# NodePort scrape endpoints for the central Prometheus on s6-monitoring.
+
+- name: Install kube-state-metrics in dev k3s
+  hosts: dev
+  gather_facts: true
+  become: true
+  vars:
+    kube_state_metrics_stage_dir: /tmp/campus-kube-state-metrics
+    kube_state_metrics_manifest_src: ../../deploy/monitoring/kube-state-metrics/
+    kube_state_metrics_overlay: dev
+    kube_state_metrics_nodeport: 30091
+    monitoring_source_host: "{{ hostvars[groups['monitoring'][0]].monitoring_scrape_host | default(hostvars[groups['monitoring'][0]].ansible_host | default(groups['monitoring'][0])) }}"
+    dev_scrape_host: "{{ kube_state_metrics_dev_scrape_host | default(hostvars[groups['dev'][0]].kube_state_metrics_scrape_host | default(hostvars[groups['dev'][0]].monitoring_scrape_host | default(hostvars[groups['dev'][0]].ansible_host | default(groups['dev'][0])))) }}"
+  tasks:
+    - name: s5-dev | require exactly one monitoring host
+      ansible.builtin.assert:
+        that:
+          - groups.get('monitoring', []) | length == 1
+        fail_msg: "Inventory must contain exactly one host in the monitoring group"
+
+    - name: s5-dev | install iptables package
+      ansible.builtin.apt:
+        name: iptables
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_facts.os_family == "Debian"
+
+    - name: s5-dev | create staged kube-state-metrics manifest directory
+      ansible.builtin.file:
+        path: "{{ kube_state_metrics_stage_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: s5-dev | stage kube-state-metrics manifests
+      ansible.builtin.copy:
+        src: "{{ kube_state_metrics_manifest_src }}"
+        dest: "{{ kube_state_metrics_stage_dir }}/"
+        owner: root
+        group: root
+        mode: "0644"
+        directory_mode: "0755"
+
+    - name: s5-dev | apply dev kube-state-metrics overlay
+      ansible.builtin.command:
+        argv:
+          - k3s
+          - kubectl
+          - apply
+          - -k
+          - "{{ kube_state_metrics_stage_dir }}/{{ kube_state_metrics_overlay }}"
+      changed_when: "'configured' in kube_state_metrics_apply.stdout or 'created' in kube_state_metrics_apply.stdout"
+      register: kube_state_metrics_apply
+
+    - name: s5-dev | wait for kube-state-metrics rollout
+      ansible.builtin.command:
+        argv:
+          - k3s
+          - kubectl
+          - rollout
+          - status
+          - deployment/kube-state-metrics
+          - -n
+          - kube-system
+          - --timeout=120s
+      changed_when: false
+
+    - name: s5-dev | verify kube-state-metrics service is NodePort
+      ansible.builtin.command:
+        argv:
+          - k3s
+          - kubectl
+          - get
+          - service
+          - kube-state-metrics
+          - -n
+          - kube-system
+          - -o
+          - "jsonpath={.spec.type}"
+      register: dev_kube_state_metrics_service_type
+      changed_when: false
+
+    - name: s5-dev | require dev kube-state-metrics service type
+      ansible.builtin.assert:
+        that:
+          - dev_kube_state_metrics_service_type.stdout == "NodePort"
+        fail_msg: "dev kube-state-metrics service is not NodePort"
+
+    - name: s5-dev | verify local kube-state-metrics NodePort endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ kube_state_metrics_nodeport }}/metrics"
+        method: GET
+        status_code: 200
+        return_content: false
+        timeout: 10
+
+    - name: s5-dev | allow local loopback access to dev kube-state-metrics
+      ansible.builtin.shell: |
+        set -euo pipefail
+        port={{ kube_state_metrics_nodeport | quote }}
+
+        if iptables -C INPUT -i lo -p tcp --dport "$port" -j ACCEPT >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        drop_line="$(iptables -L INPUT --line-numbers -n | awk '$0 ~ /DROP/ { print $1; exit }')"
+        if [ -n "$drop_line" ]; then
+          iptables -I INPUT "$drop_line" -i lo -p tcp --dport "$port" -j ACCEPT
+        else
+          iptables -A INPUT -i lo -p tcp --dport "$port" -j ACCEPT
+        fi
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: dev_kube_state_metrics_loopback_rule
+      changed_when: "'inserted' in dev_kube_state_metrics_loopback_rule.stdout"
+
+    - name: s5-dev | allow dev kube-state-metrics only from s6-monitoring
+      ansible.builtin.shell: |
+        set -euo pipefail
+        source_host={{ monitoring_source_host | quote }}
+        port={{ kube_state_metrics_nodeport | quote }}
+
+        if iptables -C INPUT -p tcp -s "$source_host" --dport "$port" -j ACCEPT >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        drop_line="$(iptables -L INPUT --line-numbers -n | awk '$0 ~ /DROP/ { print $1; exit }')"
+        if [ -n "$drop_line" ]; then
+          iptables -I INPUT "$drop_line" -p tcp -s "$source_host" --dport "$port" -j ACCEPT
+        else
+          iptables -A INPUT -p tcp -s "$source_host" --dport "$port" -j ACCEPT
+        fi
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: dev_kube_state_metrics_allow_rule
+      changed_when: "'inserted' in dev_kube_state_metrics_allow_rule.stdout"
+
+    - name: s5-dev | drop other dev kube-state-metrics traffic
+      ansible.builtin.shell: |
+        set -euo pipefail
+        port={{ kube_state_metrics_nodeport | quote }}
+
+        if iptables -C INPUT -p tcp --dport "$port" -j DROP >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        iptables -A INPUT -p tcp --dport "$port" -j DROP
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: dev_kube_state_metrics_drop_rule
+      changed_when: "'inserted' in dev_kube_state_metrics_drop_rule.stdout"
+
+    - name: s5-dev | check netfilter-persistent availability
+      ansible.builtin.command: which netfilter-persistent
+      register: netfilter_persistent_check
+      changed_when: false
+      failed_when: false
+
+    - name: s5-dev | save firewall rules when netfilter-persistent is installed
+      ansible.builtin.command: netfilter-persistent save
+      changed_when: false
+      when: netfilter_persistent_check.rc == 0
+
+    - name: s6-monitoring | verify dev kube-state-metrics target is reachable
+      ansible.builtin.wait_for:
+        host: "{{ dev_scrape_host }}"
+        port: "{{ kube_state_metrics_nodeport }}"
+        timeout: 10
+        state: started
+      delegate_to: "{{ groups['monitoring'][0] }}"
+      changed_when: false
+
+    - name: s6-monitoring | verify dev kube-state-metrics metrics endpoint returns HTTP 200
+      ansible.builtin.uri:
+        url: "http://{{ dev_scrape_host }}:{{ kube_state_metrics_nodeport }}/metrics"
+        method: GET
+        status_code: 200
+        return_content: false
+        timeout: 10
+      delegate_to: "{{ groups['monitoring'][0] }}"
+      changed_when: false
+
+- name: Install kube-state-metrics in prod k3s
+  hosts: k3s_prod[0]
+  gather_facts: true
+  become: true
+  vars:
+    kube_state_metrics_stage_dir: /tmp/campus-kube-state-metrics
+    kube_state_metrics_manifest_src: ../../deploy/monitoring/kube-state-metrics/
+    kube_state_metrics_overlay: prod
+    kube_state_metrics_nodeport: 30092
+  tasks:
+    - name: prod apply host | create staged kube-state-metrics manifest directory
+      ansible.builtin.file:
+        path: "{{ kube_state_metrics_stage_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: prod apply host | stage kube-state-metrics manifests
+      ansible.builtin.copy:
+        src: "{{ kube_state_metrics_manifest_src }}"
+        dest: "{{ kube_state_metrics_stage_dir }}/"
+        owner: root
+        group: root
+        mode: "0644"
+        directory_mode: "0755"
+
+    - name: prod apply host | apply prod kube-state-metrics overlay
+      ansible.builtin.command:
+        argv:
+          - k3s
+          - kubectl
+          - apply
+          - -k
+          - "{{ kube_state_metrics_stage_dir }}/{{ kube_state_metrics_overlay }}"
+      changed_when: "'configured' in kube_state_metrics_apply.stdout or 'created' in kube_state_metrics_apply.stdout"
+      register: kube_state_metrics_apply
+
+    - name: prod apply host | wait for kube-state-metrics rollout
+      ansible.builtin.command:
+        argv:
+          - k3s
+          - kubectl
+          - rollout
+          - status
+          - deployment/kube-state-metrics
+          - -n
+          - kube-system
+          - --timeout=120s
+      changed_when: false
+
+    - name: prod apply host | verify kube-state-metrics service is NodePort
+      ansible.builtin.command:
+        argv:
+          - k3s
+          - kubectl
+          - get
+          - service
+          - kube-state-metrics
+          - -n
+          - kube-system
+          - -o
+          - "jsonpath={.spec.type}"
+      register: prod_kube_state_metrics_service_type
+      changed_when: false
+
+    - name: prod apply host | require prod kube-state-metrics service type
+      ansible.builtin.assert:
+        that:
+          - prod_kube_state_metrics_service_type.stdout == "NodePort"
+        fail_msg: "prod kube-state-metrics service is not NodePort"
+
+    - name: prod apply host | verify local kube-state-metrics NodePort endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ kube_state_metrics_nodeport }}/metrics"
+        method: GET
+        status_code: 200
+        return_content: false
+        timeout: 10
+
+- name: Configure prod kube-state-metrics NodePort firewall
+  hosts: k3s_prod
+  gather_facts: true
+  become: true
+  vars:
+    kube_state_metrics_nodeport: 30092
+    monitoring_source_host: "{{ hostvars[groups['monitoring'][0]].monitoring_scrape_host | default(hostvars[groups['monitoring'][0]].ansible_host | default(groups['monitoring'][0])) }}"
+  tasks:
+    - name: prod nodes | require exactly one monitoring host
+      ansible.builtin.assert:
+        that:
+          - groups.get('monitoring', []) | length == 1
+        fail_msg: "Inventory must contain exactly one host in the monitoring group"
+
+    - name: prod nodes | install iptables package
+      ansible.builtin.apt:
+        name: iptables
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_facts.os_family == "Debian"
+
+    - name: prod nodes | allow local loopback access to prod kube-state-metrics
+      ansible.builtin.shell: |
+        set -euo pipefail
+        port={{ kube_state_metrics_nodeport | quote }}
+
+        if iptables -C INPUT -i lo -p tcp --dport "$port" -j ACCEPT >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        drop_line="$(iptables -L INPUT --line-numbers -n | awk '$0 ~ /DROP/ { print $1; exit }')"
+        if [ -n "$drop_line" ]; then
+          iptables -I INPUT "$drop_line" -i lo -p tcp --dport "$port" -j ACCEPT
+        else
+          iptables -A INPUT -i lo -p tcp --dport "$port" -j ACCEPT
+        fi
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: prod_kube_state_metrics_loopback_rule
+      changed_when: "'inserted' in prod_kube_state_metrics_loopback_rule.stdout"
+
+    - name: prod nodes | allow prod kube-state-metrics only from s6-monitoring
+      ansible.builtin.shell: |
+        set -euo pipefail
+        source_host={{ monitoring_source_host | quote }}
+        port={{ kube_state_metrics_nodeport | quote }}
+
+        if iptables -C INPUT -p tcp -s "$source_host" --dport "$port" -j ACCEPT >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        drop_line="$(iptables -L INPUT --line-numbers -n | awk '$0 ~ /DROP/ { print $1; exit }')"
+        if [ -n "$drop_line" ]; then
+          iptables -I INPUT "$drop_line" -p tcp -s "$source_host" --dport "$port" -j ACCEPT
+        else
+          iptables -A INPUT -p tcp -s "$source_host" --dport "$port" -j ACCEPT
+        fi
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: prod_kube_state_metrics_allow_rule
+      changed_when: "'inserted' in prod_kube_state_metrics_allow_rule.stdout"
+
+    - name: prod nodes | drop other prod kube-state-metrics traffic
+      ansible.builtin.shell: |
+        set -euo pipefail
+        port={{ kube_state_metrics_nodeport | quote }}
+
+        if iptables -C INPUT -p tcp --dport "$port" -j DROP >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        iptables -A INPUT -p tcp --dport "$port" -j DROP
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: prod_kube_state_metrics_drop_rule
+      changed_when: "'inserted' in prod_kube_state_metrics_drop_rule.stdout"
+
+    - name: prod nodes | check netfilter-persistent availability
+      ansible.builtin.command: which netfilter-persistent
+      register: netfilter_persistent_check
+      changed_when: false
+      failed_when: false
+
+    - name: prod nodes | save firewall rules when netfilter-persistent is installed
+      ansible.builtin.command: netfilter-persistent save
+      changed_when: false
+      when: netfilter_persistent_check.rc == 0
+
+- name: Verify prod kube-state-metrics from s6-monitoring
+  hosts: gw
+  gather_facts: false
+  vars:
+    kube_state_metrics_nodeport: 30092
+    prod_scrape_host: "{{ kube_state_metrics_prod_scrape_host | default(hostvars[groups['prod'][0]].kube_state_metrics_scrape_host | default(hostvars[groups['prod'][0]].monitoring_scrape_host | default(hostvars[groups['prod'][0]].ansible_host | default(groups['prod'][0])))) }}"
+  tasks:
+    - name: s6-monitoring | verify prod kube-state-metrics target is reachable
+      ansible.builtin.wait_for:
+        host: "{{ prod_scrape_host }}"
+        port: "{{ kube_state_metrics_nodeport }}"
+        timeout: 10
+        state: started
+      delegate_to: "{{ groups['monitoring'][0] }}"
+      changed_when: false
+
+    - name: s6-monitoring | verify prod kube-state-metrics metrics endpoint returns HTTP 200
+      ansible.builtin.uri:
+        url: "http://{{ prod_scrape_host }}:{{ kube_state_metrics_nodeport }}/metrics"
+        method: GET
+        status_code: 200
+        return_content: false
+        timeout: 10
+      delegate_to: "{{ groups['monitoring'][0] }}"
+      changed_when: false

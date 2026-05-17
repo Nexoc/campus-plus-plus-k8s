@@ -10,14 +10,14 @@ Current implemented runtime:
 s6-monitoring runs Prometheus and Grafana as systemd-managed services.
 node-exporter runs as a systemd service on every VM.
 postgres exporter support runs as a systemd service on s4-db after its install playbook is applied.
-Kubernetes add-ons are installed later through Helm from gw.
+kube-state-metrics runs inside dev/prod clusters after its install playbook is applied.
 ```
 
 Planned runtime extensions:
 
 ```text
 Alertmanager and Loki run as systemd-managed services on s6-monitoring.
-kube-state-metrics runs inside dev/prod clusters through Helm.
+optional Kubernetes agents can be added later through manifests or Helm.
 ```
 
 ## Chosen Model
@@ -38,15 +38,15 @@ s4-db:
   prometheus-postgres-exporter.service
 ```
 
-Use Helm only for Kubernetes-side components:
+Use Kubernetes manifests or Helm only for Kubernetes-side components:
 
 ```text
 dev cluster:
-  kube-state-metrics
+  kube-state-metrics through tracked Kustomize manifests
   optional cluster agents
 
 prod cluster:
-  kube-state-metrics
+  kube-state-metrics through tracked Kustomize manifests
   optional cluster agents
 ```
 
@@ -169,17 +169,17 @@ Next order:
 7. render-postgres-exporter-env.yml
 8. install-postgres-exporter.yml
 9. install-prometheus.yml
-10. add database dashboard panels
-11. extend check-monitoring-stack.yml or add a database-specific check
+10. install-kube-state-metrics.yml
+11. install-prometheus.yml
+12. check-monitoring-stack.yml
+13. add database and Kubernetes dashboard panels
 ```
 
 Future order:
 
 ```text
-11. install kube-state-metrics in dev/prod clusters
-12. add cluster metrics scrape path
-13. add alert rules and Alertmanager
-14. add Loki and log agents
+14. add alert rules and Alertmanager
+15. add Loki and log agents
 ```
 
 ## Current Success Criteria
@@ -199,6 +199,8 @@ s6-monitoring:9090 Prometheus
 s6-monitoring:3000 Grafana
 all VMs:9100 node-exporter
 s4-db:9187 postgres exporter after install-postgres-exporter.yml
+s5-dev:30091 kube-state-metrics dev after install-kube-state-metrics.yml
+prod node:30092 kube-state-metrics prod after install-kube-state-metrics.yml
 ```
 
 Access:
@@ -214,8 +216,10 @@ Prometheus targets:
 1 prometheus self-target
 7 node-exporter targets
 1 postgres-exporter target after install-postgres-exporter.yml and install-prometheus.yml
+2 kube-state-metrics targets after install-kube-state-metrics.yml and install-prometheus.yml
 8 total targets before PostgreSQL exporter
 9 total targets after PostgreSQL exporter
+11 total targets after kube-state-metrics dev/prod
 ```
 
 ## Planned Success Criteria
@@ -233,7 +237,8 @@ Cluster metrics:
 ```text
 kube-state-metrics active in dev cluster
 kube-state-metrics active in prod cluster
-central Prometheus can read selected cluster metrics
+central Prometheus can scrape s5-dev:30091 for dev cluster metrics
+central Prometheus can scrape a prod node on 30092 for prod cluster metrics
 ```
 
 ## Inventory Scrape Addresses
@@ -281,6 +286,16 @@ postgres exporter listens on port 9187 on s4-db.
 iptables allows 9187 from loopback for local health checks.
 iptables allows 9187 only from the monitoring_scrape_host of s6-monitoring.
 all other TCP traffic to 9187 is dropped.
+```
+
+Kube-state-metrics firewall contract:
+
+```text
+dev kube-state-metrics is exposed as NodePort 30091 on s5-dev.
+prod kube-state-metrics is exposed as NodePort 30092 on prod nodes.
+iptables allows these ports from loopback for local health checks.
+iptables allows these ports only from the monitoring_scrape_host of s6-monitoring.
+all other TCP traffic to 30091/30092 is dropped.
 ```
 
 ## Grafana Provisioning

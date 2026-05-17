@@ -337,6 +337,32 @@ ops/playbooks/install-postgres-exporter.yml
 Then re-run `ops/playbooks/install-prometheus.yml` so Prometheus includes the
 `postgres-exporter` scrape job for `s4-db:9187`.
 
+Kubernetes cluster metrics use kube-state-metrics inside each k3s cluster:
+
+```text
+dev cluster:  s5-dev NodePort 30091
+prod cluster: prod NodePort 30092
+```
+
+The tracked manifests live under:
+
+```text
+deploy/monitoring/kube-state-metrics
+```
+
+The install playbook is:
+
+```text
+ops/playbooks/install-kube-state-metrics.yml
+```
+
+Prometheus scrape addresses come from inventory/runtime variables. The default
+dev scrape host is the `dev` host, and the default prod scrape host is the first
+`prod` host. Environments can override those with inventory variables without
+changing tracked manifests or workflows. After installing kube-state-metrics,
+re-run `ops/playbooks/install-prometheus.yml` and then
+`ops/playbooks/check-monitoring-stack.yml`.
+
 ## Minimal Startup Checklist
 
 For DEV deploy:
@@ -370,5 +396,8 @@ For ops/monitoring:
 2. Ansible can reach all logical hosts
 3. s6-monitoring is reachable from gw
 4. node-exporter, Prometheus, Grafana are installed through ops playbooks
-5. check-monitoring-stack.yml passes
+5. postgres-exporter is rendered/installed if database metrics are enabled
+6. kube-state-metrics is installed if cluster metrics are enabled
+7. install-prometheus.yml has been re-run after changing scrape jobs
+8. check-monitoring-stack.yml passes
 ```

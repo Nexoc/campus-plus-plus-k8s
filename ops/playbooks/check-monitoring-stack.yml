@@ -122,6 +122,8 @@
     grafana_port: 3000
     monitoring_host: "{{ hostvars[groups['monitoring'][0]].monitoring_scrape_host | default(hostvars[groups['monitoring'][0]].ansible_host | default(groups['monitoring'][0])) }}"
     postgres_exporter_job: postgres-exporter
+    kube_state_metrics_dev_job: kube-state-metrics-dev
+    kube_state_metrics_prod_job: kube-state-metrics-prod
   tasks:
     - name: gw | verify Prometheus readiness endpoint on s6-monitoring
       ansible.builtin.uri:
@@ -174,6 +176,50 @@
           - postgres_exporter_targets_api.json.status == "success"
           - "(postgres_exporter_targets_api.json.data.activeTargets | selectattr('labels.job', 'equalto', postgres_exporter_job) | selectattr('health', 'equalto', 'up') | list | length) == (groups['db'] | length)"
         fail_msg: "postgres-exporter target is not up in Prometheus"
+
+    - name: gw | wait for dev kube-state-metrics target to be up in Prometheus
+      ansible.builtin.uri:
+        url: "http://{{ monitoring_host }}:{{ prometheus_port }}/api/v1/targets?state=active"
+        method: GET
+        status_code: 200
+        return_content: true
+        timeout: 10
+      register: kube_state_metrics_dev_targets_api
+      no_log: true
+      retries: 12
+      delay: 5
+      until:
+        - kube_state_metrics_dev_targets_api.json.status == "success"
+        - "(kube_state_metrics_dev_targets_api.json.data.activeTargets | selectattr('labels.job', 'equalto', kube_state_metrics_dev_job) | selectattr('health', 'equalto', 'up') | list | length) == 1"
+
+    - name: gw | require dev kube-state-metrics target up
+      ansible.builtin.assert:
+        that:
+          - kube_state_metrics_dev_targets_api.json.status == "success"
+          - "(kube_state_metrics_dev_targets_api.json.data.activeTargets | selectattr('labels.job', 'equalto', kube_state_metrics_dev_job) | selectattr('health', 'equalto', 'up') | list | length) == 1"
+        fail_msg: "dev kube-state-metrics target is not up in Prometheus"
+
+    - name: gw | wait for prod kube-state-metrics target to be up in Prometheus
+      ansible.builtin.uri:
+        url: "http://{{ monitoring_host }}:{{ prometheus_port }}/api/v1/targets?state=active"
+        method: GET
+        status_code: 200
+        return_content: true
+        timeout: 10
+      register: kube_state_metrics_prod_targets_api
+      no_log: true
+      retries: 12
+      delay: 5
+      until:
+        - kube_state_metrics_prod_targets_api.json.status == "success"
+        - "(kube_state_metrics_prod_targets_api.json.data.activeTargets | selectattr('labels.job', 'equalto', kube_state_metrics_prod_job) | selectattr('health', 'equalto', 'up') | list | length) == 1"
+
+    - name: gw | require prod kube-state-metrics target up
+      ansible.builtin.assert:
+        that:
+          - kube_state_metrics_prod_targets_api.json.status == "success"
+          - "(kube_state_metrics_prod_targets_api.json.data.activeTargets | selectattr('labels.job', 'equalto', kube_state_metrics_prod_job) | selectattr('health', 'equalto', 'up') | list | length) == 1"
+        fail_msg: "prod kube-state-metrics target is not up in Prometheus"
 
     - name: gw | verify Grafana health endpoint on s6-monitoring
       ansible.builtin.uri:

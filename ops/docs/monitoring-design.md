@@ -25,12 +25,13 @@ Grafana on s6-monitoring: ready
 Grafana datasource Campus Prometheus: ready
 Grafana dashboard Campus VM Overview: ready
 check-monitoring-stack.yml: ready
+PostgreSQL exporter automation: ready
+kube-state-metrics dev/prod manifests and install playbook: ready
 ```
 
 Not implemented yet:
 
 ```text
-kube-state-metrics for dev/prod clusters
 Prometheus alert rules
 Alertmanager
 Loki / log collection
@@ -51,9 +52,9 @@ Ansible
   -> prepare s6-monitoring as the central monitoring host
   -> verify ports and system services
 
-Helm
+Kubernetes manifests / Helm
   -> install Kubernetes monitoring add-ons inside dev/prod clusters
-  -> kube-state-metrics
+  -> kube-state-metrics through tracked Kustomize manifests
   -> optional cluster agents/exporters
   -> optional log agents such as promtail or Grafana Alloy
 
@@ -97,8 +98,8 @@ Planned topology extensions:
 ```text
 s6-monitoring
   -> scrape postgres exporter on s4-db
-  -> scrape or query dev k3s monitoring add-ons
-  -> scrape or query prod k3s monitoring add-ons
+  -> scrape kube-state-metrics on dev through s5-dev:30091
+  -> scrape kube-state-metrics on prod through a prod node:30092
   -> run HTTP smoke checks against Envoy NodePort endpoints
   -> Alertmanager
   -> optional Loki
@@ -149,7 +150,7 @@ Chosen runtime model:
 ```text
 central monitoring services on s6-monitoring: systemd-managed services
 VM exporters: systemd-managed services
-Kubernetes add-ons inside dev/prod clusters: Helm
+Kubernetes add-ons inside dev/prod clusters: Kustomize manifests or Helm
 ```
 
 See [Monitoring Runtime Model](monitoring-runtime.md) for the detailed runtime
@@ -173,16 +174,16 @@ s4-db:
   postgres exporter on port 9187
 ```
 
-Kubernetes components, installed later through Helm:
+Kubernetes components:
 
 ```text
 dev cluster:
-  kube-state-metrics
+  kube-state-metrics on NodePort 30091
   optional cluster metrics agent
   optional log agent
 
 prod cluster:
-  kube-state-metrics
+  kube-state-metrics on NodePort 30092
   optional cluster metrics agent
   optional log agent
 ```
@@ -207,6 +208,8 @@ Prometheus:       9090
 Grafana:          3000
 node-exporter:    9100
 postgres exporter:9187
+kube-state dev:   30091
+kube-state prod:  30092
 Envoy NodePort:   30080
 PostgreSQL:       5432
 ```
@@ -223,6 +226,8 @@ Access model:
 ```text
 s6-monitoring -> node-exporter:9100 on all VMs
 s6-monitoring -> postgres exporter:9187 on s4-db
+s6-monitoring -> kube-state-metrics:30091 on s5-dev
+s6-monitoring -> kube-state-metrics:30092 on a prod node
 admin/gw      -> Grafana on s6-monitoring
 admin/gw      -> Prometheus on s6-monitoring
 ```
@@ -269,9 +274,10 @@ Recommended next implementation:
 1. run PostgreSQL exporter env render and install playbooks
 2. re-render Prometheus config so it scrapes postgres-exporter
 3. add database dashboard panels
-4. add kube-state-metrics in dev/prod clusters through Helm
-5. choose restricted NodePort or agent/federation path for cluster metrics
-6. add alerting and logs
+4. run install-kube-state-metrics.yml for dev/prod clusters
+5. re-render Prometheus config so it scrapes kube-state-metrics
+6. add Kubernetes dashboard panels
+7. add alerting and logs
 ```
 
 This avoids pretending that a central Prometheus can automatically scrape
@@ -354,12 +360,13 @@ database dashboard panels show PostgreSQL uptime and activity
 no database passwords are committed or printed
 ```
 
-Future cluster metrics success criteria:
+Cluster metrics success criteria:
 
 ```text
 kube-state-metrics is installed in dev cluster
 kube-state-metrics is installed in prod cluster
-central monitoring can read selected dev/prod cluster metrics
+central monitoring can scrape dev kube-state-metrics through NodePort 30091
+central monitoring can scrape prod kube-state-metrics through NodePort 30092
 dashboards show workload health for campus-dev and campus-prod
 Gateway API and Envoy status checks are represented
 ```
@@ -399,19 +406,18 @@ Phase 1b:
   re-render Prometheus scrape config
   add database dashboard panels
   add exporter-specific checks
+  install kube-state-metrics in dev/prod clusters through Kustomize manifests
+  re-render Prometheus scrape config for kube-state-metrics
 ```
 
 Later:
 
 ```text
 Phase 2:
-  install kube-state-metrics in dev cluster through Helm from gw
-  install kube-state-metrics in prod cluster through Helm from gw
-  choose scrape exposure pattern for central Prometheus
-  add kubectl verification checks
+  add Kubernetes dashboard panels
+  add Gateway API / Envoy status checks
 
 Phase 3:
-  add Grafana dashboards for Kubernetes and Gateway API
   add Prometheus alert rules
   add Alertmanager routes
   document alert severity and expected response
@@ -436,6 +442,7 @@ ops/playbooks/install-grafana.yml
 ops/playbooks/check-monitoring-stack.yml
 ops/playbooks/render-postgres-exporter-env.yml
 ops/playbooks/install-postgres-exporter.yml
+ops/playbooks/install-kube-state-metrics.yml
 ```
 
 Suggested future templates:

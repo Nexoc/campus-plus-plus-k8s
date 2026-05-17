@@ -26,12 +26,12 @@ Completed:
 - Grafana datasource `Campus Prometheus` with UID `campus-prometheus`
 - initial Grafana dashboard `Campus VM Overview`
 - central monitoring stack verification
+- PostgreSQL exporter automation for `s4-db`
+- kube-state-metrics manifests and install playbook for dev/prod clusters
 
 Next monitoring work:
 
-- PostgreSQL exporter on `s4-db`
 - database dashboard panels
-- kube-state-metrics for dev/prod clusters
 - alerting and logs
 
 ## Inventory Contract
@@ -161,7 +161,7 @@ Installs `prometheus-node-exporter` on every VM through the Debian package, enab
 
 `install-prometheus.yml`
 
-Installs Prometheus on `s6-monitoring` through the Debian package, renders node-exporter and postgres-exporter scrape targets from inventory, restricts external port `9090` to `gw`, and verifies readiness from both `s6-monitoring` and `gw`.
+Installs Prometheus on `s6-monitoring` through the Debian package, renders node-exporter, postgres-exporter, and kube-state-metrics scrape targets from inventory, restricts external port `9090` to `gw`, and verifies readiness from both `s6-monitoring` and `gw`. It is not the full monitoring health gate; strict target health checks live in `check-monitoring-stack.yml`.
 
 `install-grafana.yml`
 
@@ -169,11 +169,12 @@ Installs Grafana on `s6-monitoring` through the official Grafana APT repository,
 
 `check-monitoring-stack.yml`
 
-Verifies the central monitoring stack without requiring Grafana credentials. It checks Prometheus readiness and targets, node-exporter target health, postgres-exporter target health, Grafana health, the Grafana Prometheus datasource provisioning file, and the initial dashboard provisioning files.
+Verifies the central monitoring stack without requiring Grafana credentials. It checks Prometheus readiness and targets, node-exporter target health, postgres-exporter target health, kube-state-metrics dev/prod target health, Grafana health, the Grafana Prometheus datasource provisioning file, and the initial dashboard provisioning files.
 
-The monitoring stack has 8 targets before PostgreSQL exporter is added:
-7 node-exporter targets and 1 Prometheus self-target. After PostgreSQL exporter
-is installed and Prometheus is re-rendered, the expected target count is 9.
+The monitoring stack has 9 targets after PostgreSQL exporter is installed:
+7 node-exporter targets, 1 Prometheus self-target, and 1 postgres-exporter
+target. After kube-state-metrics is installed in dev/prod and Prometheus is
+re-rendered, the expected target count is 11.
 
 `render-postgres-exporter-env.yml`
 
@@ -189,6 +190,15 @@ Installs `prometheus-postgres-exporter` on `s4-db`, loads the runtime DSN from
 `/home/nexoc/campus-secrets/monitoring/postgres-exporter.env`, restricts port
 `9187` to loopback and `s6-monitoring`, and verifies that `s6-monitoring` can
 reach the exporter metrics endpoint.
+
+`install-kube-state-metrics.yml`
+
+Installs kube-state-metrics in the dev and prod k3s clusters from the tracked
+Kustomize manifests under `deploy/monitoring/kube-state-metrics`. Dev exposes a
+restricted NodePort on `30091` from `s5-dev`. Prod exposes a restricted NodePort
+on `30092` from the prod nodes and uses the first prod host as the default
+Prometheus scrape target unless inventory overrides it. Firewall rules allow
+loopback and `s6-monitoring` only.
 
 ## Design Docs
 
@@ -307,8 +317,16 @@ cd /home/nexoc/campus-plus-plus-k8s
 ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/install-postgres-exporter.yml
 ```
 
-After adding or changing postgres exporter scrape config, re-render Prometheus
-before running the full stack check:
+Install kube-state-metrics before enabling its Prometheus scrape jobs:
+
+```bash
+# server: gw
+cd /home/nexoc/campus-plus-plus-k8s
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/install-kube-state-metrics.yml
+```
+
+After adding or changing postgres exporter or kube-state-metrics scrape config,
+re-render Prometheus before running the full stack check:
 
 ```bash
 # server: gw

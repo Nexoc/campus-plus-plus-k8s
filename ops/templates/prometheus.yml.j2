@@ -47,3 +47,25 @@ scrape_configs:
           role: db
           instance: "{{ host }}"
 {% endfor %}
+
+  - job_name: kube-state-metrics-dev
+    static_configs:
+{% set dev_host = groups.get('dev', [])[0] %}
+      - targets:
+          - "{{ kube_state_metrics_dev_scrape_host | default(hostvars[dev_host].kube_state_metrics_scrape_host | default(hostvars[dev_host].monitoring_scrape_host | default(hostvars[dev_host].ansible_host | default(dev_host)))) }}:{{ kube_state_metrics_dev_port | default(30091) }}"
+        labels:
+          environment: "{{ monitoring_environment_label }}"
+          role: k8s
+          cluster: dev
+          instance: dev
+
+  - job_name: kube-state-metrics-prod
+    static_configs:
+{% set prod_host = groups.get('prod', [])[0] %}
+      - targets:
+          - "{{ kube_state_metrics_prod_scrape_host | default(hostvars[prod_host].kube_state_metrics_scrape_host | default(hostvars[prod_host].monitoring_scrape_host | default(hostvars[prod_host].ansible_host | default(prod_host)))) }}:{{ kube_state_metrics_prod_port | default(30092) }}"
+        labels:
+          environment: "{{ monitoring_environment_label }}"
+          role: k8s
+          cluster: prod
+          instance: prod
