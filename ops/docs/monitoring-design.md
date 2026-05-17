@@ -13,6 +13,9 @@ prod CD: ready
 portable prod DB endpoint: ready
 Ansible ops/check layer: ready
 central monitoring core: ready
+postgres exporter: ready
+kube-state-metrics: ready
+monitoring dashboards: ready
 ```
 
 Implemented monitoring core:
@@ -39,9 +42,9 @@ Alertmanager
 Loki / log collection
 ```
 
-PostgreSQL exporter automation is now present, but the runtime target becomes
-active only after `render-postgres-exporter-env.yml`,
-`install-postgres-exporter.yml`, and `install-prometheus.yml` have been run.
+PostgreSQL exporter is managed by `render-postgres-exporter-env.yml`,
+`install-postgres-exporter.yml`, and `install-prometheus.yml`. The exporter DSN
+is generated from runtime inputs and is not committed or printed.
 
 ## Role Separation
 
@@ -57,8 +60,7 @@ Ansible
 Kubernetes manifests / Helm
   -> install Kubernetes monitoring add-ons inside dev/prod clusters
   -> kube-state-metrics through tracked Kustomize manifests
-  -> optional cluster agents/exporters
-  -> optional log agents such as promtail or Grafana Alloy
+  -> future log or agent components such as promtail or Grafana Alloy
 
 GitHub Actions
   -> application CI/CD only
@@ -93,18 +95,9 @@ local pc
 
 s6-monitoring
   -> scrape node-exporter on all VMs
-```
-
-Planned topology extensions:
-
-```text
-s6-monitoring
   -> scrape postgres exporter on s4-db
   -> scrape kube-state-metrics on dev through s5-dev:30091
   -> scrape kube-state-metrics on prod through a prod node:30092
-  -> run HTTP smoke checks against Envoy NodePort endpoints
-  -> Alertmanager
-  -> optional Loki
 ```
 
 `gw` remains the control host. It runs Ansible, `kubectl`, and `helm`, but it
@@ -181,13 +174,11 @@ Kubernetes components:
 ```text
 dev cluster:
   kube-state-metrics on NodePort 30091
-  optional cluster metrics agent
-  optional log agent
+  future log or agent components
 
 prod cluster:
   kube-state-metrics on NodePort 30092
-  optional cluster metrics agent
-  optional log agent
+  future log or agent components
 ```
 
 Logging and alerting components, deferred until after core metrics:
@@ -238,6 +229,7 @@ Planned access model:
 
 ```text
 s6-monitoring -> Envoy NodePort 30080 on s5-dev and prod nodes
+s6-monitoring -> Alertmanager/Loki later if those services are added
 ```
 
 Firewall principle:
@@ -254,23 +246,16 @@ PostgreSQL 5432 stays restricted to approved app clients
 Because Prometheus is a central service on `s6-monitoring`, Kubernetes metrics
 need an explicit bridge between the central VM and each cluster.
 
-Acceptable options:
+Implemented cluster metrics model:
 
 ```text
-Option A:
-  kube-state-metrics inside each cluster
-  expose scrape endpoint only to s6-monitoring through a restricted NodePort
-
-Option B:
-  lightweight Prometheus/agent inside each cluster
-  remote-write or federate selected metrics to s6-monitoring
-
-Option C:
-  start with blackbox and API-level checks from s6-monitoring
-  add deep cluster metrics later
+kube-state-metrics runs inside each cluster.
+Each cluster exposes the scrape endpoint only to s6-monitoring through a restricted NodePort.
+dev uses NodePort 30091.
+prod uses NodePort 30092.
 ```
 
-Recommended next implementation:
+Current monitoring install sequence:
 
 ```text
 1. run PostgreSQL exporter env render and install playbooks
@@ -278,7 +263,7 @@ Recommended next implementation:
 3. run install-kube-state-metrics.yml for dev/prod clusters
 4. re-render Prometheus config so it scrapes kube-state-metrics
 5. run install-grafana.yml to provision VM, PostgreSQL, and Kubernetes dashboards
-6. add alerting and logs
+6. run check-monitoring-stack.yml
 ```
 
 This avoids pretending that a central Prometheus can automatically scrape
@@ -408,7 +393,7 @@ Phase 1a:
   added check-monitoring-stack.yml
 ```
 
-Next:
+Current completed monitoring extension:
 
 ```text
 Phase 1b:
@@ -418,6 +403,7 @@ Phase 1b:
   add exporter-specific checks
   install kube-state-metrics in dev/prod clusters through Kustomize manifests
   re-render Prometheus scrape config for kube-state-metrics
+  provision PostgreSQL and Kubernetes dashboards
 ```
 
 Later:

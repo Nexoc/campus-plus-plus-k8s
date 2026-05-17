@@ -36,7 +36,8 @@ Monitoring environment:
 - `s6-monitoring`: central monitoring VM
 - Prometheus and Grafana run as systemd services on `s6-monitoring`
 - node-exporter runs as a systemd service on every lab VM
-- Kubernetes monitoring add-ons are installed later inside dev/prod clusters
+- postgres exporter runs on `s4-db`
+- kube-state-metrics runs inside dev/prod clusters and is scraped from `s6-monitoring`
 
 ## Deployment Model
 
@@ -85,7 +86,11 @@ Production path:
 
 Monitoring path:
 
-`VMs -> node-exporter:9100 -> Prometheus on s6-monitoring -> Grafana on s6-monitoring`
+`VMs -> node-exporter:9100 -> Prometheus on s6-monitoring -> Grafana dashboards`
+
+`s4-db -> postgres-exporter:9187 -> Prometheus on s6-monitoring`
+
+`dev/prod k3s -> kube-state-metrics:30091/30092 -> Prometheus on s6-monitoring`
 
 Notes:
 
@@ -105,7 +110,7 @@ Current delivery uses:
 - the production overlay in `deploy/app/overlays/prod`
 - Envoy Gateway baselines in `deploy/infra/envoy-gateway/`
 - versioned non-secret config files under each overlay
-- ignored secret env files under each overlay
+- ignored staged secret env files under each overlay
 - GHCR images tagged exactly with the pushed release tag
 - Ansible inventory in `ops/inventory/lab.local.ini` for lab host operations
 - host-local runtime files under `/home/nexoc/campus-secrets`
@@ -118,7 +123,7 @@ Self-hosted runners stage app secrets from fixed host paths:
 - `/home/nexoc/campus-secrets/home/`
 - `/home/nexoc/campus-secrets/prod/`
 
-Expected app secret files per environment:
+Expected host-local app secret files per environment:
 
 - `db-secrets.env`
 - `auth-secrets.env`
@@ -140,7 +145,5 @@ The following remain future or partially external work:
 - TLS/public hostname hardening for the lab edge
 - the final public hostname for the home overlay
 - PROD edge hardening and an RBAC-limited deployer kubeconfig
-- PostgreSQL exporter for `s4-db`
-- kube-state-metrics for dev/prod clusters
 - Prometheus alert rules and Alertmanager
 - Loki or Grafana Alloy/log collection

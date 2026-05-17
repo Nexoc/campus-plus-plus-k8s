@@ -29,6 +29,17 @@ The production kubeconfig is managed from `gw`:
 /home/nexoc/.kube/prod.yaml
 ```
 
+Current implementation status:
+
+```text
+prod cd: implemented
+latest successful prod release baseline: v0.1.1
+prod k3s ha: ready
+prod namespace: campus-prod
+prod gateway nodeport: 30080
+verification playbook: ops/playbooks/verify-prod-release.yml
+```
+
 ## Release Channels
 
 DEV releases:

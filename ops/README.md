@@ -170,10 +170,14 @@ Installs Grafana on `s6-monitoring` through the official Grafana APT repository,
 
 Verifies the central monitoring stack without requiring Grafana credentials. It checks Prometheus readiness and targets, node-exporter target health, postgres-exporter target health, kube-state-metrics dev/prod target health, Grafana health, the Grafana Prometheus datasource provisioning file, and the provisioned dashboard files.
 
-The monitoring stack has 9 targets after PostgreSQL exporter is installed:
-7 node-exporter targets, 1 Prometheus self-target, and 1 postgres-exporter
-target. After kube-state-metrics is installed in dev/prod and Prometheus is
-re-rendered, the expected target count is 11.
+The current lab baseline has 11 Prometheus targets:
+
+```text
+7 node-exporter targets
+1 Prometheus self-target
+1 postgres-exporter target
+2 kube-state-metrics targets
+```
 
 `render-postgres-exporter-env.yml`
 

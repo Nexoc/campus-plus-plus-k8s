@@ -40,18 +40,19 @@ It currently demonstrates:
 - environment-specific database endpoint config kept outside git
 - Ansible-based ops checks and host-level automation under `ops/`
 - central monitoring on `s6-monitoring` with node-exporter, Prometheus, Grafana,
-  and the initial Campus VM Overview dashboard
+  postgres exporter, kube-state-metrics, and Campus++ dashboards
 
 ## Current Status
 
 Current platform baseline:
 
+- technical baseline is complete in the current lab infrastructure
 - DEV CD is working through `dev-*` tags, `s5-campus-dev`, `campus-dev`, and Envoy NodePort `30080`
 - PROD CD is working through `v*` tags, GitHub `production` approval, `gw-campus-prod`, `campus-prod`, and Envoy NodePort `30080`
 - the documented PROD release baseline is `v0.1.1`
 - the portable PROD database alias is working through generated `service/s4-db` and `endpointslice/s4-db`
 - the Ansible ops/check layer is ready
-- core monitoring is ready on `s6-monitoring`
+- central monitoring is ready on `s6-monitoring`
 
 Current DEV request path:
 
@@ -85,7 +86,20 @@ all lab VMs
   -> node-exporter:9100
   -> Prometheus on s6-monitoring
   -> Grafana on s6-monitoring
-  -> Campus VM Overview dashboard
+
+s4-db
+  -> postgres-exporter:9187
+  -> Prometheus on s6-monitoring
+
+dev/prod k3s clusters
+  -> kube-state-metrics:30091/30092
+  -> Prometheus on s6-monitoring
+
+Prometheus
+  -> Grafana dashboards:
+     Campus VM Overview
+     Campus PostgreSQL Overview
+     Campus Kubernetes Overview
 ```
 
 Confirmed Kubernetes runtime state:
@@ -116,14 +130,14 @@ Delivery and platform components:
 - GitHub Actions for CI and release orchestration
 - self-hosted runners for cluster deployment
 - k3s for DEV and PROD Kubernetes
-- Kustomize for app overlays
+- Kustomize for app overlays and Kubernetes monitoring manifests
 - Helm for Kubernetes add-ons such as Envoy Gateway
 - Envoy Gateway / Gateway API for Kubernetes ingress
 - nginx on `gw` for the lab edge proxy
 - Ansible for host bootstrap, checks, firewall/database access, Envoy install, and monitoring setup
-- systemd for host services such as GitHub runners, node-exporter, Prometheus, and Grafana
+- systemd for host services such as GitHub runners, node-exporter, postgres exporter, Prometheus, and Grafana
 - iptables for lab firewall boundaries
-- Prometheus and Grafana for central monitoring
+- Prometheus and Grafana for central monitoring and dashboards
 
 ## Runtime Modes
 
@@ -197,9 +211,12 @@ Monitoring core currently runs as systemd services on `s6-monitoring`:
 - Prometheus on port `9090`
 - Grafana on port `3000`
 - node-exporter on all VMs on port `9100`
+- postgres exporter on `s4-db` on port `9187`
+- kube-state-metrics exposed from dev/prod clusters on NodePorts `30091` and `30092`
 
-PostgreSQL exporter, kube-state-metrics, Alertmanager, and Loki are planned
-extensions, not part of the current application release workflow.
+Monitoring is installed and checked through `ops/`. Alertmanager and Loki remain
+future monitoring extensions and are not part of the current application release
+workflow.
 
 ## CI/CD
 
@@ -278,6 +295,7 @@ campus-plus-plus/
 │   ├── infra/
 │   │   ├── envoy-gateway/
 │   │   └── gw-nginx/
+│   ├── monitoring/
 │   ├── scripts/
 │   └── templates/
 ├── docs/
@@ -326,8 +344,6 @@ Current planned work:
 - apply and harden the repo-owned `gw` nginx edge path with a stable public hostname and TLS
 - harden the PROD edge path through `gw`
 - replace the initial PROD kubeconfig with an RBAC-limited deployer kubeconfig
-- add PostgreSQL exporter for `s4-db`
-- add Kubernetes metrics with kube-state-metrics for dev/prod clusters
 - add Prometheus alert rules and Alertmanager
 - add Loki and log collection later
 - review the `home` overlay before the first real `home-*` release

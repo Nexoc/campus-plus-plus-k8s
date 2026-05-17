@@ -285,11 +285,16 @@ values. See `ops/inventory/README.md`.
 
 Current implemented monitoring stack does not require committed secrets.
 
-Optional or future runtime files:
+Current runtime-only monitoring files:
+
+```text
+/home/nexoc/campus-secrets/monitoring/postgres-exporter.env
+```
+
+Future runtime-only monitoring files may include:
 
 ```text
 /home/nexoc/campus-secrets/monitoring/grafana.env
-/home/nexoc/campus-secrets/monitoring/postgres-exporter.env
 /home/nexoc/campus-secrets/monitoring/alertmanager.env
 ```
 
@@ -307,6 +312,8 @@ Current monitoring core:
 node-exporter on all VMs
 Prometheus on s6-monitoring
 Grafana on s6-monitoring
+postgres exporter on s4-db
+kube-state-metrics in dev/prod clusters
 Campus VM Overview dashboard
 Campus PostgreSQL Overview dashboard
 Campus Kubernetes Overview dashboard
@@ -413,8 +420,8 @@ For ops/monitoring:
 2. Ansible can reach all logical hosts
 3. s6-monitoring is reachable from gw
 4. node-exporter, Prometheus, Grafana are installed through ops playbooks
-5. postgres-exporter is rendered/installed if database metrics are enabled
-6. kube-state-metrics is installed if cluster metrics are enabled
+5. postgres-exporter is rendered and installed
+6. kube-state-metrics is installed in dev/prod clusters
 7. install-prometheus.yml has been re-run after changing scrape jobs
 8. install-grafana.yml has been re-run after changing dashboards
 9. check-monitoring-stack.yml passes

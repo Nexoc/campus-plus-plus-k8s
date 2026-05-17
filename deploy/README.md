@@ -68,19 +68,17 @@ Before applying the active DEV manifests, make sure:
 - the cluster can reach PostgreSQL at `s4-db:5432`
 - the hostnames `gw`, `s5-dev`, and `s4-db` resolve through DNS or `/etc/hosts`
   on the servers that use them
-- DEV secret env files are available either locally or on the runner host
+- DEV secret env files are available on the runner host under `/home/nexoc/campus-secrets/dev`
 
 ## Config And Secrets
 
 For the full file checklist, see `docs/runtime-inputs.md`.
 
-Active DEV runtime inputs:
+Tracked DEV config files:
 
 - `deploy/app/overlays/dev/config/auth-config.env`
 - `deploy/app/overlays/dev/config/backend-config.env`
 - `deploy/app/overlays/dev/config/importer-config.env`
-- `deploy/app/overlays/dev/secrets/db-secrets.env`
-- `deploy/app/overlays/dev/secrets/auth-secrets.env`
 
 Active HOME runtime inputs follow the same layout under:
 
@@ -91,13 +89,20 @@ Reference templates live in:
 - `deploy/templates/config/`
 - `deploy/templates/secrets/`
 
+Staged secret files are generated at deploy time under:
+
+```text
+deploy/app/overlays/*/secrets/*.env
+```
+
 Rules:
 
 - config files may be versioned
 - secret templates may be versioned
+- staged secret files are ignored by git
 - real secrets must stay out of git
 
-For the self-hosted runner, the deploy workflow stages secrets from:
+For the self-hosted runners, deploy workflows stage real secrets from:
 
 - `/home/nexoc/campus-secrets/dev/db-secrets.env`
 - `/home/nexoc/campus-secrets/dev/auth-secrets.env`
@@ -335,7 +340,7 @@ Current open issues:
 - the current `gw` nginx baseline is HTTP-only lab configuration
 - PROD edge hardening and an RBAC-limited deployer kubeconfig are still future work
 - the `home` hostname is still a placeholder until the home edge is finalized
-- PostgreSQL exporter, kube-state-metrics, Alertmanager, and logs are monitoring follow-up work
+- Alertmanager and logs are monitoring follow-up work
 
 ## Related Docs
 

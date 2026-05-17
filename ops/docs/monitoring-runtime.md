@@ -1,6 +1,6 @@
 # Monitoring Runtime Model
 
-This document fixes the runtime choice for the first monitoring implementation.
+This document fixes the runtime choice for the current monitoring implementation.
 
 ## Decision
 
@@ -9,15 +9,15 @@ Current implemented runtime:
 ```text
 s6-monitoring runs Prometheus and Grafana as systemd-managed services.
 node-exporter runs as a systemd service on every VM.
-postgres exporter support runs as a systemd service on s4-db after its install playbook is applied.
-kube-state-metrics runs inside dev/prod clusters after its install playbook is applied.
+postgres exporter runs as a systemd service on s4-db.
+kube-state-metrics runs inside the dev and prod k3s clusters.
 ```
 
 Planned runtime extensions:
 
 ```text
 Alertmanager and Loki run as systemd-managed services on s6-monitoring.
-optional Kubernetes agents can be added later through manifests or Helm.
+additional Kubernetes log or agent components can be added later through manifests or Helm.
 ```
 
 ## Chosen Model
@@ -43,11 +43,11 @@ Use Kubernetes manifests or Helm only for Kubernetes-side components:
 ```text
 dev cluster:
   kube-state-metrics through tracked Kustomize manifests
-  optional cluster agents
+  future log or agent components
 
 prod cluster:
   kube-state-metrics through tracked Kustomize manifests
-  optional cluster agents
+  future log or agent components
 ```
 
 ## Why Not Docker Compose First
@@ -165,16 +165,15 @@ Completed order:
 6. check-monitoring-stack.yml
 ```
 
-Next order:
+Current full install/reconcile order:
 
 ```text
 7. render-postgres-exporter-env.yml
 8. install-postgres-exporter.yml
-9. install-prometheus.yml
-10. install-kube-state-metrics.yml
-11. install-prometheus.yml
-12. install-grafana.yml
-13. check-monitoring-stack.yml
+9. install-kube-state-metrics.yml
+10. install-prometheus.yml
+11. install-grafana.yml
+12. check-monitoring-stack.yml
 ```
 
 Future order:
@@ -210,6 +209,8 @@ Access:
 ```text
 gw can reach Prometheus and Grafana on s6-monitoring
 s6-monitoring can scrape node-exporter on all VMs
+s6-monitoring can scrape postgres exporter on s4-db
+s6-monitoring can scrape kube-state-metrics from dev/prod NodePorts
 ```
 
 Prometheus targets:
@@ -217,14 +218,12 @@ Prometheus targets:
 ```text
 1 prometheus self-target
 7 node-exporter targets
-1 postgres-exporter target after install-postgres-exporter.yml and install-prometheus.yml
-2 kube-state-metrics targets after install-kube-state-metrics.yml and install-prometheus.yml
-8 total targets before PostgreSQL exporter
-9 total targets after PostgreSQL exporter
-11 total targets after kube-state-metrics dev/prod
+1 postgres-exporter target
+2 kube-state-metrics targets
+11 total targets in the current lab baseline
 ```
 
-## Planned Success Criteria
+## Monitoring Extension Success Criteria
 
 Database metrics:
 
