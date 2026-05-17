@@ -1,17 +1,16 @@
-name: Non-Prod Release
+name: HOME Production Release
 
 on:
   push:
     tags:
-      - "uni-dev-*"
-      - "home-dev-*"
+      - "home-v*"
 
 permissions:
   contents: read
 
 jobs:
   build-and-push-images:
-    name: Build and Push Release Images
+    name: Build and Push HOME Production Images
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -22,21 +21,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Select release image tag
+      - name: Select HOME production image tag
         id: release-meta
         shell: bash
         run: |
           set -euo pipefail
           IMAGE_TAG="${GITHUB_REF_NAME}"
           case "$IMAGE_TAG" in
-            uni-dev-*|home-dev-*) ;;
+            home-v*) ;;
             *)
-              echo "Unsupported non-prod release tag: $IMAGE_TAG" >&2
+              echo "Unsupported HOME production release tag: $IMAGE_TAG" >&2
               exit 1
               ;;
           esac
           echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
-          echo "Building and publishing images for release tag $IMAGE_TAG"
+          echo "Building and publishing HOME production images for release tag $IMAGE_TAG"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -83,145 +82,32 @@ jobs:
           push: true
           tags: ghcr.io/nexoc/campus-importer:${{ steps.release-meta.outputs.image_tag }}
 
-  deploy-dev:
-    name: Deploy UNI DEV to s5
-    if: startsWith(github.ref_name, 'uni-dev-')
+  deploy-home-prod:
+    name: Deploy HOME PROD to k3s HA cluster
     needs: build-and-push-images
     runs-on:
       - self-hosted
       - Linux
       - X64
-      - dev
-      - s5
-      - uni
-    concurrency:
-      group: campus-uni-dev-release
-      cancel-in-progress: false
-    timeout-minutes: 25
-    permissions:
-      contents: read
-      packages: read
-    env:
-      KUBECONFIG: /home/nexoc/.kube/config
-      CAMPUS_SECRETS_ROOT: /home/nexoc/campus-secrets
-      RELEASE_ENV: dev
-      DEPLOY_NAMESPACE: campus-dev
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-
-      - name: Show release inputs
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Release tag: ${{ needs.build-and-push-images.outputs.image_tag }}"
-          echo "Target runner: dev+s5+uni"
-          echo "Target overlay: $RELEASE_ENV"
-          echo "Target namespace: $DEPLOY_NAMESPACE"
-
-      - name: Verify cluster access
-        shell: bash
-        run: |
-          set -euo pipefail
-          kubectl get nodes -o wide
-
-      - name: Verify host secret files
-        shell: bash
-        run: |
-          set -euo pipefail
-          for path in \
-            "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/db-secrets.env" \
-            "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/auth-secrets.env"
-          do
-            [[ -f "$path" ]] || {
-              echo "Missing required host secret file: $path" >&2
-              exit 1
-            }
-          done
-
-      - name: Ensure namespace and GHCR pull secret
-        shell: bash
-        env:
-          GHCR_PULL_USERNAME: ${{ secrets.GHCR_PULL_USERNAME }}
-          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
-          GHCR_REPOSITORY_OWNER: ${{ github.repository_owner }}
-          GHCR_FALLBACK_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          kubectl create namespace "$DEPLOY_NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
-
-          if [[ -n "${GHCR_PULL_TOKEN:-}" ]]; then
-            pull_username="${GHCR_PULL_USERNAME:-$GHCR_REPOSITORY_OWNER}"
-            pull_password="${GHCR_PULL_TOKEN}"
-            echo "Using persistent GHCR pull credentials"
-          else
-            pull_username="${GHCR_REPOSITORY_OWNER}"
-            pull_password="${GHCR_FALLBACK_TOKEN}"
-            echo "::warning::GHCR_PULL_TOKEN is not configured. Falling back to workflow GITHUB_TOKEN; future restarts may fail once that token expires."
-          fi
-
-          kubectl create secret docker-registry ghcr-pull \
-            --namespace "$DEPLOY_NAMESPACE" \
-            --docker-server ghcr.io \
-            --docker-username "${pull_username}" \
-            --docker-password "${pull_password}" \
-            --dry-run=client -o yaml | kubectl apply -f -
-
-      - name: Apply DEV overlay
-        shell: bash
-        run: |
-          set -euo pipefail
-          kubectl delete deployment campus-test -n "$DEPLOY_NAMESPACE" --ignore-not-found
-          kubectl delete service campus-test -n "$DEPLOY_NAMESPACE" --ignore-not-found
-          kubectl delete httproute campus-test -n "$DEPLOY_NAMESPACE" --ignore-not-found
-          kubectl delete job campus-importer -n "$DEPLOY_NAMESPACE" --ignore-not-found
-          kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
-          bash deploy/scripts/apply-overlay.sh \
-            --environment "$RELEASE_ENV" \
-            --image-tag "${{ needs.build-and-push-images.outputs.image_tag }}"
-
-      - name: Verify DEV overlay
-        shell: bash
-        run: |
-          set -euo pipefail
-          bash deploy/scripts/verify-overlay.sh \
-            --environment "$RELEASE_ENV" \
-            --expected-nodeport 30080
-
-      - name: Show deployed resources
-        shell: bash
-        run: |
-          set -euo pipefail
-          kubectl get all -n "$DEPLOY_NAMESPACE" -o wide
-          kubectl get gateway,httproute,envoyproxy,clienttrafficpolicy -n "$DEPLOY_NAMESPACE" -o wide
-          kubectl get gatewayclass
-          kubectl get svc -n envoy-gateway-system
-
-  deploy-home:
-    name: Deploy HOME DEV to home runner
-    if: startsWith(github.ref_name, 'home-dev-')
-    needs: build-and-push-images
-    runs-on:
-      - self-hosted
-      - Linux
-      - X64
-      - dev
-      - s5
+      - prod
+      - gw
       - home
+    environment:
+      name: home-production
     concurrency:
-      group: campus-home-dev-release
+      group: campus-home-prod-release
       cancel-in-progress: false
-    timeout-minutes: 25
+    timeout-minutes: 30
     permissions:
       contents: read
       packages: read
     env:
-      KUBECONFIG: /home/nexoc/.kube/config
+      KUBECONFIG: /home/nexoc/.kube/prod.yaml
       CAMPUS_SECRETS_ROOT: /home/nexoc/campus-secrets
-      RELEASE_ENV: home
-      DEPLOY_NAMESPACE: campus-dev
+      RELEASE_ENV: prod
+      DEPLOY_NAMESPACE: campus-prod
+      EXPECTED_NODEPORT: "30080"
+      EXPECTED_HOST: campus-prod.davl.at
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -233,9 +119,39 @@ jobs:
         run: |
           set -euo pipefail
           echo "Release tag: ${{ needs.build-and-push-images.outputs.image_tag }}"
-          echo "Target runner: dev+s5+home"
+          echo "Target runner: prod+gw+home"
           echo "Target overlay: $RELEASE_ENV"
           echo "Target namespace: $DEPLOY_NAMESPACE"
+          echo "Expected nodeport: $EXPECTED_NODEPORT"
+          echo "Expected host: $EXPECTED_HOST"
+
+      - name: Verify HOME production safety gate
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          case "${GITHUB_REF_NAME}" in
+            home-v*) ;;
+            *)
+              echo "Ref '${GITHUB_REF_NAME}' is not a HOME production tag." >&2
+              exit 1
+              ;;
+          esac
+
+          [[ "$RELEASE_ENV" == "prod" ]] || {
+            echo "RELEASE_ENV must be prod." >&2
+            exit 1
+          }
+
+          [[ "$DEPLOY_NAMESPACE" == "campus-prod" ]] || {
+            echo "DEPLOY_NAMESPACE must be campus-prod." >&2
+            exit 1
+          }
+
+          [[ "$KUBECONFIG" == "/home/nexoc/.kube/prod.yaml" ]] || {
+            echo "Unexpected KUBECONFIG path: $KUBECONFIG" >&2
+            exit 1
+          }
 
       - name: Verify cluster access
         shell: bash
@@ -285,26 +201,49 @@ jobs:
             --docker-password "${pull_password}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Apply HOME overlay
+      - name: Render HOME PROD overlay before apply
         shell: bash
         run: |
           set -euo pipefail
-          kubectl delete deployment campus-test -n "$DEPLOY_NAMESPACE" --ignore-not-found
-          kubectl delete service campus-test -n "$DEPLOY_NAMESPACE" --ignore-not-found
-          kubectl delete httproute campus-test -n "$DEPLOY_NAMESPACE" --ignore-not-found
+          manifest="/tmp/campus-home-prod-rendered-${GITHUB_RUN_ID}.yaml"
+
+          CAMPUS_SECRETS_ROOT="$CAMPUS_SECRETS_ROOT" \
+          bash deploy/scripts/apply-overlay.sh \
+            --environment "$RELEASE_ENV" \
+            --image-tag "${{ needs.build-and-push-images.outputs.image_tag }}" \
+            --render-only \
+            --manifest-out "$manifest"
+
+          grep -q "namespace: $DEPLOY_NAMESPACE" "$manifest"
+          grep -q "ghcr.io/nexoc/campus-auth:${{ needs.build-and-push-images.outputs.image_tag }}" "$manifest"
+          grep -q "ghcr.io/nexoc/campus-backend:${{ needs.build-and-push-images.outputs.image_tag }}" "$manifest"
+          grep -q "ghcr.io/nexoc/campus-nginx:${{ needs.build-and-push-images.outputs.image_tag }}" "$manifest"
+          grep -q "ghcr.io/nexoc/campus-frontend:${{ needs.build-and-push-images.outputs.image_tag }}" "$manifest"
+          grep -q "ghcr.io/nexoc/campus-importer:${{ needs.build-and-push-images.outputs.image_tag }}" "$manifest"
+          grep -q "ghcr-pull" "$manifest"
+          grep -q "nodePort: $EXPECTED_NODEPORT" "$manifest"
+          grep -q "$EXPECTED_HOST" "$manifest"
+
+          rm -f "$manifest"
+
+      - name: Apply HOME PROD overlay
+        shell: bash
+        run: |
+          set -euo pipefail
           kubectl delete job campus-importer -n "$DEPLOY_NAMESPACE" --ignore-not-found
           kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
+
           bash deploy/scripts/apply-overlay.sh \
             --environment "$RELEASE_ENV" \
             --image-tag "${{ needs.build-and-push-images.outputs.image_tag }}"
 
-      - name: Verify HOME overlay
+      - name: Verify HOME PROD overlay
         shell: bash
         run: |
           set -euo pipefail
           bash deploy/scripts/verify-overlay.sh \
             --environment "$RELEASE_ENV" \
-            --expected-nodeport 30080
+            --expected-nodeport "$EXPECTED_NODEPORT"
 
       - name: Show deployed resources
         shell: bash

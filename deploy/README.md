@@ -25,7 +25,7 @@ The current working DEV request path is:
 
 The current controlled PROD release path is:
 
-`v* tag -> production approval -> gw-campus-prod -> prod k3s HA -> campus-prod`
+`uni-v* tag -> production approval -> gw-campus-prod -> prod k3s HA -> campus-prod`
 
 Key points:
 
@@ -130,14 +130,14 @@ chmod 600 /home/nexoc/campus-secrets/dev/*.env
 ```
 
 Prepare the same layout on the future home runner before running the first
-`home-*` release. The required files are:
+`home-dev-*` release. The required files are:
 
 ```text
 /home/nexoc/campus-secrets/home/db-secrets.env
 /home/nexoc/campus-secrets/home/auth-secrets.env
 ```
 
-Prepare the `prod` host path on `gw` before running a `v*` release:
+Prepare the `prod` host path on `gw` before running a `uni-v*` release:
 
 ```bash
 # server: gw
@@ -213,7 +213,7 @@ Render the manifests:
 # server: s5-dev
 bash deploy/scripts/apply-overlay.sh \
   --environment dev \
-  --image-tag dev-example \
+  --image-tag uni-dev-example \
   --render-only
 ```
 
@@ -239,7 +239,7 @@ Apply the shared GatewayClass and the DEV stack:
 
 ```bash
 # server: s5-dev
-IMAGE_TAG=dev-example
+IMAGE_TAG=uni-dev-example
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 kubectl delete job campus-importer -n campus-dev --ignore-not-found
 bash deploy/scripts/apply-overlay.sh --environment dev --image-tag "${IMAGE_TAG}"
@@ -260,10 +260,12 @@ Current workflow behavior:
 - CI runs validation only on `push` and `pull_request`
 - `.github/workflows/deploy-dev.yml` is the non-prod release workflow
 - `.github/workflows/deploy-prod.yml` is the production release workflow
-- `dev-*` tags build and push GHCR images, then deploy to the `dev+s5` runner
-- `home-*` tags build and push GHCR images, then deploy to the `dev+home` runner
-- `v*` tags build and push GHCR images, wait for the `production` environment
-  approval, then deploy to the `prod+gw` runner
+- `uni-dev-*` tags build and push GHCR images, then deploy to the `dev+s5+uni` runner
+- `home-dev-*` tags build and push GHCR images, then deploy to the `dev+s5+home` runner
+- `uni-v*` tags build and push GHCR images, wait for the `production` environment
+  approval, then deploy to the `prod+gw+uni` runner
+- `home-v*` tags build and push GHCR images, wait for the `home-production`
+  environment approval, then deploy to the `prod+gw+home` runner
 - release image tags are exactly the Git tag that triggered the workflow
 - deploy jobs create `ghcr-pull`, apply `deploy/app` overlays, and verify the
   Envoy/Gateway API rollout
@@ -273,9 +275,10 @@ Current workflow behavior:
 
 Current release namespaces:
 
-- `dev-*` for the lab `s5` cluster
-- `home-*` for the home cluster
-- `v*` for the PROD HA cluster, namespace `campus-prod`
+- `uni-dev-*` for the university `s5` cluster
+- `home-dev-*` for the home dev cluster
+- `uni-v*` for the university PROD HA cluster, namespace `campus-prod`
+- `home-v*` for the home PROD HA cluster, namespace `campus-prod`
 
 PROD keeps `DB_HOST=s4-db`. During `prod` render/apply,
 `deploy/scripts/apply-overlay.sh` renders the `service/s4-db` and

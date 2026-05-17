@@ -46,14 +46,14 @@ require_kubeconfig() {
 
 require_tag() {
   if [[ -z "${TAG:-}" ]]; then
-    echo "TAG is required, for example: TAG=vX.Y.Z" >&2
+    echo "TAG is required, for example: TAG=uni-vX.Y.Z or TAG=home-vX.Y.Z" >&2
     exit 1
   fi
 
   case "$TAG" in
-    v*) ;;
+    uni-v*|home-v*) ;;
     *)
-      echo "TAG must be a production tag starting with v*: $TAG" >&2
+      echo "TAG must be a production tag starting with uni-v* or home-v*: $TAG" >&2
       exit 1
       ;;
   esac

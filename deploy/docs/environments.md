@@ -27,7 +27,7 @@ Home environment:
 Production environment:
 
 - `s1-prod`, `s2-prod`, and `s3-prod`: k3s HA production cluster nodes
-- `gw`: production deployment control host for the `v*` workflow
+- `gw`: production deployment control host for the `uni-v*` workflow
 - application hostname: `campus-prod.davl.at`
 - `s4-db`: stable Kubernetes DNS alias for external PostgreSQL in `campus-prod`
 
@@ -59,10 +59,11 @@ Current active app environments:
 
 Current release channels:
 
-- `dev-*` deploys to the lab cluster on runner labels `dev+s5`
-- `home-*` deploys to the home cluster on runner labels `dev+home`
+- `uni-dev-*` deploys to the university DEV cluster on runner labels `dev+s5+uni`
+- `home-dev-*` deploys to the home DEV cluster on runner labels `dev+s5+home`
 - `main` runs validation only
-- `v*` deploys to PROD through the `production` environment and `prod+gw` runner
+- `uni-v*` deploys to university PROD through the `production` environment and `prod+gw+uni` runner
+- `home-v*` deploys to home PROD through the `home-production` environment and `prod+gw+home` runner
 
 Current ops/monitoring channels:
 

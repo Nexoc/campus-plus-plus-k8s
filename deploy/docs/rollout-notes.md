@@ -14,14 +14,15 @@ Current active lab path:
 
 Current production release path:
 
-`v* tag -> GitHub environment production approval -> gw-campus-prod runner -> prod k3s HA -> campus-prod`
+`uni-v* tag -> GitHub environment production approval -> gw-campus-prod runner -> prod k3s HA -> campus-prod`
 
 Key characteristics:
 
 - `main` runs validation only
-- `dev-*` tags build and release to the lab cluster
-- `home-*` tags build and release to the home cluster
-- `v*` tags build and release to PROD after `production` approval
+- `uni-dev-*` tags build and release to the university DEV cluster
+- `home-dev-*` tags build and release to the home DEV cluster
+- `uni-v*` tags build and release to university PROD after `production` approval
+- `home-v*` tags build and release to home PROD after `home-production` approval
 - active manifests live under `deploy/app/overlays/`
 - Envoy Gateway is the active entry layer on NodePort `30080`
 - monitoring and host-level operations are handled through `ops/`, not through
@@ -49,7 +50,7 @@ The current repo supports this flow:
 
 1. Push to `main` or open a PR against `main`.
 2. `CI Pipeline` runs validation only.
-3. Push a `dev-*` or `home-*` tag.
+3. Push a `uni-dev-*` or `home-dev-*` tag.
 4. `Non-Prod Release` builds and publishes GHCR images tagged exactly with `github.ref_name`.
 5. The matching deploy job runs on the label-pinned self-hosted runner.
 6. The workflow creates or updates `ghcr-pull`, applies the shared `GatewayClass`, renders the selected overlay, and applies it.
@@ -59,10 +60,10 @@ The current repo supports this flow:
 
 The current repo supports this controlled production flow:
 
-1. Push a `v*` tag.
-2. `Production Release` builds and publishes GHCR images tagged exactly with `github.ref_name`.
+1. Push a `uni-v*` tag.
+2. `UNI Production Release` builds and publishes GHCR images tagged exactly with `github.ref_name`.
 3. The deploy job waits on the GitHub `production` environment.
-4. After manual approval, the deploy job runs on the `prod+gw` self-hosted runner.
+4. After manual approval, the deploy job runs on the `prod+gw+uni` self-hosted runner.
 5. The workflow creates or updates `ghcr-pull`, applies the shared `GatewayClass`, renders the `prod` overlay, and applies it to `campus-prod`.
 6. PROD render/apply generates the `s4-db` Service and EndpointSlice from `/home/nexoc/campus-secrets/prod/db-endpoint.env`.
 7. The workflow verifies rollouts, importer completion, Gateway API resources, and Envoy NodePort `30080`.
@@ -84,7 +85,7 @@ Render a DEV release manifest:
 cd /home/nexoc/campus-plus-plus-k8s
 bash deploy/scripts/apply-overlay.sh \
   --environment dev \
-  --image-tag dev-example \
+  --image-tag uni-dev-example \
   --render-only
 ```
 
@@ -97,7 +98,7 @@ kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 kubectl delete job campus-importer -n campus-dev --ignore-not-found
 bash deploy/scripts/apply-overlay.sh \
   --environment dev \
-  --image-tag dev-example
+  --image-tag uni-dev-example
 ```
 
 Verify a non-prod overlay:

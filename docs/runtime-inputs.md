@@ -399,7 +399,7 @@ For DEV deploy:
 2. s5-dev has /home/nexoc/campus-secrets/dev/db-secrets.env
 3. s5-dev has /home/nexoc/campus-secrets/dev/auth-secrets.env
 4. GitHub has GHCR_PULL_USERNAME and GHCR_PULL_TOKEN
-5. runner s5-campus-dev is online with dev+s5 labels
+5. runner s5-campus-dev is online with dev+s5+uni labels
 6. s5-dev can reach PostgreSQL as s4-db:5432
 ```
 
@@ -412,7 +412,7 @@ For PROD deploy:
 4. gw has /home/nexoc/campus-secrets/prod/db-endpoint.env
 5. GitHub environment production exists with required reviewers
 6. GitHub has GHCR_PULL_USERNAME and GHCR_PULL_TOKEN
-7. runner gw-campus-prod is online with prod+gw labels
+7. runner gw-campus-prod is online with prod+gw+uni labels
 8. prod cluster has or can install Envoy Gateway
 ```
 

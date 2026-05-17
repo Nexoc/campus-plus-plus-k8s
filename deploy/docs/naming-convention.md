@@ -47,7 +47,7 @@ Rules:
 
 Examples:
 
-- `dev-example`
+- `uni-dev-example`
 - `home-example`
 - `v1.0.0`
 
@@ -114,6 +114,6 @@ The repo now reflects:
 - stable component and service names
 - `deploy/app` as the canonical manifest tree
 - Envoy/Gateway API as the active ingress layer
-- tag-driven non-prod delivery via `dev-*` and `home-*`
-- controlled PROD delivery via `v*`
+- tag-driven non-prod delivery via `uni-dev-*` and `home-dev-*`
+- controlled PROD delivery via `uni-v*` and `home-v*`
 - `ops/` as the canonical Ansible and monitoring automation tree

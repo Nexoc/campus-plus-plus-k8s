@@ -29,8 +29,8 @@ It currently demonstrates:
 - Vue 3 frontend, Spring Boot auth/backend services, importer, and nginx app gateway
 - containerized application components published as immutable GHCR images
 - validation-only CI on `main`
-- controlled non-prod releases from `dev-*` and `home-*` tags
-- controlled production releases from `v*` tags with GitHub environment approval
+- controlled non-prod releases from `uni-dev-*` and `home-dev-*` tags
+- controlled production releases from `uni-v*` and `home-v*` tags with GitHub environment approval
 - self-hosted GitHub Actions runners pinned by labels
 - Kustomize-based Kubernetes deployment overlays under `deploy/app`
 - k3s single-node DEV and HA PROD Kubernetes targets
@@ -48,8 +48,8 @@ Current platform baseline:
 
 - technical baseline is complete in the current lab infrastructure
 - final implemented platform summary: [Campus++ Final Platform Status](docs/final-platform-status.md)
-- DEV CD is working through `dev-*` tags, `s5-campus-dev`, `campus-dev`, and Envoy NodePort `30080`
-- PROD CD is working through `v*` tags, GitHub `production` approval, `gw-campus-prod`, `campus-prod`, and Envoy NodePort `30080`
+- DEV CD is routed through `uni-dev-*` and `home-dev-*` tags with environment-specific runner labels
+- PROD CD is routed through `uni-v*` and `home-v*` tags with environment approval and `prod+gw+uni/home` runner labels
 - the documented PROD release baseline is `v0.1.1`
 - the portable PROD database alias is working through generated `service/s4-db` and `endpointslice/s4-db`
 - the Ansible ops/check layer is ready
@@ -190,7 +190,7 @@ Manual Kubernetes deployment uses the same release contract as the workflow:
 cd /home/nexoc/campus-plus-plus-k8s
 bash deploy/scripts/apply-overlay.sh \
   --environment dev \
-  --image-tag dev-example
+  --image-tag uni-dev-example
 
 bash deploy/scripts/verify-overlay.sh \
   --environment dev \
@@ -227,9 +227,10 @@ Current GitHub Actions behavior:
 
 - `push` to `main`: validation only
 - `pull_request` to `main`: validation only
-- `dev-*` tag: build/push images and deploy to lab `s5`
-- `home-*` tag: build/push images and deploy to the home runner
-- `v*` tag: build/push images and deploy to PROD after `production` approval
+- `uni-dev-*` tag: build/push images and deploy to the university DEV runner
+- `home-dev-*` tag: build/push images and deploy to the home DEV runner
+- `uni-v*` tag: build/push images and deploy to university PROD after `production` approval
+- `home-v*` tag: build/push images and deploy to home PROD after `home-production` approval
 
 Release images are tagged exactly with the Git tag that triggered the workflow.
 
@@ -238,16 +239,16 @@ Example DEV release:
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-git tag dev-example
-git push origin dev-example
+git tag uni-dev-example
+git push origin uni-dev-example
 ```
 
 Expected result:
 
 - `Non-Prod Release` workflow starts
-- GHCR images are published with tag `dev-example`
-- `Deploy DEV to s5` runs on runner labels `dev+s5`
-- `Deploy HOME to home runner` is skipped
+- GHCR images are published with tag `uni-dev-example`
+- `Deploy UNI DEV to s5` runs on runner labels `dev+s5+uni`
+- `Deploy HOME DEV to home runner` is skipped
 - Kubernetes rollout is verified through Envoy/Gateway API checks
 
 Example PROD release:
@@ -255,16 +256,16 @@ Example PROD release:
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-git tag v0.1.2
-git push origin v0.1.2
+git tag uni-v0.1.2
+git push origin uni-v0.1.2
 ```
 
 Expected result:
 
-- `Production Release` workflow starts
-- GHCR images are published with tag `v0.1.2`
-- `Deploy PROD to k3s HA cluster` waits for `production` environment approval
-- after approval, deploy runs on runner labels `prod+gw`
+- `UNI Production Release` workflow starts
+- GHCR images are published with tag `uni-v0.1.2`
+- `Deploy UNI PROD to k3s HA cluster` waits for `production` environment approval
+- after approval, deploy runs on runner labels `prod+gw+uni`
 - Kubernetes rollout is verified in namespace `campus-prod`
 
 ## Runner Model
@@ -273,14 +274,17 @@ GitHub Actions targets self-hosted runners by labels, not by runner names.
 
 Current runner routing:
 
-- `dev-*` requires `self-hosted`, `Linux`, `dev`, `s5`
-- `home-*` requires `self-hosted`, `Linux`, `dev`, `home`
-- `v*` requires `self-hosted`, `Linux`, `X64`, `prod`, `gw`
+- `uni-dev-*` requires `self-hosted`, `Linux`, `X64`, `dev`, `s5`, `uni`
+- `home-dev-*` requires `self-hosted`, `Linux`, `X64`, `dev`, `s5`, `home`
+- `uni-v*` requires `self-hosted`, `Linux`, `X64`, `prod`, `gw`, `uni`
+- `home-v*` requires `self-hosted`, `Linux`, `X64`, `prod`, `gw`, `home`
 
 Current runner names:
 
-- DEV runner: `s5-campus-dev`
-- PROD runner: `gw-campus-prod`
+- university DEV runner: `s5-campus-dev`
+- university PROD runner: `gw-campus-prod`
+- home DEV runner: `home-s5-campus-dev`
+- home PROD runner: `home-gw-campus-prod`
 
 ## Repository Layout
 
@@ -350,4 +354,4 @@ Current planned work:
 - replace the initial PROD kubeconfig with an RBAC-limited deployer kubeconfig
 - add Prometheus alert rules and Alertmanager
 - add Loki and log collection later
-- review the `home` overlay before the first real `home-*` release
+- review the `home` overlay before the first real `home-dev-*` release

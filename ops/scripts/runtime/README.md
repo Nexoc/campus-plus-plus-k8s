@@ -27,12 +27,13 @@ cd /home/nexoc/campus-plus-plus-k8s
 bash ops/scripts/runtime/00-preflight.sh
 bash ops/scripts/runtime/01-check-runtime-files.sh
 bash ops/scripts/runtime/02-install-envoy-prod.sh
-TAG=vX.Y.Z bash ops/scripts/runtime/03-render-prod.sh
-TAG=vX.Y.Z CONFIRM_PROD_APPLY=apply-prod bash ops/scripts/runtime/04-apply-prod.sh
-TAG=vX.Y.Z bash ops/scripts/runtime/05-verify-prod.sh
+TAG=uni-vX.Y.Z bash ops/scripts/runtime/03-render-prod.sh
+TAG=uni-vX.Y.Z CONFIRM_PROD_APPLY=apply-prod bash ops/scripts/runtime/04-apply-prod.sh
+TAG=uni-vX.Y.Z bash ops/scripts/runtime/05-verify-prod.sh
 bash ops/scripts/runtime/06-install-monitoring.sh
 ```
 
-For normal production releases, prefer the GitHub Actions `v*` workflow with
-the `production` environment approval. `04-apply-prod.sh` is for controlled
-bootstrap or recovery situations where a manual apply is intentionally chosen.
+For normal production releases, prefer the GitHub Actions `uni-v*` or
+`home-v*` workflows with environment approval. `04-apply-prod.sh` is for
+controlled bootstrap or recovery situations where a manual apply is
+intentionally chosen.

@@ -1,9 +1,9 @@
-name: Production Release
+name: UNI Production Release
 
 on:
   push:
     tags:
-      - "v*"
+      - "uni-v*"
 
 permissions:
   contents: read
@@ -28,7 +28,7 @@ jobs:
           set -euo pipefail
           IMAGE_TAG="${GITHUB_REF_NAME}"
           case "$IMAGE_TAG" in
-            v*) ;;
+            uni-v*) ;;
             *)
               echo "Unsupported production release tag: $IMAGE_TAG" >&2
               exit 1
@@ -83,7 +83,7 @@ jobs:
           tags: ghcr.io/nexoc/campus-importer:${{ steps.release-meta.outputs.image_tag }}
 
   deploy-prod:
-    name: Deploy PROD to k3s HA cluster
+    name: Deploy UNI PROD to k3s HA cluster
     needs: build-and-push-images
     runs-on:
       - self-hosted
@@ -91,6 +91,7 @@ jobs:
       - X64
       - prod
       - gw
+      - uni
     environment:
       name: production
     concurrency:
@@ -118,7 +119,7 @@ jobs:
         run: |
           set -euo pipefail
           echo "Release tag: ${{ needs.build-and-push-images.outputs.image_tag }}"
-          echo "Target runner: prod+gw"
+          echo "Target runner: prod+gw+uni"
           echo "Target overlay: $RELEASE_ENV"
           echo "Target namespace: $DEPLOY_NAMESPACE"
           echo "Expected nodeport: $EXPECTED_NODEPORT"
@@ -130,7 +131,7 @@ jobs:
           set -euo pipefail
 
           case "${GITHUB_REF_NAME}" in
-            v*) ;;
+            uni-v*) ;;
             *)
               echo "Ref '${GITHUB_REF_NAME}' is not a production tag." >&2
               exit 1

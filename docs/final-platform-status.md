@@ -9,8 +9,8 @@ monitoring.
 
 The technical baseline is complete:
 
-- DEV releases are delivered from `dev-*` tags.
-- PROD releases are delivered from `v*` tags with GitHub `production`
+- DEV releases are delivered from `uni-dev-*` and `home-dev-*` tags.
+- PROD releases are delivered from `uni-v*` and `home-v*` tags with GitHub
   environment approval.
 - DEV and PROD Kubernetes runtimes are active.
 - The external PostgreSQL dependency is reachable through a stable Kubernetes
@@ -38,7 +38,7 @@ The technical baseline is complete:
 
 - DEV k3s cluster
 - DEV GitHub Actions runner host
-- target for `dev-*` releases
+- target for `uni-dev-*` releases
 - owner of the `campus-dev` runtime
 
 `s6-monitoring`
@@ -60,7 +60,7 @@ The technical baseline is complete:
 DEV delivery:
 
 ```text
-dev-* tag
+uni-dev-* tag
 -> GitHub Actions
 -> s5-campus-dev runner
 -> s5-dev k3s
@@ -71,7 +71,7 @@ dev-* tag
 PROD delivery:
 
 ```text
-v* tag
+uni-v* tag
 -> GitHub Actions
 -> GitHub environment: production
 -> manual approval
@@ -84,9 +84,10 @@ v* tag
 The tag-based model separates release intent from branch pushes:
 
 - `main` runs validation CI.
-- `dev-*` releases to DEV.
-- `home-*` is reserved for the home runner path.
-- `v*` releases to PROD after approval.
+- `uni-dev-*` releases to university DEV.
+- `home-dev-*` releases to home DEV.
+- `uni-v*` releases to university PROD after approval.
+- `home-v*` releases to home PROD after approval.
 
 ## Kubernetes Status
 
@@ -252,7 +253,7 @@ These should not change:
 
 - logical hostnames
 - Kubernetes overlay structure
-- `dev-*` and `v*` release model
+- `uni-dev-*`, `home-dev-*`, `uni-v*`, and `home-v*` release model
 - stable application database host `s4-db`
 - runtime database endpoint contract
 - monitoring component roles

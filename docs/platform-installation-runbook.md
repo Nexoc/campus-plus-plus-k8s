@@ -33,8 +33,10 @@ this repository does not store real secrets, tokens, passwords, or infrastructur
 expected final platform state:
 
 ```text
-dev-* tag -> s5-dev -> campus-dev -> envoy nodeport 30080
-v* tag -> github production approval -> gw -> campus-prod -> envoy nodeport 30080
+uni-dev-* tag -> s5-dev -> campus-dev -> envoy nodeport 30080
+uni-v* tag -> github production approval -> gw -> campus-prod -> envoy nodeport 30080
+home-dev-* tag -> home s5-dev -> campus-dev -> envoy nodeport 30080
+home-v* tag -> home github production approval -> home gw -> campus-prod -> envoy nodeport 30080
 s4-db -> external postgresql through stable runtime alias
 s6-monitoring -> prometheus, grafana, exporters, dashboards
 ```
@@ -76,9 +78,9 @@ cd /home/nexoc/campus-plus-plus-k8s
 bash ops/scripts/runtime/00-preflight.sh
 bash ops/scripts/runtime/01-check-runtime-files.sh
 bash ops/scripts/runtime/02-install-envoy-prod.sh
-TAG=vX.Y.Z bash ops/scripts/runtime/03-render-prod.sh
-TAG=vX.Y.Z CONFIRM_PROD_APPLY=apply-prod bash ops/scripts/runtime/04-apply-prod.sh
-TAG=vX.Y.Z bash ops/scripts/runtime/05-verify-prod.sh
+TAG=uni-vX.Y.Z bash ops/scripts/runtime/03-render-prod.sh
+TAG=uni-vX.Y.Z CONFIRM_PROD_APPLY=apply-prod bash ops/scripts/runtime/04-apply-prod.sh
+TAG=uni-vX.Y.Z bash ops/scripts/runtime/05-verify-prod.sh
 bash ops/scripts/runtime/06-install-monitoring.sh
 ```
 
@@ -103,7 +105,7 @@ wrappers intentionally do not:
 * choose a release tag for you
 * run destructive cleanup on prod nodes
 
-for normal production releases, prefer the github actions `v*` workflow with `production` approval. `04-apply-prod.sh` is only for controlled bootstrap or recovery situations.
+for normal production releases, prefer the github actions `uni-v*` or `home-v*` workflows with environment approval. `04-apply-prod.sh` is only for controlled bootstrap or recovery situations.
 
 to use another inventory or kubeconfig:
 
@@ -572,15 +574,15 @@ ssh nexoc@s5-dev 'systemctl status actions.runner.Nexoc-campus-plus-plus-k8s.s5-
 
 ## phase 11: deploy dev
 
-create a `dev-*` tag from a clean `main` checkout:
+create a `uni-dev-*` tag from a clean `main` checkout:
 
 ```bash
 # server: local pc
 git checkout main
 git pull --ff-only
 git status --short
-git tag dev-test-YYYYMMDD-HHMMSS
-git push origin dev-test-YYYYMMDD-HHMMSS
+git tag uni-dev-test-YYYYMMDD-HHMMSS
+git push origin uni-dev-test-YYYYMMDD-HHMMSS
 ```
 
 then verify from `gw`:
@@ -593,7 +595,7 @@ ssh nexoc@s5-dev 'kubectl get gateway,httproute,envoyproxy,clienttrafficpolicy -
 
 ## phase 12: deploy prod
 
-create a `v*` tag only after:
+create a `uni-v*` tag only after:
 
 * prod cluster is ready
 * prod kubeconfig works from `gw`
@@ -609,8 +611,8 @@ create and push the release tag:
 git checkout main
 git pull --ff-only
 git status --short
-git tag vX.Y.Z
-git push origin vX.Y.Z
+git tag uni-vX.Y.Z
+git push origin uni-vX.Y.Z
 ```
 
 approve the `production` environment deployment in github ui.
@@ -637,7 +639,7 @@ CAMPUS_SECRETS_ROOT=/home/nexoc/campus-secrets \
 KUBECONFIG=/home/nexoc/.kube/prod.yaml \
 bash deploy/scripts/apply-overlay.sh \
   --environment prod \
-  --image-tag vX.Y.Z
+  --image-tag uni-vX.Y.Z
 ```
 
 before real apply, use render-only and server dry-run:
@@ -650,7 +652,7 @@ CAMPUS_SECRETS_ROOT=/home/nexoc/campus-secrets \
 KUBECONFIG=/home/nexoc/.kube/prod.yaml \
 bash deploy/scripts/apply-overlay.sh \
   --environment prod \
-  --image-tag vX.Y.Z \
+  --image-tag uni-vX.Y.Z \
   --render-only \
   --manifest-out /tmp/campus-prod-render.yaml
 
@@ -665,8 +667,8 @@ wrapper equivalents:
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
 
-TAG=vX.Y.Z bash ops/scripts/runtime/03-render-prod.sh
-TAG=vX.Y.Z CONFIRM_PROD_APPLY=apply-prod bash ops/scripts/runtime/04-apply-prod.sh
+TAG=uni-vX.Y.Z bash ops/scripts/runtime/03-render-prod.sh
+TAG=uni-vX.Y.Z CONFIRM_PROD_APPLY=apply-prod bash ops/scripts/runtime/04-apply-prod.sh
 ```
 
 ## phase 13: verify prod deployment
@@ -739,7 +741,7 @@ cd /home/nexoc/campus-plus-plus-k8s
 KUBECONFIG=/home/nexoc/.kube/prod.yaml \
 ansible-playbook \
   -i ops/inventory/uni.local.ini \
-  -e expected_tag=vX.Y.Z \
+  -e expected_tag=uni-vX.Y.Z \
   ops/playbooks/check-prod-cluster.yml
 ```
 
@@ -748,7 +750,7 @@ wrapper equivalent:
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-TAG=vX.Y.Z bash ops/scripts/runtime/05-verify-prod.sh
+TAG=uni-vX.Y.Z bash ops/scripts/runtime/05-verify-prod.sh
 ```
 
 ## phase 14: install monitoring
@@ -829,8 +831,8 @@ ansible-playbook -i ops/inventory/uni.local.ini ops/playbooks/check-monitoring-s
 
 the platform is ready when:
 
-* dev deploy succeeds from a `dev-*` tag
-* prod deploy succeeds from a `v*` tag after approval
+* dev deploy succeeds from a `uni-dev-*` or `home-dev-*` tag
+* prod deploy succeeds from a `uni-v*` or `home-v*` tag after approval
 * prod smoke checks return http 200
 * database access checks pass
 * monitoring stack check passes

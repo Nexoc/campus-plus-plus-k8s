@@ -6,7 +6,7 @@ Production delivery is deliberately separated from DEV delivery. The DEV
 runner must not hold production cluster credentials.
 
 Production delivery is also separate from host operations and monitoring.
-Ansible playbooks in `ops/` can verify or prepare infrastructure, but `v*`
+Ansible playbooks in `ops/` can verify or prepare infrastructure, but `uni-v*`
 tags remain the release mechanism for Campus++ application images.
 
 ## Current Baseline
@@ -14,7 +14,7 @@ tags remain the release mechanism for Campus++ application images.
 DEV tag-based CD is already active:
 
 ```text
-dev-* tag -> GitHub Actions -> s5-campus-dev runner -> dev k3s -> campus-dev -> Envoy NodePort 30080
+uni-dev-* tag -> GitHub Actions -> s5-campus-dev runner -> dev k3s -> campus-dev -> Envoy NodePort 30080
 ```
 
 The production Kubernetes target:
@@ -45,7 +45,7 @@ verification playbook: ops/playbooks/verify-prod-release.yml
 DEV releases:
 
 ```text
-dev-* tag
+uni-dev-* tag
 -> runner: s5-campus-dev
 -> target: s5-dev k3s
 -> namespace: campus-dev
@@ -54,7 +54,7 @@ dev-* tag
 Production releases:
 
 ```text
-v* tag
+uni-v* tag
 -> GitHub environment: production
 -> manual approval required
 -> runner: gw-campus-prod
@@ -66,7 +66,7 @@ v* tag
 The production runner uses these labels:
 
 ```text
-self-hosted, linux, x64, prod, gw
+self-hosted, linux, x64, prod, gw, uni
 ```
 
 ## Production Traffic Path
@@ -97,11 +97,11 @@ Production deployment should be guarded by:
 
 - a GitHub Environment named `production`
 - required reviewers on the `production` environment
-- protected tag rules for `v*`
+- protected tag rules for `uni-v*`
 - separate production host secrets under `/home/nexoc/campus-secrets/prod`
 - eventually, an RBAC-limited production kubeconfig instead of an admin kubeconfig
 
-The environment approval protects the deployment job even if a `v*` tag is
+The environment approval protects the deployment job even if a `uni-v*` tag is
 created accidentally.
 
 ## Production Control Host
@@ -221,7 +221,7 @@ The production workflow lives in:
 Trigger:
 
 ```text
-v*
+uni-v*
 ```
 
 Deployment job:
@@ -229,6 +229,7 @@ Deployment job:
 ```text
 environment: production
 runner: gw-campus-prod
+runner labels: self-hosted, linux, x64, prod, gw, uni
 KUBECONFIG: /home/nexoc/.kube/prod.yaml
 CAMPUS_SECRETS_ROOT: /home/nexoc/campus-secrets
 overlay: deploy/app/overlays/prod
