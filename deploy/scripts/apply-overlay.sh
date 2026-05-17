@@ -5,7 +5,8 @@
 # Purpose:
 # - render the selected Kustomize overlay with a concrete immutable image tag
 # - validate that required config files exist and secret files are available
-#   either in the overlay or via a fixed host secret path
+#   either in the overlay or via a fixed host secret path staged into a
+#   temporary overlay copy
 # - optionally apply the rendered manifest to the target Kubernetes namespace
 # - show the current Envoy/Gateway API rollout resources after apply
 # - for PROD, render a Kubernetes DNS alias for the external PostgreSQL endpoint
@@ -241,14 +242,6 @@ endpoints:
 EOF
 }
 
-if [[ -n "$host_secrets_root" ]]; then
-  host_secret_dir="$host_secrets_root/$environment"
-
-  echo "Staging secret files from host path '$host_secret_dir'..."
-  stage_host_secret_file "$host_secret_dir/db-secrets.env" "$overlay_path/secrets/db-secrets.env"
-  stage_host_secret_file "$host_secret_dir/auth-secrets.env" "$overlay_path/secrets/auth-secrets.env"
-fi
-
 prod_db_endpoint_address=""
 prod_db_endpoint_port=""
 
@@ -288,21 +281,7 @@ if [[ "$environment" == "prod" ]]; then
   }
 fi
 
-required_files=(
-  "$overlay_path/config/auth-config.env"
-  "$overlay_path/config/backend-config.env"
-  "$overlay_path/config/importer-config.env"
-  "$overlay_path/secrets/db-secrets.env"
-  "$overlay_path/secrets/auth-secrets.env"
-)
-
-for required_file in "${required_files[@]}"; do
-  require_file "$required_file"
-done
-
-tmp_workspace_root="$repo_root/deploy/.tmp"
-mkdir -p "$tmp_workspace_root"
-tmp_root="$(mktemp -d "$tmp_workspace_root/campus-kustomize-XXXXXX")"
+tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/campus-kustomize-XXXXXX")"
 tmp_app_root="$tmp_root/app"
 tmp_base_path="$tmp_app_root/base"
 tmp_overlay_path="$tmp_app_root/overlays/$environment"
@@ -315,6 +294,26 @@ trap cleanup EXIT
 mkdir -p "$tmp_app_root/overlays"
 cp -R "$repo_root/deploy/app/base" "$tmp_base_path"
 cp -R "$overlay_path" "$tmp_overlay_path"
+
+if [[ -n "$host_secrets_root" ]]; then
+  host_secret_dir="$host_secrets_root/$environment"
+
+  echo "Staging secret files into temporary overlay from host path '$host_secret_dir'..."
+  stage_host_secret_file "$host_secret_dir/db-secrets.env" "$tmp_overlay_path/secrets/db-secrets.env"
+  stage_host_secret_file "$host_secret_dir/auth-secrets.env" "$tmp_overlay_path/secrets/auth-secrets.env"
+fi
+
+required_files=(
+  "$tmp_overlay_path/config/auth-config.env"
+  "$tmp_overlay_path/config/backend-config.env"
+  "$tmp_overlay_path/config/importer-config.env"
+  "$tmp_overlay_path/secrets/db-secrets.env"
+  "$tmp_overlay_path/secrets/auth-secrets.env"
+)
+
+for required_file in "${required_files[@]}"; do
+  require_file "$required_file"
+done
 
 tmp_kustomization_path="$tmp_overlay_path/kustomization.yaml"
 sed -E -i "s/^([[:space:]]*newTag:[[:space:]]*).+$/\1$image_tag/" "$tmp_kustomization_path"

@@ -1,10 +1,13 @@
-# HOME Secrets
+# HOME Secrets Fallback
 
-This directory is used by the active `deploy/app/overlays/home` flow.
+This directory is an ignored local fallback for manual `deploy/app/overlays/home`
+rendering.
 
-During automated deploys, the home `gw` control runner stages secrets here from:
+During automated deploys, the home `gw` control runner reads secrets from:
 
 - `/home/nexoc/campus-secrets/home/`
+
+and stages them into a temporary overlay copy outside the repo checkout.
 
 Expected files:
 

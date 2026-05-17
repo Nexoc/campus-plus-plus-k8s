@@ -89,7 +89,11 @@ Reference templates live in:
 - `deploy/templates/config/`
 - `deploy/templates/secrets/`
 
-Staged secret files are generated at deploy time under:
+During automated deploys, real secret files are staged into a temporary overlay
+copy outside the repository checkout. They are not copied into
+`deploy/app/overlays/*/secrets/` on the self-hosted runner workspace.
+
+Ignored local overlay secret files may still be used as a manual fallback under:
 
 ```text
 deploy/app/overlays/*/secrets/*.env
@@ -99,10 +103,12 @@ Rules:
 
 - config files may be versioned
 - secret templates may be versioned
-- staged secret files are ignored by git
+- real deploy secrets are staged only into the temporary render workspace when
+  `CAMPUS_SECRETS_ROOT` is set
+- local overlay secret files are ignored fallback files
 - real secrets must stay out of git
 
-For the self-hosted runners, deploy workflows stage real secrets from:
+For the self-hosted runners, deploy workflows read real secrets from:
 
 - `/home/nexoc/campus-secrets/dev/db-secrets.env`
 - `/home/nexoc/campus-secrets/dev/auth-secrets.env`

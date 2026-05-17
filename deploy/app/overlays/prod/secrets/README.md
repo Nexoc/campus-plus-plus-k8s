@@ -1,9 +1,13 @@
-# PROD Secrets
+# PROD Secrets Fallback
 
-Real PROD secret values are staged from the deployment host when
-`CAMPUS_SECRETS_ROOT` is set.
+This directory is an ignored local fallback for manual `deploy/app/overlays/prod`
+rendering.
 
-Expected staged files:
+During automated deploys, real PROD secret values are read from the deployment
+host when `CAMPUS_SECRETS_ROOT` is set, then staged into a temporary overlay copy
+outside the repo checkout.
+
+Expected app secret files:
 
 - `db-secrets.env`
 - `auth-secrets.env`

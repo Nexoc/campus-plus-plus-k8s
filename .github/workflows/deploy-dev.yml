@@ -106,6 +106,8 @@ jobs:
       CAMPUS_SECRETS_ROOT: /home/nexoc/campus-secrets
       RELEASE_ENV: dev
       DEPLOY_NAMESPACE: campus-dev
+      EXPECTED_NODEPORT: "30080"
+      EXPECTED_HOST: campus-dev.10-123-127-29.sslip.io
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -120,6 +122,8 @@ jobs:
           echo "Target runner: uni+gw+deploy"
           echo "Target overlay: $RELEASE_ENV"
           echo "Target namespace: $DEPLOY_NAMESPACE"
+          echo "Expected nodeport: $EXPECTED_NODEPORT"
+          echo "Expected host: $EXPECTED_HOST"
 
       - name: Verify cluster access
         shell: bash
@@ -188,7 +192,24 @@ jobs:
           set -euo pipefail
           bash deploy/scripts/verify-overlay.sh \
             --environment "$RELEASE_ENV" \
-            --expected-nodeport 30080
+            --expected-nodeport "$EXPECTED_NODEPORT"
+
+      - name: Smoke UNI DEV HTTP route
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if curl -fsS -o /dev/null --max-time 10 \
+              -H "Host: $EXPECTED_HOST" \
+              "http://s5-dev:$EXPECTED_NODEPORT/"
+            then
+              echo "UNI DEV smoke check succeeded on attempt $attempt"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "UNI DEV smoke check failed for $EXPECTED_HOST via s5-dev:$EXPECTED_NODEPORT" >&2
+          exit 1
 
       - name: Show deployed resources
         shell: bash
@@ -222,6 +243,8 @@ jobs:
       CAMPUS_SECRETS_ROOT: /home/nexoc/campus-secrets
       RELEASE_ENV: home
       DEPLOY_NAMESPACE: campus-dev
+      EXPECTED_NODEPORT: "30080"
+      EXPECTED_HOST: home-campus-dev.davl.at
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -236,6 +259,8 @@ jobs:
           echo "Target runner: home+gw+deploy"
           echo "Target overlay: $RELEASE_ENV"
           echo "Target namespace: $DEPLOY_NAMESPACE"
+          echo "Expected nodeport: $EXPECTED_NODEPORT"
+          echo "Expected host: $EXPECTED_HOST"
 
       - name: Verify cluster access
         shell: bash
@@ -304,7 +329,24 @@ jobs:
           set -euo pipefail
           bash deploy/scripts/verify-overlay.sh \
             --environment "$RELEASE_ENV" \
-            --expected-nodeport 30080
+            --expected-nodeport "$EXPECTED_NODEPORT"
+
+      - name: Smoke HOME DEV HTTP route
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if curl -fsS -o /dev/null --max-time 10 \
+              -H "Host: $EXPECTED_HOST" \
+              "http://s5-dev:$EXPECTED_NODEPORT/"
+            then
+              echo "HOME DEV smoke check succeeded on attempt $attempt"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "HOME DEV smoke check failed for $EXPECTED_HOST via s5-dev:$EXPECTED_NODEPORT" >&2
+          exit 1
 
       - name: Show deployed resources
         shell: bash

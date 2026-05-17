@@ -249,7 +249,8 @@ Expected result:
 - GHCR images are published with tag `uni-dev-example`
 - `Deploy UNI DEV from gw` runs on runner labels `uni+gw+deploy`
 - `Deploy HOME DEV from gw` is skipped
-- Kubernetes rollout is verified through Envoy/Gateway API checks
+- Kubernetes rollout is verified through Envoy/Gateway API checks and an HTTP
+  smoke check with the expected Host header
 
 Example PROD release:
 
@@ -266,7 +267,8 @@ Expected result:
 - GHCR images are published with tag `uni-v0.1.2`
 - `Deploy UNI PROD to k3s HA cluster` waits for `production` environment approval
 - after approval, deploy runs on runner labels `uni+gw+deploy`
-- Kubernetes rollout is verified in namespace `campus-prod`
+- Kubernetes rollout is verified in namespace `campus-prod`, including an HTTP
+  smoke check through the Envoy NodePort path
 
 ## Runner Model
 

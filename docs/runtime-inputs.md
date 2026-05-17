@@ -27,10 +27,13 @@ Untracked runtime files:
 .env.dev
 .env.test
 .env.prod
-deploy/app/overlays/*/secrets/*.env
 ops/inventory/*.local.ini
 /home/nexoc/campus-secrets/*
 ```
+
+`deploy/app/overlays/*/secrets/*.env` files are ignored local fallback files for
+manual rendering only. Automated deploys with `CAMPUS_SECRETS_ROOT` stage real
+secret files into a temporary overlay copy outside the repo checkout.
 
 ## Local Docker Runtime
 
@@ -133,7 +136,9 @@ db-endpoint.env:
   DB_ENDPOINT_PORT
 ```
 
-The deploy scripts stage real secret files from host-local paths.
+The deploy scripts stage real secret files from host-local paths into a
+temporary overlay copy. They do not copy real secret values into the repository
+checkout when `CAMPUS_SECRETS_ROOT` is set.
 
 Required host-local files by environment:
 
@@ -159,7 +164,8 @@ needs `JWT_SECRET` and `JWT_EXPIRATION`.
 pods; it is read by `deploy/scripts/apply-overlay.sh` on `gw` to generate the
 `s4-db` Service and EndpointSlice.
 
-DEV runtime files on `s5-dev`:
+DEV runtime files for the university deploy live on the university `gw` control
+runner:
 
 ```text
 /home/nexoc/campus-secrets/dev/db-secrets.env

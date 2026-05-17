@@ -128,14 +128,17 @@ Current delivery uses:
 - the production overlay in `deploy/app/overlays/prod`
 - Envoy Gateway baselines in `deploy/infra/envoy-gateway/`
 - versioned non-secret config files under each overlay
-- ignored staged secret env files under each overlay
+- optional ignored local fallback secret env files under each overlay
 - GHCR images tagged exactly with the pushed release tag
 - Ansible inventory in `ops/inventory/lab.local.ini` for lab host operations
 - host-local runtime files under `/home/nexoc/campus-secrets`
 
+Automated deploys with `CAMPUS_SECRETS_ROOT` stage real secret env files into a
+temporary overlay copy outside the repo checkout.
+
 ## Secrets
 
-Self-hosted runners stage app secrets from fixed host paths:
+Self-hosted runners read app secrets from fixed host paths:
 
 - `/home/nexoc/campus-secrets/dev/`
 - `/home/nexoc/campus-secrets/home/`

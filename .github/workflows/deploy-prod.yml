@@ -249,6 +249,29 @@ jobs:
             --environment "$RELEASE_ENV" \
             --expected-nodeport "$EXPECTED_NODEPORT"
 
+      - name: Smoke UNI PROD HTTP route
+        shell: bash
+        run: |
+          set -euo pipefail
+          for node in s1-prod s2-prod s3-prod; do
+            for attempt in $(seq 1 30); do
+              if curl -fsS -o /dev/null --max-time 10 \
+                -H "Host: $EXPECTED_HOST" \
+                "http://$node:$EXPECTED_NODEPORT/"
+              then
+                echo "UNI PROD smoke check succeeded via $node on attempt $attempt"
+                break
+              fi
+
+              if [[ "$attempt" -eq 30 ]]; then
+                echo "UNI PROD smoke check failed for $EXPECTED_HOST via $node:$EXPECTED_NODEPORT" >&2
+                exit 1
+              fi
+
+              sleep 5
+            done
+          done
+
       - name: Show deployed resources
         shell: bash
         run: |
