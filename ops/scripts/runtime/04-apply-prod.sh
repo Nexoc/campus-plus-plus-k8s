@@ -23,6 +23,7 @@ TAG="$TAG" bash ops/scripts/runtime/03-render-prod.sh
 log "applying prod overlay for $TAG"
 CAMPUS_SECRETS_ROOT="$CAMPUS_SECRETS_ROOT" \
 KUBECONFIG="$KUBECONFIG_PATH" \
+CAMPUS_HTTPROUTE_HOSTNAME="${CAMPUS_HTTPROUTE_HOSTNAME:-$EXPECTED_HOST}" \
 bash deploy/scripts/apply-overlay.sh \
   --environment prod \
   --image-tag "$TAG"

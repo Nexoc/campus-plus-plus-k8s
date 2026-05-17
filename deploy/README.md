@@ -202,7 +202,7 @@ Verify the proxy path:
 ```bash
 # server: gw
 curl -I http://gw/
-curl -I -H 'Host: campus-dev.s5-dev.local' http://s5-dev:30080/
+curl -I -H 'Host: campus-dev.10-123-127-29.sslip.io' http://s5-dev:30080/
 ```
 
 ## Manual Non-Prod Apply
@@ -266,6 +266,15 @@ Current workflow behavior:
   approval, then deploy to the `prod+gw+uni` runner
 - `home-v*` tags build and push GHCR images, wait for the `home-production`
   environment approval, then deploy to the `prod+gw+home` runner
+
+Production hostnames are environment-specific:
+
+- university DEV uses `campus-dev.10-123-127-29.sslip.io`
+- university PROD uses `campus-prod.10-123-127-29.sslip.io`
+- university Grafana uses `grafana.10-123-127-29.sslip.io`
+- home DEV uses `home-campus-dev.davl.at`
+- home PROD uses `home-campus-prod.davl.at`
+- home Grafana uses `home-grafana.davl.at`
 - release image tags are exactly the Git tag that triggered the workflow
 - deploy jobs create `ghcr-pull`, apply `deploy/app` overlays, and verify the
   Envoy/Gateway API rollout
@@ -332,7 +341,7 @@ bash deploy/scripts/apply-overlay.sh \
   --render-only \
   --manifest-out /tmp/campus-prod-rendered.yaml
 
-grep -nE "namespace: campus-prod|campus-prod.davl.at|nodePort: 30080|imagePullSecrets|ghcr-pull|kind: Service|kind: EndpointSlice|name: s4-db" /tmp/campus-prod-rendered.yaml -A3 -B3
+grep -nE "namespace: campus-prod|campus-prod.10-123-127-29.sslip.io|nodePort: 30080|imagePullSecrets|ghcr-pull|kind: Service|kind: EndpointSlice|name: s4-db" /tmp/campus-prod-rendered.yaml -A3 -B3
 rm -f /tmp/campus-prod-rendered.yaml
 ```
 

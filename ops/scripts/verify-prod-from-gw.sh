@@ -8,7 +8,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 KUBECONFIG_PATH="${KUBECONFIG:-/home/nexoc/.kube/prod.yaml}"
 EXPECTED_NODEPORT="${EXPECTED_NODEPORT:-30080}"
-EXPECTED_HOST="${EXPECTED_HOST:-campus-prod.davl.at}"
+EXPECTED_HOST="${EXPECTED_HOST:-campus-prod.10-123-127-29.sslip.io}"
 PROD_NAMESPACE="${PROD_NAMESPACE:-campus-prod}"
 
 cd "$REPO_ROOT"
@@ -27,4 +27,3 @@ for node in s1-prod s2-prod s3-prod; do
   curl -fsS -o /dev/null -H "Host: $EXPECTED_HOST" "http://$node:$EXPECTED_NODEPORT/"
   echo "ok: $node:$EXPECTED_NODEPORT -> $EXPECTED_HOST"
 done
-

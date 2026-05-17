@@ -4,4 +4,4 @@ metadata:
   name: campus
 spec:
   hostnames:
-    - campus-home.local
+    - home-campus-dev.davl.at

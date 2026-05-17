@@ -107,7 +107,8 @@ jobs:
       RELEASE_ENV: prod
       DEPLOY_NAMESPACE: campus-prod
       EXPECTED_NODEPORT: "30080"
-      EXPECTED_HOST: campus-prod.davl.at
+      EXPECTED_HOST: campus-prod.10-123-127-29.sslip.io
+      CAMPUS_HTTPROUTE_HOSTNAME: campus-prod.10-123-127-29.sslip.io
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -165,7 +166,8 @@ jobs:
           set -euo pipefail
           for path in \
             "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/db-secrets.env" \
-            "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/auth-secrets.env"
+            "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/auth-secrets.env" \
+            "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/db-endpoint.env"
           do
             [[ -f "$path" ]] || {
               echo "Missing required host secret file: $path" >&2
@@ -208,6 +210,7 @@ jobs:
           manifest="/tmp/campus-prod-rendered-${GITHUB_RUN_ID}.yaml"
 
           CAMPUS_SECRETS_ROOT="$CAMPUS_SECRETS_ROOT" \
+          CAMPUS_HTTPROUTE_HOSTNAME="$CAMPUS_HTTPROUTE_HOSTNAME" \
           bash deploy/scripts/apply-overlay.sh \
             --environment "$RELEASE_ENV" \
             --image-tag "${{ needs.build-and-push-images.outputs.image_tag }}" \
@@ -233,6 +236,7 @@ jobs:
           kubectl delete job campus-importer -n "$DEPLOY_NAMESPACE" --ignore-not-found
           kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 
+          CAMPUS_HTTPROUTE_HOSTNAME="$CAMPUS_HTTPROUTE_HOSTNAME" \
           bash deploy/scripts/apply-overlay.sh \
             --environment "$RELEASE_ENV" \
             --image-tag "${{ needs.build-and-push-images.outputs.image_tag }}"

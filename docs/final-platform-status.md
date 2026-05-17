@@ -89,6 +89,15 @@ The tag-based model separates release intent from branch pushes:
 - `uni-v*` releases to university PROD after approval.
 - `home-v*` releases to home PROD after approval.
 
+Production hostnames:
+
+- university DEV: `campus-dev.10-123-127-29.sslip.io`
+- university PROD: `campus-prod.10-123-127-29.sslip.io`
+- university Grafana: `grafana.10-123-127-29.sslip.io`
+- home DEV: `home-campus-dev.davl.at`
+- home PROD: `home-campus-prod.davl.at`
+- home Grafana: `home-grafana.davl.at`
+
 ## Kubernetes Status
 
 DEV cluster:

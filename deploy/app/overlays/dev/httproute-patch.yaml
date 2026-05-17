@@ -4,4 +4,4 @@ metadata:
   name: campus
 spec:
   hostnames:
-    - campus-dev.s5-dev.local
+    - campus-dev.10-123-127-29.sslip.io

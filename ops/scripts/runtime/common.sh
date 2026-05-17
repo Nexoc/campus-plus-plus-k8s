@@ -11,7 +11,7 @@ KUBECONFIG_PATH="${KUBECONFIG:-/home/nexoc/.kube/prod.yaml}"
 CAMPUS_SECRETS_ROOT="${CAMPUS_SECRETS_ROOT:-/home/nexoc/campus-secrets}"
 PROD_NAMESPACE="${PROD_NAMESPACE:-campus-prod}"
 EXPECTED_NODEPORT="${EXPECTED_NODEPORT:-30080}"
-EXPECTED_HOST="${EXPECTED_HOST:-campus-prod.davl.at}"
+EXPECTED_HOST="${EXPECTED_HOST:-campus-prod.10-123-127-29.sslip.io}"
 MANIFEST_OUT="${MANIFEST_OUT:-/tmp/campus-prod-render.yaml}"
 
 cd "$REPO_ROOT"

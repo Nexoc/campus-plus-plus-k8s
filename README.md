@@ -286,6 +286,15 @@ Current runner names:
 - home DEV runner: `home-s5-campus-dev`
 - home PROD runner: `home-gw-campus-prod`
 
+Production hostnames:
+
+- university DEV: `campus-dev.10-123-127-29.sslip.io`
+- university PROD: `campus-prod.10-123-127-29.sslip.io`
+- university Grafana: `grafana.10-123-127-29.sslip.io`
+- home DEV: `home-campus-dev.davl.at`
+- home PROD: `home-campus-prod.davl.at`
+- home Grafana: `home-grafana.davl.at`
+
 ## Repository Layout
 
 ```text

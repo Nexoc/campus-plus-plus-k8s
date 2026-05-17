@@ -15,6 +15,7 @@ manifest="${MANIFEST_OUT%.*}-${TAG}.yaml"
 log "rendering prod overlay for $TAG"
 CAMPUS_SECRETS_ROOT="$CAMPUS_SECRETS_ROOT" \
 KUBECONFIG="$KUBECONFIG_PATH" \
+CAMPUS_HTTPROUTE_HOSTNAME="${CAMPUS_HTTPROUTE_HOSTNAME:-$EXPECTED_HOST}" \
 bash deploy/scripts/apply-overlay.sh \
   --environment prod \
   --image-tag "$TAG" \

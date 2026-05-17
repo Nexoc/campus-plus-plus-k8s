@@ -28,7 +28,7 @@ Production environment:
 
 - `s1-prod`, `s2-prod`, and `s3-prod`: k3s HA production cluster nodes
 - `gw`: production deployment control host for the `uni-v*` workflow
-- application hostname: `campus-prod.davl.at`
+- application hostname: `campus-prod.10-123-127-29.sslip.io`
 - `s4-db`: stable Kubernetes DNS alias for external PostgreSQL in `campus-prod`
 
 Monitoring environment:
@@ -64,6 +64,23 @@ Current release channels:
 - `main` runs validation only
 - `uni-v*` deploys to university PROD through the `production` environment and `prod+gw+uni` runner
 - `home-v*` deploys to home PROD through the `home-production` environment and `prod+gw+home` runner
+
+Home PROD uses its own hostname:
+
+```text
+home-campus-prod.davl.at
+```
+
+Canonical hostname matrix:
+
+```text
+uni dev       campus-dev.10-123-127-29.sslip.io
+uni prod      campus-prod.10-123-127-29.sslip.io
+uni grafana   grafana.10-123-127-29.sslip.io
+home dev      home-campus-dev.davl.at
+home prod     home-campus-prod.davl.at
+home grafana  home-grafana.davl.at
+```
 
 Current ops/monitoring channels:
 

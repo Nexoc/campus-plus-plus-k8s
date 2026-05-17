@@ -15,7 +15,14 @@ KUBECONFIG=/home/nexoc/.kube/prod.yaml
 CAMPUS_SECRETS_ROOT=/home/nexoc/campus-secrets
 PROD_NAMESPACE=campus-prod
 EXPECTED_NODEPORT=30080
-EXPECTED_HOST=campus-prod.davl.at
+EXPECTED_HOST=campus-prod.10-123-127-29.sslip.io
+```
+
+For home PROD manual wrapper runs, override `EXPECTED_HOST`:
+
+```bash
+# server: gw
+TAG=home-vX.Y.Z EXPECTED_HOST=home-campus-prod.davl.at bash ops/scripts/runtime/03-render-prod.sh
 ```
 
 Recommended order:

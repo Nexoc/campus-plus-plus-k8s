@@ -22,7 +22,7 @@ Use `campus-dev.conf` on `gw` as:
 The config intentionally sets:
 
 ```nginx
-proxy_set_header Host campus-dev.s5-dev.local;
+proxy_set_header Host campus-dev.10-123-127-29.sslip.io;
 ```
 
 This keeps Envoy `HTTPRoute` matching stable even when an operator opens the
@@ -44,7 +44,7 @@ sudo systemctl reload nginx
 ```bash
 # server: gw
 curl -I http://gw/
-curl -I -H 'Host: campus-dev.s5-dev.local' http://s5-dev:30080/
+curl -I -H 'Host: campus-dev.10-123-127-29.sslip.io' http://s5-dev:30080/
 ```
 
 Expected result:

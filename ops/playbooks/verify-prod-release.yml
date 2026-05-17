@@ -8,7 +8,7 @@
   vars:
     repo_root: /home/nexoc/campus-plus-plus-k8s
     expected_nodeport: 30080
-    expected_host: campus-prod.davl.at
+    expected_host: campus-prod.10-123-127-29.sslip.io
     prod_nodes:
       - s1-prod
       - s2-prod
@@ -37,4 +37,3 @@
         return_content: false
         timeout: 10
       loop: "{{ prod_nodes }}"
-

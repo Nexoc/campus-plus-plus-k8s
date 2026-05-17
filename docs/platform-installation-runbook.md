@@ -41,6 +41,17 @@ s4-db -> external postgresql through stable runtime alias
 s6-monitoring -> prometheus, grafana, exporters, dashboards
 ```
 
+canonical hostnames:
+
+```text
+uni dev:      campus-dev.10-123-127-29.sslip.io
+uni prod:     campus-prod.10-123-127-29.sslip.io
+uni grafana:  grafana.10-123-127-29.sslip.io
+home dev:     home-campus-dev.davl.at
+home prod:    home-campus-prod.davl.at
+home grafana: home-grafana.davl.at
+```
+
 ## runtime automation wrappers
 
 the step-by-step phases below are the source of truth. the repo also provides thin wrappers for the repeatable parts:
@@ -57,7 +68,7 @@ KUBECONFIG=/home/nexoc/.kube/prod.yaml
 CAMPUS_SECRETS_ROOT=/home/nexoc/campus-secrets
 PROD_NAMESPACE=campus-prod
 EXPECTED_NODEPORT=30080
-EXPECTED_HOST=campus-prod.davl.at
+EXPECTED_HOST=campus-prod.10-123-127-29.sslip.io
 ```
 
 wrapper preconditions:
@@ -704,9 +715,9 @@ smoke test through every prod node:
 
 ```bash
 # server: gw
-curl -I --max-time 10 -H "Host: campus-prod.davl.at" http://s1-prod:30080 || true
-curl -I --max-time 10 -H "Host: campus-prod.davl.at" http://s2-prod:30080 || true
-curl -I --max-time 10 -H "Host: campus-prod.davl.at" http://s3-prod:30080 || true
+curl -I --max-time 10 -H "Host: campus-prod.10-123-127-29.sslip.io" http://s1-prod:30080 || true
+curl -I --max-time 10 -H "Host: campus-prod.10-123-127-29.sslip.io" http://s2-prod:30080 || true
+curl -I --max-time 10 -H "Host: campus-prod.10-123-127-29.sslip.io" http://s3-prod:30080 || true
 ```
 
 expected result:
@@ -714,6 +725,9 @@ expected result:
 ```text
 HTTP/1.1 200 OK
 ```
+
+For home PROD, use `Host: home-campus-prod.davl.at` against the home prod
+nodes.
 
 run repo verification:
 

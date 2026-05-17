@@ -28,6 +28,9 @@ Required:
 Optional:
   --render-only   Render the overlay but do not run kubectl apply
   --manifest-out  Path for the rendered manifest output
+
+Environment:
+  CAMPUS_HTTPROUTE_HOSTNAME  Optional hostname override for the rendered HTTPRoute
 EOF
 }
 
@@ -186,6 +189,14 @@ validate_tcp_port() {
   (( port >= 1 && port <= 65535 ))
 }
 
+validate_hostname() {
+  local hostname="$1"
+
+  [[ "$hostname" =~ ^[A-Za-z0-9][A-Za-z0-9.-]*[A-Za-z0-9]$ ]] || return 1
+  [[ "$hostname" == *..* ]] && return 1
+  [[ "$hostname" == *.* ]] || return 1
+}
+
 write_prod_db_endpoint_manifest() {
   local target_path="$1"
   local endpoint_address="$2"
@@ -307,6 +318,19 @@ cp -R "$overlay_path" "$tmp_overlay_path"
 
 tmp_kustomization_path="$tmp_overlay_path/kustomization.yaml"
 sed -E -i "s/^([[:space:]]*newTag:[[:space:]]*).+$/\1$image_tag/" "$tmp_kustomization_path"
+
+httproute_hostname_override="${CAMPUS_HTTPROUTE_HOSTNAME:-}"
+
+if [[ -n "$httproute_hostname_override" ]]; then
+  validate_hostname "$httproute_hostname_override" || {
+    echo "CAMPUS_HTTPROUTE_HOSTNAME must be a valid DNS hostname." >&2
+    exit 1
+  }
+
+  httproute_patch_path="$tmp_overlay_path/httproute-patch.yaml"
+  require_file "$httproute_patch_path"
+  sed -E -i "s/^([[:space:]]*-[[:space:]]*).+$/\1$httproute_hostname_override/" "$httproute_patch_path"
+fi
 
 if [[ "$environment" == "prod" ]]; then
   prod_db_endpoint_resource="prod-db-endpoint.yaml"

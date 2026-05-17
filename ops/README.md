@@ -144,7 +144,7 @@ Runs from `gw` and installs or upgrades Envoy Gateway in the prod cluster using 
 
 `verify-prod-release.yml`
 
-Runs the existing repository verification script and performs HTTP smoke checks through `s1-prod:30080`, `s2-prod:30080`, and `s3-prod:30080` with `Host: campus-prod.davl.at`.
+Runs the existing repository verification script and performs HTTP smoke checks through `s1-prod:30080`, `s2-prod:30080`, and `s3-prod:30080` with `Host: campus-prod.10-123-127-29.sslip.io`.
 
 `check-monitoring.yml`
 

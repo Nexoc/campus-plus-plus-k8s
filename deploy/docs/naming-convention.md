@@ -65,17 +65,17 @@ The workflow schedules against labels, not runner names.
 
 Lab non-prod:
 
-- active route hostname: `campus-dev.s5-dev.local`
+- active route hostname: `campus-dev.10-123-127-29.sslip.io`
 - active NodePort entry: `30080`
 
 Home non-prod:
 
-- overlay placeholder hostname: `campus-home.local`
-- replace this with the real home edge hostname when that edge is finalized
+- active route hostname: `home-campus-dev.davl.at`
+- home production route hostname: `home-campus-prod.davl.at`
 
 Production:
 
-- active route hostname: `campus-prod.davl.at`
+- active route hostname: `campus-prod.10-123-127-29.sslip.io`
 - stable in-cluster database alias: `s4-db`
 - real external database endpoint: environment-specific host-local
   `db-endpoint.env`

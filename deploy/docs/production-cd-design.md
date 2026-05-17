@@ -80,7 +80,7 @@ client -> gw edge -> prod nodes NodePort 30080 -> Envoy Gateway -> campus-prod
 The production application hostname is:
 
 ```text
-campus-prod.davl.at
+campus-prod.10-123-127-29.sslip.io
 ```
 
 The `gw` edge can later load balance across all production nodes:
@@ -194,7 +194,7 @@ Expected rendered properties:
 
 ```text
 namespace: campus-prod
-hostname: campus-prod.davl.at
+hostname: campus-prod.10-123-127-29.sslip.io
 nodePort: 30080
 imagePullSecrets: ghcr-pull
 images: ghcr.io/nexoc/...:v-render-test
@@ -206,7 +206,7 @@ Verify without printing secret values:
 
 ```bash
 # server: gw
-grep -nE "namespace: campus-prod|campus-prod.davl.at|nodePort: 30080|image: ghcr.io/nexoc|imagePullSecrets|ghcr-pull|kind: Service|kind: EndpointSlice|name: s4-db" /tmp/campus-prod-rendered.yaml -A3 -B3
+grep -nE "namespace: campus-prod|campus-prod.10-123-127-29.sslip.io|nodePort: 30080|image: ghcr.io/nexoc|imagePullSecrets|ghcr-pull|kind: Service|kind: EndpointSlice|name: s4-db" /tmp/campus-prod-rendered.yaml -A3 -B3
 git status --short
 ```
 
