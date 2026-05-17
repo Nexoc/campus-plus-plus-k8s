@@ -384,6 +384,7 @@ Next:
 
 ```text
 Phase 1b:
+  render postgres exporter runtime env on s4-db
   install postgres exporter on s4-db
   add database dashboard panels
   add exporter-specific checks
@@ -422,6 +423,7 @@ ops/playbooks/install-node-exporter.yml
 ops/playbooks/install-prometheus.yml
 ops/playbooks/install-grafana.yml
 ops/playbooks/check-monitoring-stack.yml
+ops/playbooks/render-postgres-exporter-env.yml
 ```
 
 Suggested next playbook:

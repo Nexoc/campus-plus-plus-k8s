@@ -161,10 +161,11 @@ Completed order:
 Next order:
 
 ```text
-7. install-postgres-exporter.yml
-8. extend Prometheus scrape config for PostgreSQL exporter
-9. add database dashboard panels
-10. extend check-monitoring-stack.yml or add a database-specific check
+7. render-postgres-exporter-env.yml
+8. install-postgres-exporter.yml
+9. extend Prometheus scrape config for PostgreSQL exporter
+10. add database dashboard panels
+11. extend check-monitoring-stack.yml or add a database-specific check
 ```
 
 Future order:

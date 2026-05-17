@@ -174,6 +174,12 @@ Verifies the central monitoring stack without requiring Grafana credentials. It 
 The current core stack has 8 Prometheus targets: 7 node-exporter targets and 1
 Prometheus self-target.
 
+`render-postgres-exporter-env.yml`
+
+Runs from `gw`, reads existing PROD database runtime inputs without printing
+secret values, and creates `/home/nexoc/campus-secrets/monitoring/postgres-exporter.env`
+on `s4-db` for the future PostgreSQL exporter service.
+
 ## Design Docs
 
 - [Monitoring Design](docs/monitoring-design.md)
@@ -277,6 +283,12 @@ ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/install-grafana.ym
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
 ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/check-monitoring-stack.yml
+```
+
+```bash
+# server: gw
+cd /home/nexoc/campus-plus-plus-k8s
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/render-postgres-exporter-env.yml
 ```
 
 ```bash

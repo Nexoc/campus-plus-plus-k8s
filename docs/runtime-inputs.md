@@ -316,6 +316,15 @@ Next monitoring runtime input will be PostgreSQL exporter credentials in:
 /home/nexoc/campus-secrets/monitoring/postgres-exporter.env
 ```
 
+This file is generated on `s4-db` by:
+
+```text
+ops/playbooks/render-postgres-exporter-env.yml
+```
+
+The playbook derives the exporter `DATA_SOURCE_NAME` from existing PROD
+database runtime inputs without printing the password or the final DSN.
+
 ## Minimal Startup Checklist
 
 For DEV deploy:

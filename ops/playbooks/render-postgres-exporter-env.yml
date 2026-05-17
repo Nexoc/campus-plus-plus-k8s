@@ -1,0 +1,143 @@
+---
+# Execute from: gw
+# Target: s4-db.
+# Purpose: render the postgres exporter runtime env file from existing prod DB
+# credentials without printing database secrets.
+
+- name: Render postgres exporter runtime env
+  hosts: db
+  gather_facts: false
+  become: true
+  vars:
+    repo_root: /home/nexoc/campus-plus-plus-k8s
+    prod_db_secrets_file: /home/nexoc/campus-secrets/prod/db-secrets.env
+    prod_db_config_file: "{{ repo_root }}/deploy/app/overlays/prod/config/backend-config.env"
+    postgres_exporter_env_dir: /home/nexoc/campus-secrets/monitoring
+    postgres_exporter_env_file: /home/nexoc/campus-secrets/monitoring/postgres-exporter.env
+
+  tasks:
+    - name: s4-db | require source prod db secrets file on gw
+      ansible.builtin.stat:
+        path: "{{ prod_db_secrets_file }}"
+      delegate_to: gw
+      become: false
+      register: prod_db_secrets_stat
+
+    - name: s4-db | require prod db secrets file exists
+      ansible.builtin.assert:
+        that:
+          - prod_db_secrets_stat.stat.exists
+          - prod_db_secrets_stat.stat.isreg
+        fail_msg: "Prod DB secrets file is missing on gw"
+
+    - name: s4-db | require source prod db config file on gw
+      ansible.builtin.stat:
+        path: "{{ prod_db_config_file }}"
+      delegate_to: gw
+      become: false
+      register: prod_db_config_stat
+
+    - name: s4-db | require prod db config file exists
+      ansible.builtin.assert:
+        that:
+          - prod_db_config_stat.stat.exists
+          - prod_db_config_stat.stat.isreg
+        fail_msg: "Prod DB config file is missing on gw"
+
+    - name: s4-db | read prod db secrets from gw without logging values
+      ansible.builtin.slurp:
+        src: "{{ prod_db_secrets_file }}"
+      delegate_to: gw
+      become: false
+      register: prod_db_secrets_slurp
+      no_log: true
+
+    - name: s4-db | read prod db config from gw
+      ansible.builtin.slurp:
+        src: "{{ prod_db_config_file }}"
+      delegate_to: gw
+      become: false
+      register: prod_db_config_slurp
+      no_log: true
+
+    - name: s4-db | parse postgres exporter source values without logging
+      ansible.builtin.set_fact:
+        db_env_content: "{{ prod_db_secrets_slurp.content | b64decode }}"
+        db_config_content: "{{ prod_db_config_slurp.content | b64decode }}"
+      no_log: true
+
+    - name: s4-db | derive database connection fields without logging
+      ansible.builtin.set_fact:
+        db_name_from_secrets: "{{ (db_env_content | regex_search('(?m)^DB_NAME=(.+)$', '\\1') | default([], true) | first | default('')) | trim }}"
+        db_name_from_config: "{{ (db_config_content | regex_search('(?m)^DB_NAME=(.+)$', '\\1') | default([], true) | first | default('')) | trim }}"
+        db_username: "{{ (db_env_content | regex_search('(?m)^DB_USERNAME=(.+)$', '\\1') | default([], true) | first | default('')) | trim }}"
+        db_password: "{{ (db_env_content | regex_search('(?m)^DB_PASSWORD=(.+)$', '\\1') | default([], true) | first | default('')) | trim }}"
+        db_port_from_secrets: "{{ (db_env_content | regex_search('(?m)^DB_PORT=(.+)$', '\\1') | default([], true) | first | default('')) | trim }}"
+        db_port_from_config: "{{ (db_config_content | regex_search('(?m)^DB_PORT=(.+)$', '\\1') | default([], true) | first | default('')) | trim }}"
+      no_log: true
+
+    - name: s4-db | select database name and port without logging
+      ansible.builtin.set_fact:
+        db_name: "{{ db_name_from_secrets if (db_name_from_secrets | length > 0) else db_name_from_config }}"
+        db_port: "{{ db_port_from_secrets if (db_port_from_secrets | length > 0) else (db_port_from_config if (db_port_from_config | length > 0) else '5432') }}"
+      no_log: true
+
+    - name: s4-db | require required DB variables
+      ansible.builtin.assert:
+        that:
+          - db_name | length > 0
+          - db_username | length > 0
+          - db_password | length > 0
+          - db_port | length > 0
+        fail_msg: "Required DB variables are missing in prod DB runtime inputs"
+      no_log: true
+
+    - name: s4-db | URL-encode database connection fields without logging
+      ansible.builtin.set_fact:
+        db_username_urlencoded: "{{ db_username | urlencode | replace('/', '%2F') }}"
+        db_password_urlencoded: "{{ db_password | urlencode | replace('/', '%2F') }}"
+        db_name_urlencoded: "{{ db_name | urlencode | replace('/', '%2F') }}"
+      no_log: true
+
+    - name: s4-db | ensure monitoring secrets directory exists
+      ansible.builtin.file:
+        path: "{{ postgres_exporter_env_dir }}"
+        state: directory
+        owner: nexoc
+        group: nexoc
+        mode: "0700"
+
+    - name: s4-db | render postgres exporter env file
+      ansible.builtin.copy:
+        dest: "{{ postgres_exporter_env_file }}"
+        owner: nexoc
+        group: nexoc
+        mode: "0600"
+        content: |
+          # Runtime-only file. Do not commit.
+          # Managed by Ansible from existing prod DB runtime inputs.
+          DATA_SOURCE_NAME=postgresql://{{ db_username_urlencoded }}:{{ db_password_urlencoded }}@localhost:{{ db_port }}/{{ db_name_urlencoded }}?sslmode=disable
+      no_log: true
+
+    - name: s4-db | verify postgres exporter env file exists
+      ansible.builtin.stat:
+        path: "{{ postgres_exporter_env_file }}"
+      register: postgres_exporter_env_stat
+
+    - name: s4-db | require postgres exporter env file permissions
+      ansible.builtin.assert:
+        that:
+          - postgres_exporter_env_stat.stat.exists
+          - postgres_exporter_env_stat.stat.isreg
+          - postgres_exporter_env_stat.stat.mode == "0600"
+        fail_msg: "postgres-exporter.env is missing or has wrong permissions"
+
+    - name: s4-db | verify DATA_SOURCE_NAME key exists without printing value
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -q
+          - "^DATA_SOURCE_NAME="
+          - "{{ postgres_exporter_env_file }}"
+      changed_when: false
+      no_log: true
