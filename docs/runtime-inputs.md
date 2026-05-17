@@ -310,7 +310,7 @@ Grafana on s6-monitoring
 Campus VM Overview dashboard
 ```
 
-Next monitoring runtime input will be PostgreSQL exporter credentials in:
+PostgreSQL exporter runtime input is:
 
 ```text
 /home/nexoc/campus-secrets/monitoring/postgres-exporter.env
@@ -324,6 +324,15 @@ ops/playbooks/render-postgres-exporter-env.yml
 
 The playbook derives the exporter `DATA_SOURCE_NAME` from existing PROD
 database runtime inputs without printing the password or the final DSN.
+
+Install the exporter after rendering the env file:
+
+```text
+ops/playbooks/install-postgres-exporter.yml
+```
+
+Then re-run `ops/playbooks/install-prometheus.yml` so Prometheus includes the
+`postgres-exporter` scrape job for `s4-db:9187`.
 
 ## Minimal Startup Checklist
 

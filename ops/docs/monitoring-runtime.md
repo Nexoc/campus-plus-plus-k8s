@@ -9,13 +9,13 @@ Current implemented runtime:
 ```text
 s6-monitoring runs Prometheus and Grafana as systemd-managed services.
 node-exporter runs as a systemd service on every VM.
+postgres exporter support runs as a systemd service on s4-db after its install playbook is applied.
 Kubernetes add-ons are installed later through Helm from gw.
 ```
 
 Planned runtime extensions:
 
 ```text
-postgres exporter runs as a systemd service on s4-db.
 Alertmanager and Loki run as systemd-managed services on s6-monitoring.
 kube-state-metrics runs inside dev/prod clusters through Helm.
 ```
@@ -35,7 +35,7 @@ all VMs:
   prometheus-node-exporter.service
 
 s4-db:
-  postgres-exporter.service later
+  prometheus-postgres-exporter.service
 ```
 
 Use Helm only for Kubernetes-side components:
@@ -163,7 +163,7 @@ Next order:
 ```text
 7. render-postgres-exporter-env.yml
 8. install-postgres-exporter.yml
-9. extend Prometheus scrape config for PostgreSQL exporter
+9. install-prometheus.yml
 10. add database dashboard panels
 11. extend check-monitoring-stack.yml or add a database-specific check
 ```
@@ -193,6 +193,7 @@ Ports:
 s6-monitoring:9090 Prometheus
 s6-monitoring:3000 Grafana
 all VMs:9100 node-exporter
+s4-db:9187 postgres exporter after install-postgres-exporter.yml
 ```
 
 Access:
@@ -207,7 +208,9 @@ Prometheus targets:
 ```text
 1 prometheus self-target
 7 node-exporter targets
-8 total targets in the current core stack
+1 postgres-exporter target after install-postgres-exporter.yml and install-prometheus.yml
+8 total targets before PostgreSQL exporter
+9 total targets after PostgreSQL exporter
 ```
 
 ## Planned Success Criteria
@@ -215,7 +218,7 @@ Prometheus targets:
 Database metrics:
 
 ```text
-postgres-exporter.service active on s4-db
+prometheus-postgres-exporter.service active on s4-db
 s4-db:9187 postgres exporter
 s6-monitoring can scrape postgres exporter on s4-db
 ```
@@ -264,6 +267,15 @@ Grafana listens on port 3000 on s6-monitoring.
 iptables allows 3000 from loopback for local health checks.
 iptables allows 3000 from the monitoring_scrape_host of gw.
 all other TCP traffic to 3000 is dropped.
+```
+
+Postgres exporter firewall contract:
+
+```text
+postgres exporter listens on port 9187 on s4-db.
+iptables allows 9187 from loopback for local health checks.
+iptables allows 9187 only from the monitoring_scrape_host of s6-monitoring.
+all other TCP traffic to 9187 is dropped.
 ```
 
 ## Grafana Provisioning

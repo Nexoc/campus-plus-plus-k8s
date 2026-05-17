@@ -161,7 +161,7 @@ Installs `prometheus-node-exporter` on every VM through the Debian package, enab
 
 `install-prometheus.yml`
 
-Installs Prometheus on `s6-monitoring` through the Debian package, renders node-exporter scrape targets from inventory, restricts external port `9090` to `gw`, and verifies readiness from both `s6-monitoring` and `gw`.
+Installs Prometheus on `s6-monitoring` through the Debian package, renders node-exporter and postgres-exporter scrape targets from inventory, restricts external port `9090` to `gw`, and verifies readiness from both `s6-monitoring` and `gw`.
 
 `install-grafana.yml`
 
@@ -169,16 +169,24 @@ Installs Grafana on `s6-monitoring` through the official Grafana APT repository,
 
 `check-monitoring-stack.yml`
 
-Verifies the central monitoring stack without requiring Grafana credentials. It checks Prometheus readiness and targets, Grafana health, the Grafana Prometheus datasource provisioning file, and the initial dashboard provisioning files.
+Verifies the central monitoring stack without requiring Grafana credentials. It checks Prometheus readiness and targets, node-exporter target health, postgres-exporter target health, Grafana health, the Grafana Prometheus datasource provisioning file, and the initial dashboard provisioning files.
 
-The current core stack has 8 Prometheus targets: 7 node-exporter targets and 1
-Prometheus self-target.
+The monitoring stack has 8 targets before PostgreSQL exporter is added:
+7 node-exporter targets and 1 Prometheus self-target. After PostgreSQL exporter
+is installed and Prometheus is re-rendered, the expected target count is 9.
 
 `render-postgres-exporter-env.yml`
 
 Runs from `gw`, reads existing PROD database runtime inputs without printing
 secret values, and creates `/home/nexoc/campus-secrets/monitoring/postgres-exporter.env`
 on `s4-db` for the future PostgreSQL exporter service.
+
+`install-postgres-exporter.yml`
+
+Installs `prometheus-postgres-exporter` on `s4-db`, loads the runtime DSN from
+`/home/nexoc/campus-secrets/monitoring/postgres-exporter.env`, restricts port
+`9187` to loopback and `s6-monitoring`, and verifies that `s6-monitoring` can
+reach the exporter metrics endpoint.
 
 ## Design Docs
 
@@ -289,6 +297,22 @@ ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/check-monitoring-s
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
 ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/render-postgres-exporter-env.yml
+```
+
+```bash
+# server: gw
+cd /home/nexoc/campus-plus-plus-k8s
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/install-postgres-exporter.yml
+```
+
+After adding or changing postgres exporter scrape config, re-render Prometheus
+before running the full stack check:
+
+```bash
+# server: gw
+cd /home/nexoc/campus-plus-plus-k8s
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/install-prometheus.yml
+ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/check-monitoring-stack.yml
 ```
 
 ```bash

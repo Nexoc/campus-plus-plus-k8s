@@ -121,6 +121,7 @@
     prometheus_port: 9090
     grafana_port: 3000
     monitoring_host: "{{ hostvars[groups['monitoring'][0]].monitoring_scrape_host | default(hostvars[groups['monitoring'][0]].ansible_host | default(groups['monitoring'][0])) }}"
+    postgres_exporter_job: postgres-exporter
   tasks:
     - name: gw | verify Prometheus readiness endpoint on s6-monitoring
       ansible.builtin.uri:
@@ -145,6 +146,13 @@
           - prometheus_targets_api.json.status == "success"
           - "(prometheus_targets_api.json.data.activeTargets | selectattr('labels.job', 'equalto', 'node-exporter') | selectattr('health', 'equalto', 'up') | list | length) == (groups['all'] | length)"
         fail_msg: "Not all node-exporter targets are up in Prometheus"
+
+    - name: gw | require postgres-exporter target up
+      ansible.builtin.assert:
+        that:
+          - prometheus_targets_api.json.status == "success"
+          - "(prometheus_targets_api.json.data.activeTargets | selectattr('labels.job', 'equalto', postgres_exporter_job) | selectattr('health', 'equalto', 'up') | list | length) == (groups['db'] | length)"
+        fail_msg: "postgres-exporter target is not up in Prometheus"
 
     - name: gw | verify Grafana health endpoint on s6-monitoring
       ansible.builtin.uri:

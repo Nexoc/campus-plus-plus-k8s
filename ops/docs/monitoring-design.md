@@ -30,12 +30,15 @@ check-monitoring-stack.yml: ready
 Not implemented yet:
 
 ```text
-postgres exporter for s4-db
 kube-state-metrics for dev/prod clusters
 Prometheus alert rules
 Alertmanager
 Loki / log collection
 ```
+
+PostgreSQL exporter automation is now present, but the runtime target becomes
+active only after `render-postgres-exporter-env.yml`,
+`install-postgres-exporter.yml`, and `install-prometheus.yml` have been run.
 
 ## Role Separation
 
@@ -163,11 +166,11 @@ all VMs:
   node-exporter
 ```
 
-Next VM-level component:
+Database VM-level component:
 
 ```text
 s4-db:
-  postgres exporter
+  postgres exporter on port 9187
 ```
 
 Kubernetes components, installed later through Helm:
@@ -203,6 +206,7 @@ Current implemented service ports:
 Prometheus:       9090
 Grafana:          3000
 node-exporter:    9100
+postgres exporter:9187
 Envoy NodePort:   30080
 PostgreSQL:       5432
 ```
@@ -212,13 +216,13 @@ Planned monitoring ports:
 ```text
 Alertmanager:     9093
 Loki:             3100
-postgres exporter:9187
 ```
 
 Access model:
 
 ```text
 s6-monitoring -> node-exporter:9100 on all VMs
+s6-monitoring -> postgres exporter:9187 on s4-db
 admin/gw      -> Grafana on s6-monitoring
 admin/gw      -> Prometheus on s6-monitoring
 ```
@@ -226,7 +230,6 @@ admin/gw      -> Prometheus on s6-monitoring
 Planned access model:
 
 ```text
-s6-monitoring -> postgres exporter:9187 on s4-db
 s6-monitoring -> Envoy NodePort 30080 on s5-dev and prod nodes
 ```
 
@@ -263,11 +266,12 @@ Option C:
 Recommended next implementation:
 
 ```text
-1. add PostgreSQL exporter on s4-db
-2. add database dashboard panels
-3. add kube-state-metrics in dev/prod clusters through Helm
-4. choose restricted NodePort or agent/federation path for cluster metrics
-5. add alerting and logs
+1. run PostgreSQL exporter env render and install playbooks
+2. re-render Prometheus config so it scrapes postgres-exporter
+3. add database dashboard panels
+4. add kube-state-metrics in dev/prod clusters through Helm
+5. choose restricted NodePort or agent/federation path for cluster metrics
+6. add alerting and logs
 ```
 
 This avoids pretending that a central Prometheus can automatically scrape
@@ -386,6 +390,7 @@ Next:
 Phase 1b:
   render postgres exporter runtime env on s4-db
   install postgres exporter on s4-db
+  re-render Prometheus scrape config
   add database dashboard panels
   add exporter-specific checks
 ```
@@ -424,11 +429,6 @@ ops/playbooks/install-prometheus.yml
 ops/playbooks/install-grafana.yml
 ops/playbooks/check-monitoring-stack.yml
 ops/playbooks/render-postgres-exporter-env.yml
-```
-
-Suggested next playbook:
-
-```text
 ops/playbooks/install-postgres-exporter.yml
 ```
 

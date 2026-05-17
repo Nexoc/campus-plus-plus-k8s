@@ -1,0 +1,200 @@
+---
+# Execute from: gw
+# Target: s4-db, with final reachability check from s6-monitoring.
+# Purpose: install postgres exporter as a systemd service on s4-db and verify
+# that s6-monitoring can reach the exporter.
+
+- name: Install postgres exporter on s4-db
+  hosts: db
+  gather_facts: true
+  become: true
+  vars:
+    postgres_exporter_packages:
+      - prometheus-postgres-exporter
+      - iptables
+    postgres_exporter_service: prometheus-postgres-exporter
+    postgres_exporter_port: 9187
+    postgres_exporter_env_file: /home/nexoc/campus-secrets/monitoring/postgres-exporter.env
+    postgres_exporter_override_dir: /etc/systemd/system/prometheus-postgres-exporter.service.d
+    postgres_exporter_override_file: /etc/systemd/system/prometheus-postgres-exporter.service.d/campus-monitoring.conf
+    monitoring_source_host: "{{ hostvars[groups['monitoring'][0]].monitoring_scrape_host | default(hostvars[groups['monitoring'][0]].ansible_host | default(groups['monitoring'][0])) }}"
+  handlers:
+    - name: reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: restart postgres exporter
+      ansible.builtin.service:
+        name: "{{ postgres_exporter_service }}"
+        state: restarted
+  tasks:
+    - name: s4-db | require exactly one monitoring host
+      ansible.builtin.assert:
+        that:
+          - groups.get('monitoring', []) | length == 1
+        fail_msg: "Inventory must contain exactly one host in the monitoring group"
+
+    - name: s4-db | check postgres exporter runtime env file
+      ansible.builtin.stat:
+        path: "{{ postgres_exporter_env_file }}"
+      register: postgres_exporter_env_stat
+
+    - name: s4-db | require postgres exporter runtime env file
+      ansible.builtin.assert:
+        that:
+          - postgres_exporter_env_stat.stat.exists
+          - postgres_exporter_env_stat.stat.isreg
+        fail_msg: "Missing postgres exporter runtime env file. Run ops/playbooks/render-postgres-exporter-env.yml first."
+
+    - name: s4-db | install postgres exporter package
+      ansible.builtin.apt:
+        name: "{{ postgres_exporter_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_facts.os_family == "Debian"
+
+    - name: s4-db | create postgres exporter systemd override directory
+      ansible.builtin.file:
+        path: "{{ postgres_exporter_override_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: s4-db | configure postgres exporter runtime env file
+      ansible.builtin.copy:
+        dest: "{{ postgres_exporter_override_file }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Service]
+          EnvironmentFile={{ postgres_exporter_env_file }}
+      notify:
+        - reload systemd
+        - restart postgres exporter
+
+    - name: s4-db | apply pending postgres exporter systemd changes
+      ansible.builtin.meta: flush_handlers
+
+    - name: s4-db | enable and start postgres exporter service
+      ansible.builtin.service:
+        name: "{{ postgres_exporter_service }}"
+        enabled: true
+        state: started
+
+    - name: s4-db | verify postgres exporter service is active
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - "{{ postgres_exporter_service }}"
+      changed_when: false
+
+    - name: s4-db | allow local loopback access to postgres exporter
+      ansible.builtin.shell: |
+        set -euo pipefail
+        port={{ postgres_exporter_port | quote }}
+
+        if iptables -C INPUT -i lo -p tcp --dport "$port" -j ACCEPT >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        drop_line="$(iptables -L INPUT --line-numbers -n | awk '$0 ~ /DROP/ { print $1; exit }')"
+        if [ -n "$drop_line" ]; then
+          iptables -I INPUT "$drop_line" -i lo -p tcp --dport "$port" -j ACCEPT
+        else
+          iptables -A INPUT -i lo -p tcp --dport "$port" -j ACCEPT
+        fi
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: postgres_exporter_loopback_rule
+      changed_when: "'inserted' in postgres_exporter_loopback_rule.stdout"
+
+    - name: s4-db | allow postgres exporter only from s6-monitoring
+      ansible.builtin.shell: |
+        set -euo pipefail
+        source_host={{ monitoring_source_host | quote }}
+        port={{ postgres_exporter_port | quote }}
+
+        if iptables -C INPUT -p tcp -s "$source_host" --dport "$port" -j ACCEPT >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        drop_line="$(iptables -L INPUT --line-numbers -n | awk '$0 ~ /DROP/ { print $1; exit }')"
+        if [ -n "$drop_line" ]; then
+          iptables -I INPUT "$drop_line" -p tcp -s "$source_host" --dport "$port" -j ACCEPT
+        else
+          iptables -A INPUT -p tcp -s "$source_host" --dport "$port" -j ACCEPT
+        fi
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: postgres_exporter_allow_rule
+      changed_when: "'inserted' in postgres_exporter_allow_rule.stdout"
+
+    - name: s4-db | drop other postgres exporter traffic
+      ansible.builtin.shell: |
+        set -euo pipefail
+        port={{ postgres_exporter_port | quote }}
+
+        if iptables -C INPUT -p tcp --dport "$port" -j DROP >/dev/null 2>&1; then
+          echo "present"
+          exit 0
+        fi
+
+        iptables -A INPUT -p tcp --dport "$port" -j DROP
+        echo "inserted"
+      args:
+        executable: /bin/bash
+      register: postgres_exporter_drop_rule
+      changed_when: "'inserted' in postgres_exporter_drop_rule.stdout"
+
+    - name: s4-db | verify local postgres exporter metrics endpoint
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ postgres_exporter_port }}/metrics"
+        method: GET
+        status_code: 200
+        return_content: false
+        timeout: 5
+
+    - name: s4-db | check netfilter-persistent availability
+      ansible.builtin.command: which netfilter-persistent
+      register: netfilter_persistent_check
+      changed_when: false
+      failed_when: false
+
+    - name: s4-db | save firewall rules when netfilter-persistent is installed
+      ansible.builtin.command: netfilter-persistent save
+      changed_when: false
+      when: netfilter_persistent_check.rc == 0
+
+- name: Verify postgres exporter reachability from s6-monitoring
+  hosts: db
+  gather_facts: false
+  vars:
+    postgres_exporter_port: 9187
+    db_scrape_host: "{{ hostvars[groups['db'][0]].monitoring_scrape_host | default(hostvars[groups['db'][0]].ansible_host | default(groups['db'][0])) }}"
+  tasks:
+    - name: s6-monitoring | verify postgres exporter target is reachable
+      ansible.builtin.wait_for:
+        host: "{{ db_scrape_host }}"
+        port: "{{ postgres_exporter_port }}"
+        timeout: 5
+        state: started
+      delegate_to: "{{ groups['monitoring'][0] }}"
+      changed_when: false
+
+    - name: s6-monitoring | verify postgres exporter metrics endpoint returns HTTP 200
+      ansible.builtin.uri:
+        url: "http://{{ db_scrape_host }}:{{ postgres_exporter_port }}/metrics"
+        method: GET
+        status_code: 200
+        return_content: false
+        timeout: 5
+      delegate_to: "{{ groups['monitoring'][0] }}"
+      changed_when: false

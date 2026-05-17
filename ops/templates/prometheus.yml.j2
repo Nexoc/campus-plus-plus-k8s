@@ -36,3 +36,14 @@ scrape_configs:
           role: server
 {% endif %}
 {% endfor %}
+
+  - job_name: postgres-exporter
+    static_configs:
+{% for host in groups.get('db', []) | sort %}
+      - targets:
+          - "{{ hostvars[host].monitoring_scrape_host | default(hostvars[host].ansible_host | default(host)) }}:9187"
+        labels:
+          environment: "{{ monitoring_environment_label }}"
+          role: db
+          instance: "{{ host }}"
+{% endfor %}
