@@ -106,6 +106,7 @@ Home dev files:
 ```text
 /home/nexoc/campus-secrets/home/db-secrets.env
 /home/nexoc/campus-secrets/home/auth-secrets.env
+/home/nexoc/campus-secrets/home/db-endpoint.env
 ```
 
 Home prod files:
@@ -117,6 +118,10 @@ Home prod files:
 ```
 
 `prod` means the home production cluster.
+
+For home dev and home prod, the app keeps `DB_HOST=s4-db`; the deploy script
+renders the Kubernetes `s4-db` Service and EndpointSlice from the matching
+`db-endpoint.env`.
 
 Real secrets must not be committed or printed.
 

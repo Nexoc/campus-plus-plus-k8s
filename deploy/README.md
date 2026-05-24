@@ -57,8 +57,9 @@ Before applying home dev manifests:
 - Envoy Gateway is installed in `envoy-gateway-system`
 - the cluster can pull images from GHCR
 - `local-path` StorageClass is available for `course-materials`
-- the cluster can reach PostgreSQL at `s4-db:5432`
-- `gw`, `s5-dev`, and `s4-db` resolve through DNS or `/etc/hosts`
+- `db-endpoint.env` points at the real `s4-db` endpoint
+- the cluster can reach the endpoint address and port from `db-endpoint.env`
+- `gw` and `s5-dev` resolve through DNS or `/etc/hosts`
 - home dev secrets exist under `/home/nexoc/campus-secrets/home`
 
 Before applying home prod manifests:
@@ -78,6 +79,7 @@ Home dev runtime inputs:
 ```text
 /home/nexoc/campus-secrets/home/db-secrets.env
 /home/nexoc/campus-secrets/home/auth-secrets.env
+/home/nexoc/campus-secrets/home/db-endpoint.env
 ```
 
 Home prod runtime inputs:
@@ -88,9 +90,9 @@ Home prod runtime inputs:
 /home/nexoc/campus-secrets/prod/db-endpoint.env
 ```
 
-For prod, `DB_HOST` remains `s4-db`. The deploy script renders `service/s4-db`
-and `endpointslice/s4-db` from `db-endpoint.env`, so the real database address
-stays out of git.
+For home dev and home prod, `DB_HOST` remains `s4-db`. The deploy script
+renders `service/s4-db` and `endpointslice/s4-db` from `db-endpoint.env`, so the
+real database address stays out of git.
 
 ## Install Or Update Envoy Gateway
 
@@ -138,6 +140,7 @@ Render:
 
 ```bash
 # server: gw
+CAMPUS_SECRETS_ROOT=/home/nexoc/campus-secrets \
 bash deploy/scripts/apply-overlay.sh \
   --environment home \
   --image-tag home-dev-example \
@@ -151,6 +154,7 @@ Apply:
 IMAGE_TAG=home-dev-example
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 kubectl delete job campus-importer -n campus-dev --ignore-not-found
+CAMPUS_SECRETS_ROOT=/home/nexoc/campus-secrets \
 bash deploy/scripts/apply-overlay.sh --environment home --image-tag "${IMAGE_TAG}"
 ```
 

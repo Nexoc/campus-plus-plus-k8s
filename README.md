@@ -76,9 +76,9 @@ home prod     home-campus-prod.davl.at
 home grafana  home-grafana.davl.at
 ```
 
-The portable production database alias is generated as `service/s4-db` and
-`endpointslice/s4-db` in `campus-prod`. The real database endpoint comes from
-host-local runtime files on `gw`.
+The portable database alias is generated as `service/s4-db` and
+`endpointslice/s4-db` in `campus-dev` and `campus-prod`. The real database
+endpoint comes from host-local runtime files on `gw`.
 
 Monitoring automation is available under `ops/`. Current home-lab verification
 should be performed after the home-only documentation/workflow refactor.

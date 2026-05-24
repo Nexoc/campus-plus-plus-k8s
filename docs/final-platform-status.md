@@ -135,10 +135,11 @@ Stable application contract:
 DB_HOST=s4-db
 ```
 
-For home prod, `s4-db` is also a Kubernetes DNS alias inside `campus-prod`.
-The real endpoint is read from:
+For home dev and home prod, `s4-db` is also a Kubernetes DNS alias inside
+`campus-dev` and `campus-prod`. The real endpoint is read from:
 
 ```text
+/home/nexoc/campus-secrets/home/db-endpoint.env
 /home/nexoc/campus-secrets/prod/db-endpoint.env
 ```
 

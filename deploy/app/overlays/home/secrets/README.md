@@ -14,6 +14,14 @@ Expected files:
 - `db-secrets.env`
 - `auth-secrets.env`
 
+The external PostgreSQL endpoint is not staged here. `apply-overlay.sh` reads it
+from the host-local secrets root to render `service/s4-db` and
+`endpointslice/s4-db` in `campus-dev`:
+
+```text
+/home/nexoc/campus-secrets/home/db-endpoint.env
+```
+
 Current assumptions for the `home` overlay:
 
 - it mirrors the lab namespace and service layout

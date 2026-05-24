@@ -76,9 +76,9 @@ Stable app database contract:
 DB_HOST=s4-db
 ```
 
-For home prod, `s4-db` is a Kubernetes Service/EndpointSlice alias generated at
-render/apply time. The real database endpoint is not stored in tracked
-manifests.
+For home dev and home prod, `s4-db` is a Kubernetes Service/EndpointSlice alias
+generated at render/apply time. The real database endpoint is not stored in
+tracked manifests.
 
 ## Kubernetes App Secrets
 
@@ -96,6 +96,7 @@ Required host-local files:
 home dev:
   /home/nexoc/campus-secrets/home/db-secrets.env
   /home/nexoc/campus-secrets/home/auth-secrets.env
+  /home/nexoc/campus-secrets/home/db-endpoint.env
 
 home prod:
   /home/nexoc/campus-secrets/prod/db-secrets.env
@@ -106,9 +107,8 @@ home prod:
 `auth-secrets.env` is needed in every app environment because the auth service
 needs `JWT_SECRET` and `JWT_EXPIRATION`.
 
-`db-endpoint.env` is prod-only. It is read by
-`deploy/scripts/apply-overlay.sh` on `gw` to generate the `s4-db` Service and
-EndpointSlice.
+`db-endpoint.env` is read by `deploy/scripts/apply-overlay.sh` on `gw` to
+generate the `s4-db` Service and EndpointSlice for home dev and home prod.
 
 Create directories with restrictive permissions:
 
@@ -245,9 +245,10 @@ For home dev deploy:
 1. gw has /home/nexoc/.kube/dev.yaml
 2. gw has /home/nexoc/campus-secrets/home/db-secrets.env
 3. gw has /home/nexoc/campus-secrets/home/auth-secrets.env
-4. GitHub has GHCR_PULL_USERNAME and GHCR_PULL_TOKEN
-5. home-gw-runner is online with home+gw+deploy labels
-6. s5-dev can reach PostgreSQL as s4-db:5432
+4. gw has /home/nexoc/campus-secrets/home/db-endpoint.env
+5. GitHub has GHCR_PULL_USERNAME and GHCR_PULL_TOKEN
+6. home-gw-runner is online with home+gw+deploy labels
+7. s5-dev can reach the PostgreSQL endpoint address and port from db-endpoint.env
 ```
 
 For home prod deploy:

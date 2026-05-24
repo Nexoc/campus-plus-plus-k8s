@@ -55,8 +55,9 @@ Active files:
 3. Push a `home-dev-*` tag.
 4. The home dev workflow builds and publishes GHCR images tagged exactly with `github.ref_name`.
 5. The deploy job runs on `home+gw+deploy` self-hosted runner labels.
-6. The workflow creates or updates `ghcr-pull`, applies the shared `GatewayClass`, renders the `home` overlay, and applies it to `campus-dev`.
-7. The workflow verifies rollouts, importer completion, Gateway API resources,
+6. Home dev render/apply generates the `s4-db` Service and EndpointSlice from `/home/nexoc/campus-secrets/home/db-endpoint.env`.
+7. The workflow creates or updates `ghcr-pull`, applies the shared `GatewayClass`, renders the `home` overlay, and applies it to `campus-dev`.
+8. The workflow verifies rollouts, importer completion, Gateway API resources,
    Envoy NodePort `30080`, and an HTTP smoke check with `Host: home-campus-dev.davl.at`.
 
 ## Home Production Release Workflow
@@ -77,6 +78,7 @@ Render a home dev release manifest:
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
+CAMPUS_SECRETS_ROOT=/home/nexoc/campus-secrets \
 bash deploy/scripts/apply-overlay.sh \
   --environment home \
   --image-tag home-dev-example \
@@ -90,6 +92,7 @@ Apply the home dev overlay:
 cd /home/nexoc/campus-plus-plus-k8s
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 kubectl delete job campus-importer -n campus-dev --ignore-not-found
+CAMPUS_SECRETS_ROOT=/home/nexoc/campus-secrets \
 bash deploy/scripts/apply-overlay.sh \
   --environment home \
   --image-tag home-dev-example
@@ -122,7 +125,8 @@ bash deploy/scripts/apply-overlay.sh \
   --manifest-out /tmp/campus-prod-rendered.yaml
 ```
 
-The prod render must include `service/s4-db` and `endpointslice/s4-db`.
+Home dev and home prod renders must include `service/s4-db` and
+`endpointslice/s4-db`.
 
 ## Verification Checklist
 

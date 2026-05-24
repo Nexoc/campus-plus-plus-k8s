@@ -74,6 +74,7 @@ Home dev runtime files:
 ```text
 /home/nexoc/campus-secrets/home/db-secrets.env
 /home/nexoc/campus-secrets/home/auth-secrets.env
+/home/nexoc/campus-secrets/home/db-endpoint.env
 ```
 
 Home prod runtime files:
@@ -90,10 +91,11 @@ Home prod runtime files:
 s4-db
 ```
 
-Inside `campus-prod`, `s4-db` is a Kubernetes DNS alias. The real external
-database address comes from:
+Inside `campus-dev` and `campus-prod`, `s4-db` is a Kubernetes DNS alias. The
+real external database address comes from:
 
 ```text
+/home/nexoc/campus-secrets/home/db-endpoint.env
 /home/nexoc/campus-secrets/prod/db-endpoint.env
 ```
 

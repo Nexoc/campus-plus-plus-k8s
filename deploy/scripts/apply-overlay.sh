@@ -9,11 +9,11 @@
 #   temporary overlay copy
 # - optionally apply the rendered manifest to the target Kubernetes namespace
 # - show the current Envoy/Gateway API rollout resources after apply
-# - for PROD, render a Kubernetes DNS alias for the external PostgreSQL endpoint
-#   from host-local runtime config without committing environment IPs
+# - for HOME and PROD, render a Kubernetes DNS alias for the external PostgreSQL
+#   endpoint from host-local runtime config without committing environment IPs
 #
 # This script is used both for manual operator runs and for the self-hosted
-# non-prod release workflow.
+# home dev/prod release workflows.
 
 set -euo pipefail
 
@@ -32,6 +32,7 @@ Optional:
 
 Environment:
   CAMPUS_HTTPROUTE_HOSTNAME  Optional hostname override for the rendered HTTPRoute
+  CAMPUS_SECRETS_ROOT        Required for home/prod external s4-db endpoint config
 EOF
 }
 
@@ -198,7 +199,7 @@ validate_hostname() {
   [[ "$hostname" == *.* ]] || return 1
 }
 
-write_prod_db_endpoint_manifest() {
+write_db_endpoint_manifest() {
   local target_path="$1"
   local endpoint_address="$2"
   local endpoint_port="$3"
@@ -242,40 +243,41 @@ endpoints:
 EOF
 }
 
-prod_db_endpoint_address=""
-prod_db_endpoint_port=""
+db_endpoint_address=""
+db_endpoint_port=""
+db_endpoint_file=""
 
-if [[ "$environment" == "prod" ]]; then
+if [[ "$environment" == "home" || "$environment" == "prod" ]]; then
   [[ -n "$host_secrets_root" ]] || {
-    echo "CAMPUS_SECRETS_ROOT is required for PROD db endpoint config." >&2
+    echo "CAMPUS_SECRETS_ROOT is required for $environment db endpoint config." >&2
     exit 1
   }
 
-  prod_db_endpoint_file="$host_secrets_root/$environment/db-endpoint.env"
-  [[ -f "$prod_db_endpoint_file" ]] || {
-    echo "Required PROD db endpoint config not found: $prod_db_endpoint_file" >&2
+  db_endpoint_file="$host_secrets_root/$environment/db-endpoint.env"
+  [[ -f "$db_endpoint_file" ]] || {
+    echo "Required $environment db endpoint config not found: $db_endpoint_file" >&2
     exit 1
   }
 
-  prod_db_endpoint_address="$(read_env_value "$prod_db_endpoint_file" DB_ENDPOINT_ADDRESS)"
-  prod_db_endpoint_port="$(read_env_value "$prod_db_endpoint_file" DB_ENDPOINT_PORT)"
+  db_endpoint_address="$(read_env_value "$db_endpoint_file" DB_ENDPOINT_ADDRESS)"
+  db_endpoint_port="$(read_env_value "$db_endpoint_file" DB_ENDPOINT_PORT)"
 
-  [[ -n "$prod_db_endpoint_address" ]] || {
-    echo "DB_ENDPOINT_ADDRESS is required in $prod_db_endpoint_file" >&2
+  [[ -n "$db_endpoint_address" ]] || {
+    echo "DB_ENDPOINT_ADDRESS is required in $db_endpoint_file" >&2
     exit 1
   }
 
-  [[ -n "$prod_db_endpoint_port" ]] || {
-    echo "DB_ENDPOINT_PORT is required in $prod_db_endpoint_file" >&2
+  [[ -n "$db_endpoint_port" ]] || {
+    echo "DB_ENDPOINT_PORT is required in $db_endpoint_file" >&2
     exit 1
   }
 
-  validate_ipv4_address "$prod_db_endpoint_address" || {
+  validate_ipv4_address "$db_endpoint_address" || {
     echo "DB_ENDPOINT_ADDRESS must be a valid IPv4 address." >&2
     exit 1
   }
 
-  validate_tcp_port "$prod_db_endpoint_port" || {
+  validate_tcp_port "$db_endpoint_port" || {
     echo "DB_ENDPOINT_PORT must be a TCP port from 1 to 65535." >&2
     exit 1
   }
@@ -331,15 +333,15 @@ if [[ -n "$httproute_hostname_override" ]]; then
   sed -E -i "s/^([[:space:]]*-[[:space:]]*).+$/\1$httproute_hostname_override/" "$httproute_patch_path"
 fi
 
-if [[ "$environment" == "prod" ]]; then
-  prod_db_endpoint_resource="prod-db-endpoint.yaml"
-  write_prod_db_endpoint_manifest \
-    "$tmp_overlay_path/$prod_db_endpoint_resource" \
-    "$prod_db_endpoint_address" \
-    "$prod_db_endpoint_port"
-  sed -i "/^[[:space:]]*-[[:space:]]*\\.\\.\\/\\.\\.\\/base[[:space:]]*$/a\\  - $prod_db_endpoint_resource" "$tmp_kustomization_path"
-  grep -q "$prod_db_endpoint_resource" "$tmp_kustomization_path" || {
-    echo "Failed to add PROD db endpoint resource to temporary kustomization." >&2
+if [[ -n "$db_endpoint_file" ]]; then
+  db_endpoint_resource="$environment-db-endpoint.yaml"
+  write_db_endpoint_manifest \
+    "$tmp_overlay_path/$db_endpoint_resource" \
+    "$db_endpoint_address" \
+    "$db_endpoint_port"
+  sed -i "/^[[:space:]]*-[[:space:]]*\\.\\.\\/\\.\\.\\/base[[:space:]]*$/a\\  - $db_endpoint_resource" "$tmp_kustomization_path"
+  grep -q "$db_endpoint_resource" "$tmp_kustomization_path" || {
+    echo "Failed to add $environment db endpoint resource to temporary kustomization." >&2
     exit 1
   }
 fi

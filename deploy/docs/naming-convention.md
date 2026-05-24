@@ -82,6 +82,8 @@ Home dev:
 
 - route hostname: `home-campus-dev.davl.at`
 - NodePort entry: `s5-dev:30080`
+- stable in-cluster database alias: `s4-db`
+- real external database endpoint: `/home/nexoc/campus-secrets/home/db-endpoint.env`
 
 Home prod:
 

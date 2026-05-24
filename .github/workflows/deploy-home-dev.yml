@@ -137,7 +137,8 @@ jobs:
           set -euo pipefail
           for path in \
             "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/db-secrets.env" \
-            "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/auth-secrets.env"
+            "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/auth-secrets.env" \
+            "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/db-endpoint.env"
           do
             [[ -f "$path" ]] || {
               echo "Missing required host secret file: $path" >&2
@@ -172,6 +173,38 @@ jobs:
             --docker-username "${pull_username}" \
             --docker-password "${pull_password}" \
             --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Render HOME DEV overlay before apply
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest="/tmp/campus-home-dev-rendered-${GITHUB_RUN_ID}.yaml"
+          db_endpoint_file="$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/db-endpoint.env"
+          db_endpoint_address="$(sed -n 's/^DB_ENDPOINT_ADDRESS=//p' "$db_endpoint_file" | head -n1 | tr -d '\r')"
+          db_endpoint_port="$(sed -n 's/^DB_ENDPOINT_PORT=//p' "$db_endpoint_file" | head -n1 | tr -d '\r')"
+
+          bash deploy/scripts/apply-overlay.sh \
+            --environment "$RELEASE_ENV" \
+            --image-tag "${{ needs.build-and-push-images.outputs.image_tag }}" \
+            --render-only \
+            --manifest-out "$manifest"
+
+          grep -q "namespace: $DEPLOY_NAMESPACE" "$manifest"
+          grep -q "kind: Service" "$manifest"
+          grep -q "kind: EndpointSlice" "$manifest"
+          grep -q "name: s4-db" "$manifest"
+          grep -q -- "$db_endpoint_address" "$manifest"
+          grep -q "port: $db_endpoint_port" "$manifest"
+          grep -q "ghcr.io/nexoc/campus-auth:${{ needs.build-and-push-images.outputs.image_tag }}" "$manifest"
+          grep -q "ghcr.io/nexoc/campus-backend:${{ needs.build-and-push-images.outputs.image_tag }}" "$manifest"
+          grep -q "ghcr.io/nexoc/campus-nginx:${{ needs.build-and-push-images.outputs.image_tag }}" "$manifest"
+          grep -q "ghcr.io/nexoc/campus-frontend:${{ needs.build-and-push-images.outputs.image_tag }}" "$manifest"
+          grep -q "ghcr.io/nexoc/campus-importer:${{ needs.build-and-push-images.outputs.image_tag }}" "$manifest"
+          grep -q "ghcr-pull" "$manifest"
+          grep -q "nodePort: $EXPECTED_NODEPORT" "$manifest"
+          grep -q "$EXPECTED_HOST" "$manifest"
+
+          rm -f "$manifest"
 
       - name: Apply HOME overlay
         shell: bash

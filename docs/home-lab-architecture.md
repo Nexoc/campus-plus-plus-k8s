@@ -42,6 +42,18 @@ home prod     home-campus-prod.davl.at
 home grafana  home-grafana.davl.at
 ```
 
+## Database Alias
+
+Application config keeps the stable database host:
+
+```text
+DB_HOST=s4-db
+```
+
+For home dev and home prod, `deploy/scripts/apply-overlay.sh` renders
+`service/s4-db` and `endpointslice/s4-db` from the runtime-only
+`db-endpoint.env` file for that environment.
+
 ## Runtime Files
 
 On `gw`:
@@ -49,8 +61,12 @@ On `gw`:
 ```text
 /home/nexoc/.kube/dev.yaml
 /home/nexoc/.kube/prod.yaml
-/home/nexoc/campus-secrets/home/*
-/home/nexoc/campus-secrets/prod/*
+/home/nexoc/campus-secrets/home/db-secrets.env
+/home/nexoc/campus-secrets/home/auth-secrets.env
+/home/nexoc/campus-secrets/home/db-endpoint.env
+/home/nexoc/campus-secrets/prod/db-secrets.env
+/home/nexoc/campus-secrets/prod/auth-secrets.env
+/home/nexoc/campus-secrets/prod/db-endpoint.env
 ```
 
 Active inventory:

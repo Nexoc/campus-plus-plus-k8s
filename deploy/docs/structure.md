@@ -43,10 +43,10 @@ This tree is used by:
 `deploy/app/overlays/dev` remains for legacy/manual compatibility. Active home
 dev releases use `deploy/app/overlays/home`.
 
-For PROD, `apply-overlay.sh` also renders a temporary `s4-db` Service and
-EndpointSlice from host-local runtime config before running Kustomize. This
-keeps the external database address out of tracked manifests while preserving a
-stable `DB_HOST=s4-db` application contract.
+For home dev and home prod, `apply-overlay.sh` also renders a temporary `s4-db`
+Service and EndpointSlice from host-local runtime config before running
+Kustomize. This keeps the external database address out of tracked manifests
+while preserving a stable `DB_HOST=s4-db` application contract.
 
 The external database address is not part of `deploy/app`. The tracked
 manifest contract is the stable Kubernetes name `s4-db`; the actual endpoint is
