@@ -27,6 +27,25 @@ home-dev-* -> home dev -> s5-dev -> campus-dev
 home-v*    -> home prod -> s1-prod/s2-prod/s3-prod -> campus-prod
 ```
 
+## Final CD Status
+
+As of 2026-05-24, the home-only workflow/runtime refactor is in place.
+
+The first real home dev CD reached `campus-dev`, but old test tags failed
+because `s4-db` did not resolve inside the namespace. The repository now renders
+`Service/s4-db` and `EndpointSlice/s4-db` for both `home` and `prod` from the
+runtime-only `db-endpoint.env` file.
+
+Do not reuse these failed local test tags:
+
+```text
+home-dev-test-20260524-1211
+home-dev-test-20260524-1241
+```
+
+Next validation should use a fresh `home-dev-test-YYYYMMDD-HHMM` tag after
+creating `/home/nexoc/campus-secrets/home/db-endpoint.env` on `gw`.
+
 ## Infrastructure Roles
 
 `gw`
@@ -230,8 +249,9 @@ Environment-specific values belong in:
 
 ## Remaining Optional Improvements
 
-- split workflows into CI, home dev deploy, and home prod deploy
-- verify home monitoring end to end after docs/workflow cleanup
+- verify home dev end to end with a fresh `home-dev-test-*` tag
+- verify home prod end to end with a fresh `home-v*` tag
+- verify home monitoring end to end
 - add RBAC-limited kubeconfigs for deployment runners
 - add Alertmanager and Prometheus alert rules
 - add Loki or Grafana Alloy log collection
