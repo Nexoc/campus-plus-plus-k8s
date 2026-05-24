@@ -29,8 +29,12 @@ Available automation:
 - PostgreSQL exporter automation for `s4-db`
 - kube-state-metrics manifests and install playbook for dev/prod clusters
 
-Current home-lab monitoring verification should be rerun after the home-only
-refactor.
+Home-lab monitoring has been visually verified in Grafana:
+
+- node-exporter metrics for all 7 VMs
+- postgres-exporter metrics for `s4-db`
+- kube-state-metrics for dev and prod
+- Prometheus targets up
 
 ## Inventory Contract
 

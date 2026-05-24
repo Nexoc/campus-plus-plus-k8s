@@ -223,6 +223,35 @@ Prometheus targets:
 11 total targets in the current lab baseline
 ```
 
+## Visual Verification
+
+Grafana monitoring baseline was visually verified on 2026-05-24.
+
+Verified dashboards:
+
+```text
+Campus VM Overview:
+  node exporters up = 7
+  CPU usage and target status visible across gw, db, dev, prod, and monitoring roles
+
+Campus PostgreSQL Overview:
+  postgres exporter up = 1
+  connections, database size, transaction rate, locks, and cache hit ratio visible for s4-db
+
+Campus Kubernetes Overview:
+  kube-state-metrics-dev = 1
+  kube-state-metrics-prod = 1
+  pod phase, deployment replica, unavailable replica, and namespace panels visible
+```
+
+Recommended dashboard view for screenshots and status reviews:
+
+```text
+time range: last 1 hour
+refresh: 30s
+dashboards: keep provisioned; star them in Grafana for quick access
+```
+
 ## Monitoring Extension Success Criteria
 
 Database metrics:

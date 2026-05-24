@@ -406,8 +406,14 @@ ansible-playbook -i ops/inventory/home.local.ini ops/playbooks/install-grafana.y
 ansible-playbook -i ops/inventory/home.local.ini ops/playbooks/check-monitoring-stack.yml
 ```
 
-Monitoring automation is available; current home-lab verification should be
-rerun after the home-only refactor.
+Monitoring baseline has been visually verified in Grafana:
+
+```text
+VM metrics are displayed for all 7 lab VMs.
+PostgreSQL metrics are displayed for s4-db.
+Kubernetes metrics are displayed for dev and prod through kube-state-metrics.
+Prometheus targets are up.
+```
 
 ## Acceptance Criteria
 

@@ -169,8 +169,14 @@ The deployment script generates:
 
 ## Monitoring Status
 
-Monitoring automation is available for `s6-monitoring`. Current home-lab
-verification should be rerun after the home-only refactor.
+Monitoring visual verification completed on 2026-05-24.
+
+Grafana dashboards are visible and backed by live Prometheus data:
+
+- `Campus VM Overview` displays node-exporter metrics for all 7 home-lab VMs
+- `Campus PostgreSQL Overview` displays postgres-exporter metrics for `s4-db`
+- `Campus Kubernetes Overview` displays kube-state-metrics data for dev and prod
+- Prometheus targets are up for VM, PostgreSQL, and Kubernetes metrics
 
 Components:
 
@@ -251,7 +257,6 @@ Environment-specific values belong in:
 
 - verify home dev end to end with a fresh `home-dev-test-*` tag
 - verify home prod end to end with a fresh `home-v*` tag
-- verify home monitoring end to end
 - add RBAC-limited kubeconfigs for deployment runners
 - add Alertmanager and Prometheus alert rules
 - add Loki or Grafana Alloy log collection

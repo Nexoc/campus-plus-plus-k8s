@@ -80,8 +80,12 @@ The portable database alias is generated as `service/s4-db` and
 `endpointslice/s4-db` in `campus-dev` and `campus-prod`. The real database
 endpoint comes from host-local runtime files on `gw`.
 
-Monitoring automation is available under `ops/`. Current home-lab verification
-should be performed after the home-only documentation/workflow refactor.
+Monitoring baseline has been visually verified in Grafana:
+
+- VM metrics are displayed for all 7 home-lab VMs
+- PostgreSQL metrics are displayed for `s4-db`
+- Kubernetes metrics are displayed for dev and prod through kube-state-metrics
+- Prometheus targets are up
 
 ## Architecture
 
@@ -298,7 +302,6 @@ Product docs:
 
 - verify home dev through `home-dev-*`
 - verify home prod through `home-v*`
-- verify monitoring on `s6-monitoring` with `home-grafana.davl.at`
 - keep only `home-gw-runner` as the active deployment runner on `gw`
 - replace initial prod kubeconfig with an RBAC-limited deployer kubeconfig
 - add Prometheus alert rules and Alertmanager

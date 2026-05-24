@@ -16,6 +16,7 @@ central monitoring core: ready
 postgres exporter: ready
 kube-state-metrics: ready
 monitoring dashboards: ready
+monitoring visual verification: complete
 ```
 
 Implemented monitoring core:
@@ -32,6 +33,7 @@ Grafana dashboard Campus Kubernetes Overview: ready
 check-monitoring-stack.yml: ready
 PostgreSQL exporter automation: ready
 kube-state-metrics dev/prod manifests and install playbook: ready
+Grafana visual baseline verification: complete
 ```
 
 Not implemented yet:
