@@ -6,7 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
-INVENTORY="${ANSIBLE_INVENTORY:-ops/inventory/home.local.ini}"
+INVENTORY="${ANSIBLE_INVENTORY:-ops/inventory/lab.local.ini}"
 KUBECONFIG_PATH="${KUBECONFIG:-/home/nexoc/.kube/prod.yaml}"
 CAMPUS_SECRETS_ROOT="${CAMPUS_SECRETS_ROOT:-/home/nexoc/campus-secrets}"
 PROD_NAMESPACE="${PROD_NAMESPACE:-campus-prod}"
