@@ -51,6 +51,33 @@ http://home-campus-prod.davl.at  -> 301
 https://home-campus-prod.davl.at -> 200
 ```
 
+## Database And CI/CD
+
+Database:
+
+```text
+s4-db: PostgreSQL
+endpoint: 192.168.56.20:5432
+network: internal only
+```
+
+The Kubernetes database alias is fixed:
+
+```text
+service/s4-db and endpointslice/s4-db exist in campus-dev and campus-prod.
+DB_HOST=s4-db resolves inside both Kubernetes namespaces.
+```
+
+CI/CD:
+
+```text
+home-dev-* -> dev deploy
+home-v*    -> prod deploy
+runner     -> home-gw-runner on gw
+service    -> actions.runner.Nexoc-campus-plus-plus-k8s.home-gw-runner.service
+path       -> /home/nexoc/actions-runner-prod
+```
+
 ## Public Edge Routing
 
 ```text
@@ -73,6 +100,10 @@ certificate method:
 ```
 
 The certificate was not obtained with `certbot --nginx`.
+
+The home-campus nginx routing file was added separately and did not overwrite
+existing VPS configs for `davl.at`, `campus.davl.at`, `matrix.davl.at`,
+`meet.davl.at`, or `element.davl.at`.
 
 Traffic path:
 
@@ -107,24 +138,69 @@ Campus PostgreSQL Overview
 Campus Kubernetes Overview
 ```
 
+## Grafana External Protected Access
+
+```text
+https://home-grafana.davl.at
+-> VPS nginx HTTPS
+-> nginx basic auth
+-> WireGuard
+-> s6-monitoring:3000
+-> Grafana login
+-> viewer user
+```
+
+Certificate:
+
+```text
+/etc/letsencrypt/live/home-grafana/fullchain.pem
+/etc/letsencrypt/live/home-grafana/privkey.pem
+```
+
+Verified behavior:
+
+```text
+without basic auth -> 401
+with basic auth    -> 302 /login
+browser            -> Grafana opens
+viewer user        -> dashboards visible
+```
+
+Security state:
+
+```text
+Grafana: protected
+Prometheus: not public
+node exporters: not public
+PostgreSQL: not public
+```
+
+Firewall on `s6-monitoring`:
+
+```text
+allow 10.20.0.1 -> tcp/3000
+drop tcp/9090
+drop tcp/9100
+```
+
 ## Remaining Work
 
 ```text
-Grafana external access is not exposed yet.
-Prometheus should not be public.
-Security hardening is intentionally postponed as the final step.
+Security hardening is partially done.
+Final hardening pass is still planned.
 ```
 
 Possible later improvements:
 
 ```text
-Grafana protected access
 rate limits
 basic auth for dev
 default deny server
 fail2ban
 firewall review
+backup/restore docs
 RBAC-limited deployment kubeconfigs
 Alertmanager and alert rules
 Loki or Grafana Alloy log collection
+final portfolio report and architecture diagram
 ```

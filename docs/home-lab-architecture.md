@@ -69,7 +69,23 @@ configuration:
 /root/nginx-backups/nginx-before-home-campus-2026-05-24-132601.tar.gz
 /etc/letsencrypt/live/home-campus/fullchain.pem
 /etc/letsencrypt/live/home-campus/privkey.pem
+/etc/letsencrypt/live/home-grafana/fullchain.pem
+/etc/letsencrypt/live/home-grafana/privkey.pem
 ```
+
+Grafana external access is protected:
+
+```text
+https://home-grafana.davl.at
+-> VPS nginx HTTPS
+-> nginx basic auth
+-> WireGuard
+-> s6-monitoring:3000
+-> Grafana login
+-> viewer user
+```
+
+Prometheus, exporters, and PostgreSQL are not public.
 
 ## Database Alias
 

@@ -52,6 +52,8 @@ creating `/home/nexoc/campus-secrets/home/db-endpoint.env` on `gw`.
 
 - home control host
 - GitHub runner host: `home-gw-runner`
+- GitHub runner service: `actions.runner.Nexoc-campus-plus-plus-k8s.home-gw-runner.service`
+- GitHub runner path: `/home/nexoc/actions-runner-prod`
 - SSH/Ansible/kubectl/Helm entry point
 - home edge host
 - location of dev/prod kubeconfigs and runtime secret roots
@@ -153,6 +155,13 @@ certificate method: certbot certonly --webroot
 
 The certificate was not obtained with `certbot --nginx`.
 
+Grafana certificate:
+
+```text
+/etc/letsencrypt/live/home-grafana/fullchain.pem
+/etc/letsencrypt/live/home-grafana/privkey.pem
+```
+
 Traffic path:
 
 ```text
@@ -234,6 +243,46 @@ Expected Grafana hostname:
 home-grafana.davl.at
 ```
 
+## Grafana External Access Status
+
+Protected external Grafana access is verified:
+
+```text
+https://home-grafana.davl.at
+-> VPS nginx HTTPS
+-> nginx basic auth
+-> WireGuard
+-> s6-monitoring:3000
+-> Grafana login
+-> viewer user
+```
+
+Verification:
+
+```text
+without basic auth -> 401
+with basic auth    -> 302 /login
+browser            -> Grafana opens
+viewer user        -> dashboards visible
+```
+
+Security state:
+
+```text
+Grafana: protected
+Prometheus: not public
+node exporters: not public
+PostgreSQL: not public
+```
+
+Firewall on `s6-monitoring`:
+
+```text
+allow 10.20.0.1 -> tcp/3000
+drop tcp/9090
+drop tcp/9100
+```
+
 ## Operations And Checks
 
 Tracked inventory example:
@@ -298,10 +347,10 @@ Environment-specific values belong in:
 
 ## Remaining Optional Improvements
 
-- Grafana external access is not exposed yet
-- Prometheus should not be public
-- security hardening is intentionally postponed as the final step
-- possible later: Grafana protected access, rate limits, basic auth for dev, default deny server, fail2ban, firewall review
+- final security hardening pass: rate limits, default deny server, fail2ban, firewall review
+- optional basic auth for dev
+- backup/restore docs
+- final portfolio report and architecture diagram
 - add RBAC-limited kubeconfigs for deployment runners
 - add Alertmanager and Prometheus alert rules
 - add Loki or Grafana Alloy log collection

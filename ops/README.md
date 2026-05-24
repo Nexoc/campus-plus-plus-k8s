@@ -35,6 +35,8 @@ Home-lab monitoring has been visually verified in Grafana:
 - postgres-exporter metrics for `s4-db`
 - kube-state-metrics for dev and prod
 - Prometheus targets up
+- protected external Grafana access through VPS nginx basic auth and Grafana login
+- Prometheus, exporters, and PostgreSQL are not public
 
 ## Inventory Contract
 

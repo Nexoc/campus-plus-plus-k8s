@@ -103,6 +103,15 @@ Monitoring baseline has been visually verified in Grafana:
 - PostgreSQL metrics are displayed for `s4-db`
 - Kubernetes metrics are displayed for dev and prod through kube-state-metrics
 - Prometheus targets are up
+- Grafana is externally reachable only behind VPS nginx basic auth and Grafana login
+- Prometheus, exporters, and PostgreSQL remain private
+
+Protected Grafana path:
+
+```text
+https://home-grafana.davl.at -> VPS nginx HTTPS -> nginx basic auth
+-> WireGuard -> s6-monitoring:3000 -> Grafana login -> viewer user
+```
 
 ## Architecture
 
@@ -319,10 +328,10 @@ Product docs:
 
 ## Next Work
 
-- Grafana external access is not exposed yet
-- Prometheus should not be public
-- security hardening is intentionally postponed as the final step
-- possible later: Grafana protected access, rate limits, basic auth for dev, default deny server, fail2ban, firewall review
+- final security hardening pass: rate limits, default deny server, fail2ban, firewall review
+- optional basic auth for dev
+- backup/restore docs
+- final portfolio report and architecture diagram
 - replace initial prod kubeconfig with an RBAC-limited deployer kubeconfig
 - add Prometheus alert rules and Alertmanager
 - add Loki or Grafana Alloy later

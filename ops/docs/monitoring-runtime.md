@@ -252,6 +252,36 @@ refresh: 30s
 dashboards: keep provisioned; star them in Grafana for quick access
 ```
 
+## External Grafana Access
+
+Protected external Grafana access is verified:
+
+```text
+https://home-grafana.davl.at
+-> VPS nginx HTTPS
+-> nginx basic auth
+-> WireGuard
+-> s6-monitoring:3000
+-> Grafana login
+-> viewer user
+```
+
+Certificate:
+
+```text
+/etc/letsencrypt/live/home-grafana/fullchain.pem
+/etc/letsencrypt/live/home-grafana/privkey.pem
+```
+
+Verified behavior:
+
+```text
+without basic auth -> 401
+with basic auth    -> 302 /login
+browser            -> Grafana opens
+viewer user        -> dashboards visible
+```
+
 ## Monitoring Extension Success Criteria
 
 Database metrics:
@@ -295,9 +325,8 @@ Prometheus firewall contract:
 
 ```text
 Prometheus listens on port 9090 on s6-monitoring.
-iptables allows 9090 from loopback for local health checks.
-iptables allows 9090 from the monitoring_scrape_host of gw.
-all other TCP traffic to 9090 is dropped.
+iptables drops external TCP traffic to 9090.
+Prometheus is not public.
 ```
 
 Grafana firewall contract:
@@ -305,8 +334,8 @@ Grafana firewall contract:
 ```text
 Grafana listens on port 3000 on s6-monitoring.
 iptables allows 3000 from loopback for local health checks.
-iptables allows 3000 from the monitoring_scrape_host of gw.
-all other TCP traffic to 3000 is dropped.
+iptables allows 3000 from the VPS WireGuard address 10.20.0.1.
+all other non-local TCP traffic to 3000 is dropped.
 ```
 
 Postgres exporter firewall contract:
@@ -352,7 +381,8 @@ without the stable UID and keeps the dashboard references working.
 
 ```text
 exporter ports are not public
-Prometheus and Grafana are reachable only through trusted lab paths
+Prometheus is not public
+Grafana is externally reachable only through VPS nginx basic auth and Grafana login
 secrets stay under /home/nexoc/campus-secrets/monitoring
 no monitoring passwords or tokens are printed by playbooks
 ```

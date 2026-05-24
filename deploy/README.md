@@ -189,6 +189,14 @@ External HTTPS status:
 - `http://home-campus-prod.davl.at` returns `301`
 - `https://home-campus-prod.davl.at` returns `200`
 
+Protected Grafana access:
+
+- `https://home-grafana.davl.at` reaches Grafana through VPS nginx HTTPS
+- requests without nginx basic auth return `401`
+- requests with nginx basic auth reach Grafana login with `302 /login`
+- Grafana viewer user can see the provisioned dashboards
+- Prometheus, exporters, and PostgreSQL are not public
+
 Release image tags are exactly the Git tag that triggered the workflow.
 
 ## Verification
@@ -221,10 +229,8 @@ grep -nE "namespace: campus-prod|home-campus-prod.davl.at|nodePort: 30080|imageP
 
 ## Known Gaps
 
-- Grafana external access is not exposed yet
-- Prometheus should not be public
-- security hardening is intentionally postponed as the final step
-- possible later: Grafana protected access, rate limits, basic auth for dev, default deny server, fail2ban, firewall review
+- final security hardening pass is still planned
+- possible later: rate limits, basic auth for dev, default deny server, fail2ban, firewall review
 - RBAC-limited deployer kubeconfigs are future work
 - Alertmanager and logs are monitoring follow-up work
 

@@ -17,6 +17,7 @@ postgres exporter: ready
 kube-state-metrics: ready
 monitoring dashboards: ready
 monitoring visual verification: complete
+protected Grafana external access: ready
 ```
 
 Implemented monitoring core:
@@ -34,6 +35,7 @@ check-monitoring-stack.yml: ready
 PostgreSQL exporter automation: ready
 kube-state-metrics dev/prod manifests and install playbook: ready
 Grafana visual baseline verification: complete
+Grafana protected external access through VPS nginx basic auth: complete
 ```
 
 Not implemented yet:
@@ -238,7 +240,7 @@ Firewall principle:
 
 ```text
 exporter ports should be reachable only from s6-monitoring
-Grafana should be reachable only from trusted admin paths
+Grafana should be reachable externally only through protected VPS nginx routing
 Prometheus and Alertmanager should not be publicly exposed
 PostgreSQL 5432 stays restricted to approved app clients
 ```
@@ -343,6 +345,8 @@ Grafana can reach Prometheus through the provisioned datasource
 Campus VM Overview dashboard displays node-exporter data
 Campus PostgreSQL Overview dashboard displays postgres-exporter data
 Campus Kubernetes Overview dashboard displays kube-state-metrics data
+home-grafana.davl.at reaches Grafana through nginx basic auth and Grafana login
+Prometheus, exporters, and PostgreSQL remain private
 check-monitoring-stack.yml passes
 no monitoring secret values are committed or printed
 ```

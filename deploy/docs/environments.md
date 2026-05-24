@@ -91,6 +91,7 @@ Monitoring:
 VMs -> node-exporter:9100 -> Prometheus on s6-monitoring -> Grafana
 s4-db -> postgres-exporter:9187 -> Prometheus on s6-monitoring
 dev/prod k3s -> kube-state-metrics -> Prometheus on s6-monitoring
+admin browser -> home-grafana.davl.at -> VPS nginx basic auth -> s6-monitoring:3000 -> Grafana login
 ```
 
 ## Configuration Strategy
@@ -144,3 +145,4 @@ These remain runtime-only:
 - GitHub Actions secrets
 - public DNS/TLS setup
 - k3s installation and cluster bootstrap
+- VPS nginx routing and basic auth state
