@@ -12,8 +12,8 @@ deploy/
 ├── app/
 │   ├── base/
 │   └── overlays/
-│       ├── dev/
-│       ├── home/
+│       ├── dev/    # legacy/manual compatibility
+│       ├── home/   # active home dev
 │       └── prod/
 ├── infra/
 │   ├── envoy-gateway/
@@ -39,6 +39,9 @@ This tree is used by:
 - `deploy/scripts/verify-overlay.sh`
 - `.github/workflows/deploy-home-dev.yml`
 - `.github/workflows/deploy-home-prod.yml`
+
+`deploy/app/overlays/dev` remains for legacy/manual compatibility. Active home
+dev releases use `deploy/app/overlays/home`.
 
 For PROD, `apply-overlay.sh` also renders a temporary `s4-db` Service and
 EndpointSlice from host-local runtime config before running Kustomize. This

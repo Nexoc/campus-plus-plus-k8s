@@ -15,6 +15,7 @@ target/
 
 .env
 .env*
+!.env.example
 
 # Local deployment secrets generated from templates
 deploy/app/overlays/*/secrets/*.env

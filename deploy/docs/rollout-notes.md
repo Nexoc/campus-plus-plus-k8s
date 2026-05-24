@@ -138,7 +138,6 @@ A successful verification pass should confirm:
 
 ## Known Open Gaps
 
-- active workflow files still need to be split/renamed to the home-only model
-- home prod edge hardening and TLS should be verified after workflow cleanup
+- home prod edge hardening and TLS should be verified
 - RBAC-limited deployer kubeconfigs are still future work
 - Alertmanager and logs are monitoring follow-up work

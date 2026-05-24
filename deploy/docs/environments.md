@@ -30,8 +30,8 @@ Current active app environments:
 - `home`: home dev release target, namespace `campus-dev`, cluster `s5-dev`
 - `prod`: home production release target, namespace `campus-prod`, cluster `s1-prod/s2-prod/s3-prod`
 
-The older `dev` overlay can remain for manual compatibility, but the active dev
-release channel is the `home` overlay.
+`deploy/app/overlays/dev` is legacy/manual compatibility. The active home dev
+release channel is `deploy/app/overlays/home`.
 
 ## Release Channels
 

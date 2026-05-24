@@ -210,7 +210,6 @@ grep -nE "namespace: campus-prod|home-campus-prod.davl.at|nodePort: 30080|imageP
 
 ## Known Gaps
 
-- active workflows still need to be split/renamed to the final home-only files
 - home prod edge hardening and TLS should be verified
 - RBAC-limited deployer kubeconfigs are future work
 - Alertmanager and logs are monitoring follow-up work

@@ -1,7 +1,9 @@
 # DEV Secrets Fallback
 
-This directory is an ignored local fallback for manual `deploy/app/overlays/dev`
-rendering.
+This directory is an ignored local fallback for legacy/manual
+`deploy/app/overlays/dev` rendering.
+
+Active home dev releases use `deploy/app/overlays/home`.
 
 During automated deploys, the self-hosted runner reads secrets from:
 

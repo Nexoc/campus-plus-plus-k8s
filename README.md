@@ -138,8 +138,8 @@ Active overlays:
 - `deploy/app/overlays/home`: home dev, namespace `campus-dev`, target `s5-dev`
 - `deploy/app/overlays/prod`: home prod, namespace `campus-prod`, target `s1-prod/s2-prod/s3-prod`
 
-The older `dev` overlay may remain for local/manual compatibility, but the
-active release channel for dev is `home-dev-*` through the `home` overlay.
+`deploy/app/overlays/dev` is legacy/manual compatibility. The active home dev
+release channel is `home-dev-*` through `deploy/app/overlays/home`.
 
 Shared deployment helpers:
 
@@ -296,11 +296,10 @@ Product docs:
 
 ## Next Work
 
-- split active workflows into validation, home dev deploy, and home prod deploy
-- keep only `home-gw-runner` as the active deployment runner on `gw`
 - verify home dev through `home-dev-*`
 - verify home prod through `home-v*`
 - verify monitoring on `s6-monitoring` with `home-grafana.davl.at`
+- keep only `home-gw-runner` as the active deployment runner on `gw`
 - replace initial prod kubeconfig with an RBAC-limited deployer kubeconfig
 - add Prometheus alert rules and Alertmanager
 - add Loki or Grafana Alloy later
