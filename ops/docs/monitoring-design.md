@@ -64,7 +64,7 @@ Kubernetes manifests / Helm
 
 GitHub Actions
   -> application CI/CD only
-  -> uni-dev-*, home-dev-*, uni-v*, and home-v* release pipelines
+  -> home-dev-* and home-v* release pipelines
   -> not the primary mechanism for configuring monitoring
 
 kubectl

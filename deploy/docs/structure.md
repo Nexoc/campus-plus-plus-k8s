@@ -37,8 +37,8 @@ This tree is used by:
 
 - `deploy/scripts/apply-overlay.sh`
 - `deploy/scripts/verify-overlay.sh`
-- `.github/workflows/deploy-dev.yml`
-- `.github/workflows/deploy-prod.yml`
+- `.github/workflows/deploy-home-dev.yml`
+- `.github/workflows/deploy-home-prod.yml`
 
 For PROD, `apply-overlay.sh` also renders a temporary `s4-db` Service and
 EndpointSlice from host-local runtime config before running Kustomize. This
@@ -63,11 +63,11 @@ Current active infra baseline:
 
 ### `infra/gw-nginx/`
 
-Current lab edge baseline:
+Current home lab edge baseline:
 
 - nginx site config for `gw`
 - reverse proxy from `gw:80` to `s5-dev:30080`
-- fixed Host header for the DEV `HTTPRoute`
+- fixed Host header for the home dev `HTTPRoute`
 
 ## `scripts/`
 

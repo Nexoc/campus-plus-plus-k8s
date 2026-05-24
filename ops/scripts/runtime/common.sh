@@ -6,12 +6,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 
-INVENTORY="${ANSIBLE_INVENTORY:-ops/inventory/uni.local.ini}"
+INVENTORY="${ANSIBLE_INVENTORY:-ops/inventory/home.local.ini}"
 KUBECONFIG_PATH="${KUBECONFIG:-/home/nexoc/.kube/prod.yaml}"
 CAMPUS_SECRETS_ROOT="${CAMPUS_SECRETS_ROOT:-/home/nexoc/campus-secrets}"
 PROD_NAMESPACE="${PROD_NAMESPACE:-campus-prod}"
 EXPECTED_NODEPORT="${EXPECTED_NODEPORT:-30080}"
-EXPECTED_HOST="${EXPECTED_HOST:-campus-prod.10-123-127-29.sslip.io}"
+EXPECTED_HOST="${EXPECTED_HOST:-home-campus-prod.davl.at}"
 MANIFEST_OUT="${MANIFEST_OUT:-/tmp/campus-prod-render.yaml}"
 
 cd "$REPO_ROOT"
@@ -46,14 +46,14 @@ require_kubeconfig() {
 
 require_tag() {
   if [[ -z "${TAG:-}" ]]; then
-    echo "TAG is required, for example: TAG=uni-vX.Y.Z or TAG=home-vX.Y.Z" >&2
+    echo "TAG is required, for example: TAG=home-vX.Y.Z" >&2
     exit 1
   fi
 
   case "$TAG" in
-    uni-v*|home-v*) ;;
+    home-v*) ;;
     *)
-      echo "TAG must be a production tag starting with uni-v* or home-v*: $TAG" >&2
+      echo "TAG must be a production tag starting with home-v*: $TAG" >&2
       exit 1
       ;;
   esac

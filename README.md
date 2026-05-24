@@ -2,116 +2,86 @@
 
 [![CI Pipeline](https://github.com/Nexoc/campus-plus-plus-k8s/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nexoc/campus-plus-plus-k8s/actions/workflows/ci.yml)
 
-Campus++ is a full-stack Hochschule Campus Wien application packaged and
-operated as a production-like Kubernetes / DevOps portfolio project.
+Campus++ is a full-stack Hochschule Campus Wien application packaged as a
+home Kubernetes lab on one physical PC with VM clones.
 
-The repository is not only application code. It also contains the delivery,
-operations, and monitoring model around the app:
+The active target is home-only:
 
 ```text
-Campus++ app
-  -> Docker images
-  -> GHCR
-  -> k3s dev/prod clusters
-  -> Envoy Gateway / Gateway API
-  -> tag-based GitHub Actions CI/CD
-  -> Ansible ops automation
-  -> central monitoring on s6-monitoring
+home lab on one physical PC
 ```
+
+The server roles stay stable:
+
+```text
+gw          -> gateway / runner / ansible / edge
+s4-db       -> PostgreSQL
+s5-dev      -> dev k3s
+s6-monitoring -> Prometheus + Grafana
+s1-prod     -> prod k3s node 1
+s2-prod     -> prod k3s node 2
+s3-prod     -> prod k3s node 3
+```
+
+`uni` is not an active target. The names `s4-db`, `s5-dev`,
+`s6-monitoring`, and `s1-prod/s2-prod/s3-prod` are home-lab VM roles.
 
 ## What This Demonstrates
 
-This repository is maintained as a DevOps/Kubernetes migration project, not
-just as a full-stack app repository.
-
-It currently demonstrates:
-
 - Vue 3 frontend, Spring Boot auth/backend services, importer, and nginx app gateway
-- containerized application components published as immutable GHCR images
+- immutable GHCR images for all application components
 - validation-only CI on `main`
-- controlled non-prod releases from `uni-dev-*` and `home-dev-*` tags
-- controlled production releases from `uni-v*` and `home-v*` tags with GitHub environment approval
-- self-hosted GitHub Actions runners pinned by labels
-- Kustomize-based Kubernetes deployment overlays under `deploy/app`
-- k3s single-node DEV and HA PROD Kubernetes targets
-- Envoy Gateway / Gateway API as the active Kubernetes entry layer
-- `gw` nginx edge baseline for lab traffic forwarding
-- external PostgreSQL reached through the stable `s4-db` runtime alias
-- environment-specific database endpoint config kept outside git
-- Ansible-based ops checks and host-level automation under `ops/`
-- central monitoring on `s6-monitoring` with node-exporter, Prometheus, Grafana,
-  postgres exporter, kube-state-metrics, and Campus++ dashboards
+- tag-driven home dev and home prod releases
+- self-hosted GitHub Actions runner on `gw`
+- k3s dev and production clusters
+- Kustomize deployment overlays under `deploy/app`
+- Envoy Gateway / Gateway API as the Kubernetes entry layer
+- external PostgreSQL through the stable `s4-db` runtime alias
+- Ansible ops automation under `ops/`
+- central monitoring on `s6-monitoring`
 
 ## Current Status
 
-Current platform baseline:
-
-- technical baseline is complete in the current lab infrastructure
-- final implemented platform summary: [Campus++ Final Platform Status](docs/final-platform-status.md)
-- DEV CD is routed through `uni-dev-*` and `home-dev-*` tags on environment-specific `gw` control runners
-- PROD CD is routed through `uni-v*` and `home-v*` tags with environment approval on the same environment-specific `gw` control runners
-- the documented PROD release baseline is `v0.1.1`
-- the portable PROD database alias is working through generated `service/s4-db` and `endpointslice/s4-db`
-- the Ansible ops/check layer is ready
-- central monitoring is ready on `s6-monitoring`
-
-Current DEV request path:
+Current platform target:
 
 ```text
-client
-  -> gw
-  -> s5-dev:30080
-  -> Envoy Gateway / Gateway API
-  -> campus-nginx
-  -> frontend / auth / backend
-  -> PostgreSQL s4-db
+home lab on one physical PC with VM clones
 ```
 
-Current PROD request path:
+Release channels:
 
 ```text
-client
-  -> gw edge
-  -> s1-prod|s2-prod|s3-prod:30080
-  -> Envoy Gateway / Gateway API
-  -> campus-prod
-  -> campus-nginx
-  -> frontend / auth / backend
-  -> PostgreSQL s4-db
+home-dev-* -> s5-dev / campus-dev
+home-v*    -> s1-prod/s2-prod/s3-prod / campus-prod
 ```
 
-Current monitoring path:
+Current active paths:
 
 ```text
-all lab VMs
-  -> node-exporter:9100
-  -> Prometheus on s6-monitoring
-  -> Grafana on s6-monitoring
+home dev request:
+client -> gw -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> app -> s4-db
 
-s4-db
-  -> postgres-exporter:9187
-  -> Prometheus on s6-monitoring
+home prod request:
+client -> gw -> s1-prod|s2-prod|s3-prod:30080 -> Envoy Gateway -> campus-prod -> app -> s4-db
 
-dev/prod k3s clusters
-  -> kube-state-metrics:30091/30092
-  -> Prometheus on s6-monitoring
-
-Prometheus
-  -> Grafana dashboards:
-     Campus VM Overview
-     Campus PostgreSQL Overview
-     Campus Kubernetes Overview
+home monitoring:
+VMs and k3s clusters -> s6-monitoring -> Prometheus -> Grafana
 ```
 
-Confirmed Kubernetes runtime state:
+Current hostnames:
 
-- `frontend`, `auth`, `backend`, and `campus-nginx` run in Kubernetes
-- `campus-importer` completes successfully
-- `Gateway/campus` is `Programmed=True`
-- `HTTPRoute/campus` is accepted and routes to `campus-nginx`
-- `EnvoyProxy/campus-edge` publishes NodePort `30080`
-- `ClientTrafficPolicy/campus-edge` is present
-- Envoy Gateway / Gateway API is the active Kubernetes entry layer
+```text
+home dev      home-campus-dev.davl.at
+home prod     home-campus-prod.davl.at
+home grafana  home-grafana.davl.at
+```
+
+The portable production database alias is generated as `service/s4-db` and
+`endpointslice/s4-db` in `campus-prod`. The real database endpoint comes from
+host-local runtime files on `gw`.
+
+Monitoring automation is available under `ops/`. Current home-lab verification
+should be performed after the home-only documentation/workflow refactor.
 
 ## Architecture
 
@@ -122,32 +92,30 @@ Application components:
 - `backend`: Spring Boot API service
 - `campus-nginx`: internal application gateway and auth boundary
 - `campus-importer`: one-shot data import job
-- PostgreSQL: external database reached through `s4-db`
+- PostgreSQL: external database on `s4-db`
 
-Delivery and platform components:
+Platform components:
 
-- Docker for local and image build runtime
+- Docker for local development and image builds
 - GHCR for application images
 - GitHub Actions for CI and release orchestration
-- self-hosted runners for cluster deployment
-- k3s for DEV and PROD Kubernetes
-- Kustomize for app overlays and Kubernetes monitoring manifests
-- Helm for Kubernetes add-ons such as Envoy Gateway
+- `home-gw-runner` for deployment jobs
+- k3s on `s5-dev` for dev
+- k3s HA on `s1-prod`, `s2-prod`, and `s3-prod` for prod
+- Kustomize for Kubernetes overlays
 - Envoy Gateway / Gateway API for Kubernetes ingress
-- nginx on `gw` for the lab edge proxy
-- Ansible for host bootstrap, checks, firewall/database access, Envoy install, and monitoring setup
-- systemd for host services such as GitHub runners, node-exporter, postgres exporter, Prometheus, and Grafana
-- iptables for lab firewall boundaries
-- Prometheus and Grafana for central monitoring and dashboards
+- nginx on `gw` for the home edge path
+- Ansible for host checks, bootstrap, Envoy install, database access, and monitoring
+- Prometheus and Grafana on `s6-monitoring`
 
 ## Runtime Modes
 
 ### Local Docker Runtime
 
 Use the root `docker-compose.yml` for local workstation development and smoke
-testing. This is not part of the server deployment path.
+testing. This is not the server deployment path.
 
-```text
+```bash
 docker compose --env-file .env.dev up -d --build
 ```
 
@@ -159,143 +127,123 @@ http://localhost
 
 Stop:
 
-```text
+```bash
 docker compose --env-file .env.dev down -v --remove-orphans
 ```
 
 ### Kubernetes Runtime
 
-Use `deploy/app/overlays/` for Kubernetes deployments.
-
 Active overlays:
 
-- `deploy/app/overlays/dev`: lab DEV cluster on `s5-dev`
-- `deploy/app/overlays/home`: home cluster, same app model with its own edge patch
-- `deploy/app/overlays/prod`: production cluster on `s1-prod`, `s2-prod`, and `s3-prod`
+- `deploy/app/overlays/home`: home dev, namespace `campus-dev`, target `s5-dev`
+- `deploy/app/overlays/prod`: home prod, namespace `campus-prod`, target `s1-prod/s2-prod/s3-prod`
+
+The older `dev` overlay may remain for local/manual compatibility, but the
+active release channel for dev is `home-dev-*` through the `home` overlay.
 
 Shared deployment helpers:
 
 - `deploy/scripts/apply-overlay.sh`
 - `deploy/scripts/verify-overlay.sh`
 
-Shared infrastructure baselines:
-
-- `deploy/infra/envoy-gateway/`
-- `deploy/infra/gw-nginx/`
-
-Manual Kubernetes deployment uses the same release contract as the workflow:
+Manual home dev render/apply shape:
 
 ```bash
-# server: s5-dev
+# server: gw
 cd /home/nexoc/campus-plus-plus-k8s
 bash deploy/scripts/apply-overlay.sh \
-  --environment dev \
-  --image-tag uni-dev-example
+  --environment home \
+  --image-tag home-dev-example
 
 bash deploy/scripts/verify-overlay.sh \
-  --environment dev \
+  --environment home \
   --expected-nodeport 30080
 ```
 
 ### Ops And Monitoring Runtime
 
-Use `ops/` from `gw` for Ansible-based operations.
-
-The model is:
+Use `ops/` from `gw`:
 
 ```text
 local pc -> gw -> ansible/ssh/kubectl/helm -> all servers/prod cluster
 ```
 
-Monitoring core currently runs as systemd services on `s6-monitoring`:
+Use the home inventory:
 
-- Prometheus on port `9090`
-- Grafana on port `3000`
-- node-exporter on all VMs on port `9100`
-- postgres exporter on `s4-db` on port `9187`
-- kube-state-metrics exposed from dev/prod clusters on NodePorts `30091` and `30092`
+```text
+ops/inventory/home.local.ini
+```
 
-Monitoring is installed and checked through `ops/`. Alertmanager and Loki remain
-future monitoring extensions and are not part of the current application release
-workflow.
+Monitoring roles:
+
+- node-exporter on all VMs
+- Prometheus on `s6-monitoring`
+- Grafana on `s6-monitoring`
+- postgres exporter on `s4-db`
+- kube-state-metrics in dev/prod clusters
 
 ## CI/CD
 
-`main` is the only working branch.
+`main` is the working branch.
 
-Current GitHub Actions behavior:
+Current GitHub Actions model:
 
 - `push` to `main`: validation only
 - `pull_request` to `main`: validation only
-- `uni-dev-*` tag: build/push images and deploy to university DEV from the university `gw` runner
-- `home-dev-*` tag: build/push images and deploy to home DEV from the home `gw` runner
-- `uni-v*` tag: build/push images and deploy to university PROD after `production` approval
-- `home-v*` tag: build/push images and deploy to home PROD after `home-production` approval
+- `home-dev-*` tag: build/push images and deploy home dev to `s5-dev`
+- `home-v*` tag: build/push images and deploy home prod after `home-production` approval
 
 Release images are tagged exactly with the Git tag that triggered the workflow.
 
-Example DEV release:
+Example home dev release:
 
 ```bash
-# server: gw
-cd /home/nexoc/campus-plus-plus-k8s
-git tag uni-dev-example
-git push origin uni-dev-example
+# server: local pc
+git tag home-dev-example
+git push origin home-dev-example
 ```
 
 Expected result:
 
-- `Non-Prod Release` workflow starts
-- GHCR images are published with tag `uni-dev-example`
-- `Deploy UNI DEV from gw` runs on runner labels `uni+gw+deploy`
-- `Deploy HOME DEV from gw` is skipped
-- Kubernetes rollout is verified through Envoy/Gateway API checks and an HTTP
-  smoke check with the expected Host header
+- GHCR images are published with tag `home-dev-example`
+- deploy runs on runner labels `home+gw+deploy`
+- `home` overlay is applied to namespace `campus-dev`
+- smoke check uses `Host: home-campus-dev.davl.at` against `s5-dev:30080`
 
-Example PROD release:
+Example home prod release:
 
 ```bash
-# server: gw
-cd /home/nexoc/campus-plus-plus-k8s
-git tag uni-v0.1.2
-git push origin uni-v0.1.2
+# server: local pc
+git tag home-v0.1.2
+git push origin home-v0.1.2
 ```
 
 Expected result:
 
-- `UNI Production Release` workflow starts
-- GHCR images are published with tag `uni-v0.1.2`
-- `Deploy UNI PROD to k3s HA cluster` waits for `production` environment approval
-- after approval, deploy runs on runner labels `uni+gw+deploy`
-- Kubernetes rollout is verified in namespace `campus-prod`, including an HTTP
-  smoke check through the Envoy NodePort path
+- GHCR images are published with tag `home-v0.1.2`
+- deploy waits for GitHub environment `home-production`
+- deploy runs on runner labels `home+gw+deploy`
+- `prod` overlay is applied to namespace `campus-prod`
+- smoke checks use `Host: home-campus-prod.davl.at` against prod nodes
 
 ## Runner Model
 
-GitHub Actions targets self-hosted runners by labels, not by runner names.
+GitHub Actions targets self-hosted runners by labels, not runner names.
 
-Current runner routing:
+Active runner:
 
-- `uni-dev-*` and `uni-v*` require `self-hosted`, `Linux`, `X64`, `uni`, `gw`, `deploy`
-- `home-dev-*` and `home-v*` require `self-hosted`, `Linux`, `X64`, `home`, `gw`, `deploy`
+```text
+runner name: home-gw-runner
+labels: self-hosted, Linux, X64, home, gw, deploy
+```
 
-Recommended runner names:
+The runner needs:
 
-- university control runner: `uni-gw-runner`
-- home control runner: `home-gw-runner`
-
-The runner names are descriptive only. GitHub Actions routes jobs by labels.
-Each control runner needs the correct kubeconfigs and runtime secret files for
-its own environment.
-
-Production hostnames:
-
-- university DEV: `campus-dev.10-123-127-29.sslip.io`
-- university PROD: `campus-prod.10-123-127-29.sslip.io`
-- university Grafana: `grafana.10-123-127-29.sslip.io`
-- home DEV: `home-campus-dev.davl.at`
-- home PROD: `home-campus-prod.davl.at`
-- home Grafana: `home-grafana.davl.at`
+- `/home/nexoc/.kube/dev.yaml`
+- `/home/nexoc/.kube/prod.yaml`
+- `/home/nexoc/campus-secrets/home/*`
+- `/home/nexoc/campus-secrets/prod/*`
+- GHCR pull credentials configured in GitHub Actions
 
 ## Repository Layout
 
@@ -305,12 +253,8 @@ campus-plus-plus/
 ├── backend/
 ├── deploy/
 │   ├── app/
-│   │   ├── base/
-│   │   └── overlays/
 │   ├── docs/
 │   ├── infra/
-│   │   ├── envoy-gateway/
-│   │   └── gw-nginx/
 │   ├── monitoring/
 │   ├── scripts/
 │   └── templates/
@@ -319,34 +263,28 @@ campus-plus-plus/
 ├── importer/
 ├── nginx/
 ├── ops/
-│   ├── docs/
-│   ├── inventory/
-│   ├── playbooks/
-│   ├── scripts/
-│   └── templates/
 ├── docker-compose.yml
 └── README.md
 ```
 
 ## Documentation
 
-Deployment docs:
+Primary docs:
 
+- [Home Lab Architecture](docs/home-lab-architecture.md)
 - [Final Platform Status](docs/final-platform-status.md)
 - [Platform Installation Runbook](docs/platform-installation-runbook.md)
-- [Deployment Runbook](deploy/README.md)
 - [Runtime Inputs](docs/runtime-inputs.md)
+- [Deployment Runbook](deploy/README.md)
 - [Environments](deploy/docs/environments.md)
 - [Naming Convention](deploy/docs/naming-convention.md)
 - [Rollout Notes](deploy/docs/rollout-notes.md)
 - [Production CD Design](deploy/docs/production-cd-design.md)
-- [Deployment Structure](deploy/docs/structure.md)
-- [GW nginx baseline](deploy/infra/gw-nginx/README.md)
-- [Envoy Gateway baseline](deploy/infra/envoy-gateway/README.md)
 
 Ops and monitoring docs:
 
 - [Ops Automation](ops/README.md)
+- [Ansible Inventories](ops/inventory/README.md)
 - [Runtime Automation Wrappers](ops/scripts/runtime/README.md)
 - [Monitoring Design](ops/docs/monitoring-design.md)
 - [Monitoring Runtime Model](ops/docs/monitoring-runtime.md)
@@ -358,11 +296,11 @@ Product docs:
 
 ## Next Work
 
-Current planned work:
-
-- apply and harden the repo-owned `gw` nginx edge path with a stable public hostname and TLS
-- harden the PROD edge path through `gw`
-- replace the initial PROD kubeconfig with an RBAC-limited deployer kubeconfig
+- split active workflows into validation, home dev deploy, and home prod deploy
+- keep only `home-gw-runner` as the active deployment runner on `gw`
+- verify home dev through `home-dev-*`
+- verify home prod through `home-v*`
+- verify monitoring on `s6-monitoring` with `home-grafana.davl.at`
+- replace initial prod kubeconfig with an RBAC-limited deployer kubeconfig
 - add Prometheus alert rules and Alertmanager
-- add Loki and log collection later
-- review the `home` overlay before the first real `home-dev-*` release
+- add Loki or Grafana Alloy later

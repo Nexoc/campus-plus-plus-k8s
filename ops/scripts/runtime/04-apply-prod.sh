@@ -13,7 +13,7 @@ require_kubeconfig
 if [[ "${CONFIRM_PROD_APPLY:-}" != "apply-prod" ]]; then
   echo "Refusing manual prod apply without explicit confirmation." >&2
   echo "Use: TAG=$TAG CONFIRM_PROD_APPLY=apply-prod bash ops/scripts/runtime/04-apply-prod.sh" >&2
-  echo "For normal releases, prefer the GitHub Actions uni-v* or home-v* workflow with production approval." >&2
+  echo "For normal releases, prefer the GitHub Actions home-v* workflow with home-production approval." >&2
   exit 1
 fi
 

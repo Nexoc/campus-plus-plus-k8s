@@ -1,134 +1,128 @@
 # Rollout Notes
 
-This document captures the current tag-driven rollout model for Campus++.
+This document captures the active home-only tag-driven rollout model for
+Campus++.
 
 ## Current Status Summary
 
 Current delivery path:
 
-`Git tag -> GitHub Actions -> GHCR -> target runner -> k3s cluster -> Envoy Gateway -> campus-nginx -> services`
+```text
+Git tag -> GitHub Actions -> GHCR -> home-gw-runner -> k3s -> Envoy Gateway -> campus-nginx -> services
+```
 
-Current active lab path:
+Current active home dev path:
 
-`Internet -> gw -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> app`
+```text
+local pc -> gw -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> app
+```
 
-Current production release path:
+Current home production path:
 
-`uni-v* tag -> GitHub environment production approval -> uni gw control runner -> prod k3s HA -> campus-prod`
+```text
+home-v* -> home-production approval -> home-gw-runner -> prod k3s HA -> campus-prod
+```
 
 Key characteristics:
 
 - `main` runs validation only
-- `uni-dev-*` tags build and release to the university DEV cluster
-- `home-dev-*` tags build and release to the home DEV cluster
-- `uni-v*` tags build and release to university PROD after `production` approval
-- `home-v*` tags build and release to home PROD after `home-production` approval
+- `home-dev-*` tags build and release to home dev on `s5-dev`
+- `home-v*` tags build and release to home prod after `home-production` approval
 - active manifests live under `deploy/app/overlays/`
 - Envoy Gateway is the active entry layer on NodePort `30080`
-- monitoring and host-level operations are handled through `ops/`, not through
-  application release tags
+- monitoring and host-level operations are handled through `ops/`
 
 ## Relevant Repo Files
 
 Active files:
 
 - `deploy/app/base/`
-- `deploy/app/overlays/dev/`
 - `deploy/app/overlays/home/`
+- `deploy/app/overlays/prod/`
 - `deploy/infra/envoy-gateway/`
 - `deploy/infra/gw-nginx/`
 - `deploy/scripts/apply-overlay.sh`
 - `deploy/scripts/verify-overlay.sh`
 - `.github/workflows/ci.yml`
-- `.github/workflows/deploy-dev.yml`
-- `.github/workflows/deploy-prod.yml`
+- `.github/workflows/deploy-home-dev.yml`
+- `.github/workflows/deploy-home-prod.yml`
 - `deploy/docs/production-cd-design.md`
 
-## Non-Prod Release Workflow
-
-The current repo supports this flow:
+## Home Dev Release Workflow
 
 1. Push to `main` or open a PR against `main`.
 2. `CI Pipeline` runs validation only.
-3. Push a `uni-dev-*` or `home-dev-*` tag.
-4. `Non-Prod Release` builds and publishes GHCR images tagged exactly with `github.ref_name`.
-5. The matching deploy job runs on the environment-specific `gw+deploy` self-hosted runner.
-6. The workflow creates or updates `ghcr-pull`, applies the shared `GatewayClass`, renders the selected overlay, and applies it.
+3. Push a `home-dev-*` tag.
+4. The home dev workflow builds and publishes GHCR images tagged exactly with `github.ref_name`.
+5. The deploy job runs on `home+gw+deploy` self-hosted runner labels.
+6. The workflow creates or updates `ghcr-pull`, applies the shared `GatewayClass`, renders the `home` overlay, and applies it to `campus-dev`.
 7. The workflow verifies rollouts, importer completion, Gateway API resources,
-   Envoy NodePort `30080`, and an HTTP smoke check with the expected Host header.
+   Envoy NodePort `30080`, and an HTTP smoke check with `Host: home-campus-dev.davl.at`.
 
-## Production Release Workflow
+## Home Production Release Workflow
 
-The current repo supports this controlled production flow:
-
-1. Push a `uni-v*` tag.
-2. `UNI Production Release` builds and publishes GHCR images tagged exactly with `github.ref_name`.
-3. The deploy job waits on the GitHub `production` environment.
-4. After manual approval, the deploy job runs on the `uni+gw+deploy` self-hosted runner.
+1. Push a `home-v*` tag.
+2. The home prod workflow builds and publishes GHCR images tagged exactly with `github.ref_name`.
+3. The deploy job waits on GitHub environment `home-production`.
+4. After manual approval, the deploy job runs on `home+gw+deploy` self-hosted runner labels.
 5. The workflow creates or updates `ghcr-pull`, applies the shared `GatewayClass`, renders the `prod` overlay, and applies it to `campus-prod`.
-6. PROD render/apply generates the `s4-db` Service and EndpointSlice from `/home/nexoc/campus-secrets/prod/db-endpoint.env`.
+6. Prod render/apply generates the `s4-db` Service and EndpointSlice from `/home/nexoc/campus-secrets/prod/db-endpoint.env`.
 7. The workflow verifies rollouts, importer completion, Gateway API resources,
-   Envoy NodePort `30080`, and HTTP smoke checks with the expected Host header.
-
-`db-endpoint.env` is host-local runtime configuration. Its values are not
-committed, and the workflow stays unchanged when the external database address
-changes between lab and university infrastructure.
-
-Lab and university deployments should differ only by ignored inventories and
-runtime files. Workflows and tracked Kubernetes manifests must stay unchanged
-when moving between those environments.
+   Envoy NodePort `30080`, and HTTP smoke checks with `Host: home-campus-prod.davl.at`.
 
 ## Suggested Manual Commands
 
-Render a DEV release manifest:
+Render a home dev release manifest:
 
 ```bash
-# server: s5-dev
+# server: gw
 cd /home/nexoc/campus-plus-plus-k8s
 bash deploy/scripts/apply-overlay.sh \
-  --environment dev \
-  --image-tag uni-dev-example \
+  --environment home \
+  --image-tag home-dev-example \
   --render-only
 ```
 
-Apply a non-prod overlay:
+Apply the home dev overlay:
 
 ```bash
-# server: s5-dev
+# server: gw
 cd /home/nexoc/campus-plus-plus-k8s
 kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 kubectl delete job campus-importer -n campus-dev --ignore-not-found
 bash deploy/scripts/apply-overlay.sh \
-  --environment dev \
-  --image-tag uni-dev-example
+  --environment home \
+  --image-tag home-dev-example
 ```
 
-Verify a non-prod overlay:
+Verify home dev:
 
 ```bash
-# server: s5-dev
+# server: gw
 cd /home/nexoc/campus-plus-plus-k8s
 bash deploy/scripts/verify-overlay.sh \
-  --environment dev \
+  --environment home \
   --expected-nodeport 30080
+
+curl -I -H "Host: home-campus-dev.davl.at" http://s5-dev:30080/
 ```
 
-Render a PROD release manifest from `gw` without applying it:
+Render a home prod release manifest from `gw` without applying it:
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
 CAMPUS_SECRETS_ROOT=/home/nexoc/campus-secrets \
 KUBECONFIG=/home/nexoc/.kube/prod.yaml \
+CAMPUS_HTTPROUTE_HOSTNAME=home-campus-prod.davl.at \
 bash deploy/scripts/apply-overlay.sh \
   --environment prod \
-  --image-tag v-render-test \
+  --image-tag home-v-render-test \
   --render-only \
   --manifest-out /tmp/campus-prod-rendered.yaml
 ```
 
-The PROD render must include `service/s4-db` and `endpointslice/s4-db`, both
-generated from host-local `db-endpoint.env`.
+The prod render must include `service/s4-db` and `endpointslice/s4-db`.
 
 ## Verification Checklist
 
@@ -144,9 +138,7 @@ A successful verification pass should confirm:
 
 ## Known Open Gaps
 
-Current open issues:
-
-- the lab `gw` nginx baseline is now in repo, but public hostname/TLS hardening is still future work
-- the home hostname is still a placeholder in the overlay
-- PROD edge hardening and an RBAC-limited deployer kubeconfig are still future work
-- PostgreSQL exporter, kube-state-metrics, alerting, and logs are handled in the monitoring roadmap
+- active workflow files still need to be split/renamed to the home-only model
+- home prod edge hardening and TLS should be verified after workflow cleanup
+- RBAC-limited deployer kubeconfigs are still future work
+- Alertmanager and logs are monitoring follow-up work

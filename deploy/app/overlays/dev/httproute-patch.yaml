@@ -4,4 +4,4 @@ metadata:
   name: campus
 spec:
   hostnames:
-    - campus-dev.10-123-127-29.sslip.io
+    - home-campus-dev.davl.at

@@ -1,170 +1,132 @@
 # Environments
 
-This document describes the current Campus++ environment model after the move
-to tag-driven releases and the addition of the Ansible/monitoring layer.
+This document describes the active Campus++ environment model.
 
-## Infrastructure Roles
+The repository targets one active infrastructure model:
 
-University/lab environment:
+```text
+home lab on one physical PC with VM clones
+```
 
-- `gw`: gateway, NAT, SSH jump host, Ansible control host, and DEV/PROD deploy control host
-- `s5-dev`: single-node k3s DEV cluster
-- `s4-db`: PostgreSQL outside Kubernetes
-- `s6-monitoring`: central monitoring VM
-- `s1-prod`, `s2-prod`, `s3-prod`: k3s HA production cluster nodes
+`uni` is not an active target. The server roles stay and are interpreted as
+home-lab VM roles.
 
-IP addresses belong in inventory, DNS, or host-local runtime configuration, not
-in Kubernetes application manifests or GitHub workflows. Runtime configuration
-uses hostnames and stable contracts so the same repo can be deployed from a
-future environment without editing tracked Kubernetes files.
+## Home Lab Roles
 
-Home environment:
+- `gw`: gateway, runner host, Ansible control host, kubectl/Helm control host, edge host
+- `s4-db`: PostgreSQL VM outside Kubernetes
+- `s5-dev`: single-node dev k3s cluster
+- `s6-monitoring`: Prometheus and Grafana VM
+- `s1-prod`, `s2-prod`, `s3-prod`: home production k3s HA nodes
 
-- separate `gw` control runner and k3s cluster
-- same application layout as lab
-- its own edge hostname patch and runner labels
-
-Production environment:
-
-- `s1-prod`, `s2-prod`, and `s3-prod`: k3s HA production cluster nodes
-- `gw`: deployment control host for the `uni-dev-*` and `uni-v*` workflows
-- application hostname: `campus-prod.10-123-127-29.sslip.io`
-- `s4-db`: stable Kubernetes DNS alias for external PostgreSQL in `campus-prod`
-
-Monitoring environment:
-
-- `s6-monitoring`: central monitoring VM
-- Prometheus and Grafana run as systemd services on `s6-monitoring`
-- node-exporter runs as a systemd service on every lab VM
-- postgres exporter runs on `s4-db`
-- kube-state-metrics runs inside dev/prod clusters and is scraped from `s6-monitoring`
-
-## Deployment Model
-
-Campus++ keeps application code, deployment code, and operations code separate:
-
-- application code stays in `frontend/`, `auth/`, `backend/`, `importer/`, and `nginx/`
-- active Kubernetes manifests live under `deploy/app/overlays/`
-- shared infra baselines live under `deploy/infra/`
-- templates live under `deploy/templates/`
-- Ansible inventories, playbooks, scripts, and monitoring templates live under `ops/`
+IP addresses belong in ignored inventory files, DNS, or host-local runtime
+configuration. Tracked Kubernetes manifests and workflows use logical names and
+runtime contracts.
 
 ## Runtime Environments
 
 Current active app environments:
 
-- `dev`: lab cluster on `s5-dev`, namespace `campus-dev`
-- `home`: home cluster, same namespace layout on a separate cluster
-- `prod`: HA cluster on `s1-prod`, `s2-prod`, and `s3-prod`, namespace `campus-prod`
+- `home`: home dev release target, namespace `campus-dev`, cluster `s5-dev`
+- `prod`: home production release target, namespace `campus-prod`, cluster `s1-prod/s2-prod/s3-prod`
 
-Current release channels:
+The older `dev` overlay can remain for manual compatibility, but the active dev
+release channel is the `home` overlay.
 
-- `uni-dev-*` deploys to the university DEV cluster from the `uni+gw+deploy` control runner
-- `home-dev-*` deploys to the home DEV cluster from the `home+gw+deploy` control runner
-- `main` runs validation only
-- `uni-v*` deploys to university PROD through the `production` environment and the `uni+gw+deploy` control runner
-- `home-v*` deploys to home PROD through the `home-production` environment and the `home+gw+deploy` control runner
-
-Home PROD uses its own hostname:
+## Release Channels
 
 ```text
-home-campus-prod.davl.at
+main        -> validation only
+home-dev-*  -> campus-dev on s5-dev
+home-v*     -> campus-prod on s1-prod/s2-prod/s3-prod
 ```
 
-Canonical hostname matrix:
+Deployment runner:
 
 ```text
-uni dev       campus-dev.10-123-127-29.sslip.io
-uni prod      campus-prod.10-123-127-29.sslip.io
-uni grafana   grafana.10-123-127-29.sslip.io
+home-gw-runner
+labels: self-hosted, Linux, X64, home, gw, deploy
+```
+
+Production approval environment:
+
+```text
+home-production
+```
+
+## Hostname Matrix
+
+```text
 home dev      home-campus-dev.davl.at
 home prod     home-campus-prod.davl.at
 home grafana  home-grafana.davl.at
 ```
 
-Current ops/monitoring channels:
+## Request Paths
 
-- Ansible playbooks are run manually from `gw`
-- host bootstrap and checks are not part of application release tags
-- monitoring services are installed and verified through `ops/playbooks/`
+Home dev:
 
-## Current Request Paths
+```text
+client -> gw -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> services -> s4-db
+```
 
-Lab DEV path:
+Home prod:
 
-`Internet -> gw -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> services -> PostgreSQL s4-db`
+```text
+client -> gw -> s1-prod|s2-prod|s3-prod:30080 -> Envoy Gateway -> campus-prod -> services -> s4-db
+```
 
-Home path:
+Monitoring:
 
-`Home edge hostname -> home cluster NodePort 30080 -> Envoy Gateway -> campus-nginx -> services`
-
-Production path:
-
-`Internet -> gw -> prod nodes NodePort 30080 -> Envoy Gateway -> campus-prod -> services -> PostgreSQL s4-db`
-
-Monitoring path:
-
-`VMs -> node-exporter:9100 -> Prometheus on s6-monitoring -> Grafana dashboards`
-
-`s4-db -> postgres-exporter:9187 -> Prometheus on s6-monitoring`
-
-`dev/prod k3s -> kube-state-metrics:30091/30092 -> Prometheus on s6-monitoring`
-
-Notes:
-
-- Envoy Gateway is the active entry layer for non-prod and PROD environments
-- `campus-nginx` remains the internal app gateway and auth boundary
-- PostgreSQL stays outside Kubernetes for the lab environment
-- in PROD, the real external PostgreSQL endpoint is provided by
-  `/home/nexoc/campus-secrets/prod/db-endpoint.env` on `gw`, not by committed
-  manifests
-- monitoring is operational infrastructure, not an application CD artifact
+```text
+VMs -> node-exporter:9100 -> Prometheus on s6-monitoring -> Grafana
+s4-db -> postgres-exporter:9187 -> Prometheus on s6-monitoring
+dev/prod k3s -> kube-state-metrics -> Prometheus on s6-monitoring
+```
 
 ## Configuration Strategy
 
 Current delivery uses:
 
-- Kustomize overlays in `deploy/app/overlays/dev` and `deploy/app/overlays/home`
-- the production overlay in `deploy/app/overlays/prod`
+- Kustomize overlays in `deploy/app/overlays/home` and `deploy/app/overlays/prod`
 - Envoy Gateway baselines in `deploy/infra/envoy-gateway/`
-- versioned non-secret config files under each overlay
+- versioned non-secret config under each overlay
 - optional ignored local fallback secret env files under each overlay
-- GHCR images tagged exactly with the pushed release tag
-- Ansible inventory in `ops/inventory/lab.local.ini` for lab host operations
+- GHCR images tagged exactly with the release tag
+- Ansible inventory in `ops/inventory/home.local.ini`
 - host-local runtime files under `/home/nexoc/campus-secrets`
 
-Automated deploys with `CAMPUS_SECRETS_ROOT` stage real secret env files into a
-temporary overlay copy outside the repo checkout.
+Self-hosted deployments with `CAMPUS_SECRETS_ROOT` stage real secret env files
+into a temporary overlay copy outside the repo checkout.
 
 ## Secrets
 
-Self-hosted runners read app secrets from fixed host paths:
+Home dev files:
 
-- `/home/nexoc/campus-secrets/dev/`
-- `/home/nexoc/campus-secrets/home/`
-- `/home/nexoc/campus-secrets/prod/`
+```text
+/home/nexoc/campus-secrets/home/db-secrets.env
+/home/nexoc/campus-secrets/home/auth-secrets.env
+```
 
-Expected host-local app secret files per environment:
+Home prod files:
 
-- `db-secrets.env`
-- `auth-secrets.env`
+```text
+/home/nexoc/campus-secrets/prod/db-secrets.env
+/home/nexoc/campus-secrets/prod/auth-secrets.env
+/home/nexoc/campus-secrets/prod/db-endpoint.env
+```
 
-PROD also requires:
-
-- `db-endpoint.env`
-
-Monitoring runtime secret files, when needed, stay under:
-
-- `/home/nexoc/campus-secrets/monitoring/`
+`prod` means the home production cluster.
 
 Real secrets must not be committed or printed.
 
-## What Is Still Outside Repo Or Incomplete
+## Outside Repo
 
-The following remain future or partially external work:
+These remain runtime-only:
 
-- TLS/public hostname hardening for the lab edge
-- the final public hostname for the home overlay
-- PROD edge hardening and an RBAC-limited deployer kubeconfig
-- Prometheus alert rules and Alertmanager
-- Loki or Grafana Alloy/log collection
+- real VM addresses
+- kubeconfig files
+- GitHub runner registration token
+- GitHub Actions secrets
+- public DNS/TLS setup
+- k3s installation and cluster bootstrap

@@ -2,13 +2,10 @@
 
 This document lists the files and settings that must exist outside normal
 source code before running Campus++ locally, deploying it to Kubernetes, or
-operating the lab infrastructure.
+operating the home lab.
 
 Real secrets, tokens, passwords, and environment-specific IP addresses must not
 be committed.
-
-For the implemented platform summary, see
-[Campus++ Final Platform Status](final-platform-status.md).
 
 ## Source Of Truth
 
@@ -17,7 +14,7 @@ Tracked examples and templates:
 ```text
 deploy/templates/config/*.env.example
 deploy/templates/secrets/*.env.example
-ops/inventory/*.example.ini
+ops/inventory/home.example.ini
 ops/templates/*.env.example
 ```
 
@@ -27,7 +24,7 @@ Untracked runtime files:
 .env.dev
 .env.test
 .env.prod
-ops/inventory/*.local.ini
+ops/inventory/home.local.ini
 /home/nexoc/campus-secrets/*
 ```
 
@@ -51,23 +48,9 @@ Expected local files at repo root:
 .env.prod
 ```
 
-The Docker Compose runtime needs these variables:
-
-```text
-BACKEND_PROFILE
-AUTH_PROFILE
-DB_HOST
-DB_PORT
-DB_NAME
-DB_USERNAME
-DB_PASSWORD
-JWT_SECRET
-JWT_EXPIRATION
-```
-
 Typical local Docker command:
 
-```text
+```bash
 docker compose --env-file .env.dev up -d --build
 ```
 
@@ -78,10 +61,6 @@ These files are ignored by git. Do not commit real database or JWT values.
 Tracked non-secret config files live under each overlay:
 
 ```text
-deploy/app/overlays/dev/config/auth-config.env
-deploy/app/overlays/dev/config/backend-config.env
-deploy/app/overlays/dev/config/importer-config.env
-
 deploy/app/overlays/home/config/auth-config.env
 deploy/app/overlays/home/config/backend-config.env
 deploy/app/overlays/home/config/importer-config.env
@@ -91,23 +70,14 @@ deploy/app/overlays/prod/config/backend-config.env
 deploy/app/overlays/prod/config/importer-config.env
 ```
 
-These define non-secret runtime settings such as:
-
-```text
-SPRING_PROFILES_ACTIVE
-DB_HOST
-DB_PORT
-DB_NAME
-```
-
-Current stable app contract:
+Stable app database contract:
 
 ```text
 DB_HOST=s4-db
 ```
 
-For PROD, `s4-db` is a Kubernetes Service/EndpointSlice alias generated at
-render/apply time. The real database endpoint is not stored in Kubernetes
+For home prod, `s4-db` is a Kubernetes Service/EndpointSlice alias generated at
+render/apply time. The real database endpoint is not stored in tracked
 manifests.
 
 ## Kubernetes App Secrets
@@ -120,38 +90,14 @@ deploy/templates/secrets/auth-secrets.env.example
 deploy/templates/secrets/db-endpoint.env.example
 ```
 
-Required keys:
+Required host-local files:
 
 ```text
-db-secrets.env:
-  DB_USERNAME
-  DB_PASSWORD
-
-auth-secrets.env:
-  JWT_SECRET
-  JWT_EXPIRATION
-
-db-endpoint.env:
-  DB_ENDPOINT_ADDRESS
-  DB_ENDPOINT_PORT
-```
-
-The deploy scripts stage real secret files from host-local paths into a
-temporary overlay copy. They do not copy real secret values into the repository
-checkout when `CAMPUS_SECRETS_ROOT` is set.
-
-Required host-local files by environment:
-
-```text
-dev:
-  /home/nexoc/campus-secrets/dev/db-secrets.env
-  /home/nexoc/campus-secrets/dev/auth-secrets.env
-
-home:
+home dev:
   /home/nexoc/campus-secrets/home/db-secrets.env
   /home/nexoc/campus-secrets/home/auth-secrets.env
 
-prod:
+home prod:
   /home/nexoc/campus-secrets/prod/db-secrets.env
   /home/nexoc/campus-secrets/prod/auth-secrets.env
   /home/nexoc/campus-secrets/prod/db-endpoint.env
@@ -160,68 +106,36 @@ prod:
 `auth-secrets.env` is needed in every app environment because the auth service
 needs `JWT_SECRET` and `JWT_EXPIRATION`.
 
-`db-endpoint.env` is currently PROD-only. It is not an app secret mounted into
-pods; it is read by `deploy/scripts/apply-overlay.sh` on `gw` to generate the
-`s4-db` Service and EndpointSlice.
-
-DEV runtime files for the university deploy live on the university `gw` control
-runner:
-
-```text
-/home/nexoc/campus-secrets/dev/db-secrets.env
-/home/nexoc/campus-secrets/dev/auth-secrets.env
-```
-
-HOME runtime files on the home `gw` control runner:
-
-```text
-/home/nexoc/campus-secrets/home/db-secrets.env
-/home/nexoc/campus-secrets/home/auth-secrets.env
-```
-
-PROD runtime files on `gw`:
-
-```text
-/home/nexoc/campus-secrets/prod/db-secrets.env
-/home/nexoc/campus-secrets/prod/auth-secrets.env
-/home/nexoc/campus-secrets/prod/db-endpoint.env
-```
+`db-endpoint.env` is prod-only. It is read by
+`deploy/scripts/apply-overlay.sh` on `gw` to generate the `s4-db` Service and
+EndpointSlice.
 
 Create directories with restrictive permissions:
 
 ```bash
 # server: gw
-mkdir -p /home/nexoc/campus-secrets/prod
-chmod 700 /home/nexoc/campus-secrets /home/nexoc/campus-secrets/prod
-chmod 600 /home/nexoc/campus-secrets/prod/*.env
-```
-
-Use the same pattern on the environment `gw` control host for DEV:
-
-```bash
-# server: gw
-mkdir -p /home/nexoc/campus-secrets/dev
-chmod 700 /home/nexoc/campus-secrets /home/nexoc/campus-secrets/dev
-chmod 600 /home/nexoc/campus-secrets/dev/*.env
+mkdir -p /home/nexoc/campus-secrets/home /home/nexoc/campus-secrets/prod
+chmod 700 /home/nexoc/campus-secrets /home/nexoc/campus-secrets/home /home/nexoc/campus-secrets/prod
+chmod 600 /home/nexoc/campus-secrets/home/*.env /home/nexoc/campus-secrets/prod/*.env
 ```
 
 Do not print the contents of these files in logs or chat.
 
 ## Kubernetes Access Files
 
-DEV deploy from the environment `gw` control runner expects:
+Home dev deploy from `gw` expects:
 
 ```text
 /home/nexoc/.kube/dev.yaml
 ```
 
-PROD deploy from the same environment `gw` control runner expects:
+Home prod deploy from `gw` expects:
 
 ```text
 /home/nexoc/.kube/prod.yaml
 ```
 
-The workflows use explicit kubeconfig paths:
+Workflow env:
 
 ```text
 DEV:  KUBECONFIG=/home/nexoc/.kube/dev.yaml
@@ -237,22 +151,10 @@ GHCR_PULL_USERNAME
 GHCR_PULL_TOKEN
 ```
 
-These are not files in the repo. They are used by deploy workflows to create or
-update the Kubernetes `ghcr-pull` image pull secret.
+These are not files in the repo. Deploy workflows use them to create or update
+the Kubernetes `ghcr-pull` image pull secret.
 
-Do not print token values.
-
-## GitHub Environments And Runners
-
-University releases require:
-
-```text
-DEV tag: uni-dev-*
-PROD tag: uni-v*
-PROD GitHub environment: production
-required reviewers: enabled for production
-runner labels: self-hosted, Linux, X64, uni, gw, deploy
-```
+## GitHub Environment And Runner
 
 Home releases require:
 
@@ -261,41 +163,38 @@ DEV tag: home-dev-*
 PROD tag: home-v*
 PROD GitHub environment: home-production
 required reviewers: enabled for home-production
+runner name: home-gw-runner
 runner labels: self-hosted, Linux, X64, home, gw, deploy
 ```
 
 ## Ansible Inventory
 
-Tracked examples:
+Tracked example:
 
 ```text
-ops/inventory/lab.example.ini
-ops/inventory/university.example.ini
+ops/inventory/home.example.ini
 ```
 
-Ignored runtime inventories:
+Ignored runtime inventory:
 
 ```text
-ops/inventory/lab.local.ini
-ops/inventory/university.local.ini
+ops/inventory/home.local.ini
 ```
 
-Create the lab inventory on `gw`:
+Create the home inventory on `gw`:
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-cp ops/inventory/lab.example.ini ops/inventory/lab.local.ini
+cp ops/inventory/home.example.ini ops/inventory/home.local.ini
 ```
 
-Then fill in environment-specific `ansible_host` and `monitoring_scrape_host`
-values. See `ops/inventory/README.md`.
+Then fill in `ansible_host` and `monitoring_scrape_host` values. See
+`ops/inventory/README.md`.
 
 ## Monitoring Runtime Files
 
-Current implemented monitoring stack does not require committed secrets.
-
-Current runtime-only monitoring files:
+Current runtime-only monitoring file:
 
 ```text
 /home/nexoc/campus-secrets/monitoring/postgres-exporter.env
@@ -324,109 +223,50 @@ Prometheus on s6-monitoring
 Grafana on s6-monitoring
 postgres exporter on s4-db
 kube-state-metrics in dev/prod clusters
-Campus VM Overview dashboard
-Campus PostgreSQL Overview dashboard
-Campus Kubernetes Overview dashboard
 ```
 
-PostgreSQL exporter runtime input is:
-
-```text
-/home/nexoc/campus-secrets/monitoring/postgres-exporter.env
-```
-
-This file is generated on `s4-db` by:
+PostgreSQL exporter runtime input is generated by:
 
 ```text
 ops/playbooks/render-postgres-exporter-env.yml
 ```
 
-The playbook derives the exporter `DATA_SOURCE_NAME` from existing PROD
-database runtime inputs without printing the password or the final DSN. The
-database host and port prefer `/home/nexoc/campus-secrets/prod/db-endpoint.env`
-(`DB_ENDPOINT_ADDRESS`, `DB_ENDPOINT_PORT`), then tracked PROD config
-(`DB_HOST`, `DB_PORT`), then the stable fallback host `s4-db`.
-
-Install the exporter after rendering the env file:
+Grafana expected hostname:
 
 ```text
-ops/playbooks/install-postgres-exporter.yml
-```
-
-Then re-run `ops/playbooks/install-prometheus.yml` so Prometheus includes the
-`postgres-exporter` scrape job for `s4-db:9187`.
-
-Kubernetes cluster metrics use kube-state-metrics inside each k3s cluster:
-
-```text
-dev cluster:  s5-dev NodePort 30091
-prod cluster: prod NodePort 30092
-```
-
-The tracked manifests live under:
-
-```text
-deploy/monitoring/kube-state-metrics
-```
-
-The install playbook is:
-
-```text
-ops/playbooks/install-kube-state-metrics.yml
-```
-
-Prometheus scrape addresses come from inventory/runtime variables. The default
-dev scrape host is the `dev` host, and the default prod scrape host is the first
-`prod` host. Environments can override those with inventory variables without
-changing tracked manifests or workflows. After installing kube-state-metrics,
-re-run `ops/playbooks/install-prometheus.yml` and then
-`ops/playbooks/check-monitoring-stack.yml`.
-
-Grafana dashboards are static tracked JSON files installed by:
-
-```text
-ops/playbooks/install-grafana.yml
-```
-
-They use datasource UID `campus-prometheus` and are provisioned under the
-provider-controlled `Campus++` folder:
-
-```text
-Campus VM Overview
-Campus PostgreSQL Overview
-Campus Kubernetes Overview
+home-grafana.davl.at
 ```
 
 ## Minimal Startup Checklist
 
-For DEV deploy:
+For home dev deploy:
 
 ```text
 1. gw has /home/nexoc/.kube/dev.yaml
-2. gw has /home/nexoc/campus-secrets/dev/db-secrets.env
-3. gw has /home/nexoc/campus-secrets/dev/auth-secrets.env
+2. gw has /home/nexoc/campus-secrets/home/db-secrets.env
+3. gw has /home/nexoc/campus-secrets/home/auth-secrets.env
 4. GitHub has GHCR_PULL_USERNAME and GHCR_PULL_TOKEN
-5. the university gw runner is online with uni+gw+deploy labels
+5. home-gw-runner is online with home+gw+deploy labels
 6. s5-dev can reach PostgreSQL as s4-db:5432
 ```
 
-For PROD deploy:
+For home prod deploy:
 
 ```text
 1. gw has /home/nexoc/.kube/prod.yaml
 2. gw has /home/nexoc/campus-secrets/prod/db-secrets.env
 3. gw has /home/nexoc/campus-secrets/prod/auth-secrets.env
 4. gw has /home/nexoc/campus-secrets/prod/db-endpoint.env
-5. GitHub environment production exists with required reviewers
+5. GitHub environment home-production exists with required reviewers
 6. GitHub has GHCR_PULL_USERNAME and GHCR_PULL_TOKEN
-7. the university gw runner is online with uni+gw+deploy labels
+7. home-gw-runner is online with home+gw+deploy labels
 8. prod cluster has or can install Envoy Gateway
 ```
 
 For ops/monitoring:
 
 ```text
-1. gw has ops/inventory/lab.local.ini
+1. gw has ops/inventory/home.local.ini
 2. Ansible can reach all logical hosts
 3. s6-monitoring is reachable from gw
 4. node-exporter, Prometheus, Grafana are installed through ops playbooks

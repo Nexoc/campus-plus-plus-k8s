@@ -247,8 +247,8 @@ central Prometheus can scrape a prod node on 30092 for prod cluster metrics
 ```text
 monitoring_scrape_host defines the address that s6-monitoring uses for each VM.
 This is separate from ansible_host because gw may use ansible_connection=local.
-Lab IP values belong in ops/inventory/lab.local.ini only.
-University deployments should keep the same variable names and replace addresses.
+Home-lab IP values belong in ops/inventory/home.local.ini only.
+The same variable names should be kept when addresses change.
 ```
 
 ## Firewall Contracts

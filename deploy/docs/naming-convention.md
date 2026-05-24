@@ -1,21 +1,21 @@
 # Naming Convention
 
-This document defines the current naming rules for Campus++ across clusters,
-images, and release tags.
+This document defines naming rules for the home-only Campus++ lab.
 
 ## Guiding Rules
 
-- keep workload names stable across environments
-- keep environment identity in overlays, runner labels, and edge routing
-- keep image names aligned with component names
-- keep deploy identity in immutable Git tags
+- keep workload names stable across home dev and home prod
+- keep release identity in immutable Git tags
+- keep runner routing in labels
+- keep VM roles as stable logical hostnames
+- keep real addresses out of tracked manifests and workflows
 
 ## Kubernetes Resource Naming
 
-Current canonical names:
+Canonical names:
 
-- DEV namespace: `campus-dev`
-- PROD namespace: `campus-prod`
+- dev namespace: `campus-dev`
+- prod namespace: `campus-prod`
 - frontend deployment/service: `frontend`
 - auth deployment/service: `auth`
 - backend deployment/service: `backend`
@@ -27,11 +27,11 @@ Current canonical names:
 - EnvoyProxy: `campus-edge`
 - ClientTrafficPolicy: `campus-edge`
 
-These names stay stable across the lab, home, and production overlays.
+These names stay stable across the `home` and `prod` overlays.
 
 ## Image Naming
 
-Current GHCR images:
+GHCR images:
 
 - `ghcr.io/nexoc/campus-frontend`
 - `ghcr.io/nexoc/campus-auth`
@@ -47,42 +47,56 @@ Rules:
 
 Examples:
 
-- `uni-dev-example`
-- `home-example`
-- `v1.0.0`
+- `home-dev-example`
+- `home-v0.1.0`
+- `home-v-render-test`
+
+## Release Tag Naming
+
+Active release tags:
+
+```text
+home-dev-* -> home dev on s5-dev / campus-dev
+home-v*    -> home prod on s1-prod/s2-prod/s3-prod / campus-prod
+```
 
 ## Runner Label Naming
 
-Current workflow targeting rules:
+Active workflow targeting rules:
 
-- lab deploy job requires labels `self-hosted`, `Linux`, `dev`, `s5`
-- home deploy job requires labels `self-hosted`, `Linux`, `dev`, `home`
-- prod deploy job requires labels `self-hosted`, `Linux`, `X64`, `prod`, `gw`
+```text
+self-hosted, Linux, X64, home, gw, deploy
+```
 
-The workflow schedules against labels, not runner names.
+Recommended runner name:
+
+```text
+home-gw-runner
+```
+
+GitHub Actions schedules against labels, not runner names.
 
 ## Hostname Strategy
 
-Lab non-prod:
+Home dev:
 
-- active route hostname: `campus-dev.10-123-127-29.sslip.io`
-- active NodePort entry: `30080`
+- route hostname: `home-campus-dev.davl.at`
+- NodePort entry: `s5-dev:30080`
 
-Home non-prod:
+Home prod:
 
-- active route hostname: `home-campus-dev.davl.at`
-- home production route hostname: `home-campus-prod.davl.at`
-
-Production:
-
-- active route hostname: `campus-prod.10-123-127-29.sslip.io`
+- route hostname: `home-campus-prod.davl.at`
+- NodePort entries: `s1-prod:30080`, `s2-prod:30080`, `s3-prod:30080`
 - stable in-cluster database alias: `s4-db`
-- real external database endpoint: environment-specific host-local
-  `db-endpoint.env`
+- real external database endpoint: `/home/nexoc/campus-secrets/prod/db-endpoint.env`
+
+Home monitoring:
+
+- Grafana hostname: `home-grafana.davl.at`
 
 ## Ops And Monitoring Naming
 
-Current ops hostnames:
+Stable logical hostnames:
 
 - control host: `gw`
 - database host: `s4-db`
@@ -90,7 +104,7 @@ Current ops hostnames:
 - monitoring host: `s6-monitoring`
 - prod cluster hosts: `s1-prod`, `s2-prod`, `s3-prod`
 
-Current monitoring service names:
+Monitoring service names:
 
 - node-exporter systemd service: `prometheus-node-exporter`
 - Prometheus systemd service: `prometheus`
@@ -99,7 +113,6 @@ Current monitoring service names:
 - Grafana datasource name: `Campus Prometheus`
 - Grafana datasource UID: `campus-prometheus`
 - Grafana dashboard folder: `Campus++`
-- initial Grafana dashboard: `Campus VM Overview`
 
 Monitoring labels use stable host identity:
 
@@ -109,11 +122,12 @@ Monitoring labels use stable host identity:
 
 ## Repo Alignment
 
-The repo now reflects:
+The repo should reflect:
 
+- home-only active target
 - stable component and service names
 - `deploy/app` as the canonical manifest tree
 - Envoy/Gateway API as the active ingress layer
-- tag-driven non-prod delivery via `uni-dev-*` and `home-dev-*`
-- controlled PROD delivery via `uni-v*` and `home-v*`
+- tag-driven home dev delivery via `home-dev-*`
+- controlled home prod delivery via `home-v*`
 - `ops/` as the canonical Ansible and monitoring automation tree

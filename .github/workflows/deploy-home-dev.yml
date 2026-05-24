@@ -1,16 +1,16 @@
-name: UNI Production Release
+name: HOME Dev Release
 
 on:
   push:
     tags:
-      - "uni-v*"
+      - "home-dev-*"
 
 permissions:
   contents: read
 
 jobs:
   build-and-push-images:
-    name: Build and Push Production Images
+    name: Build and Push HOME Dev Images
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -21,21 +21,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Select production image tag
+      - name: Select HOME dev image tag
         id: release-meta
         shell: bash
         run: |
           set -euo pipefail
           IMAGE_TAG="${GITHUB_REF_NAME}"
           case "$IMAGE_TAG" in
-            uni-v*) ;;
+            home-dev-*) ;;
             *)
-              echo "Unsupported production release tag: $IMAGE_TAG" >&2
+              echo "Unsupported HOME dev release tag: $IMAGE_TAG" >&2
               exit 1
               ;;
           esac
           echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
-          echo "Building and publishing production images for release tag $IMAGE_TAG"
+          echo "Building and publishing HOME dev images for release tag $IMAGE_TAG"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -82,33 +82,31 @@ jobs:
           push: true
           tags: ghcr.io/nexoc/campus-importer:${{ steps.release-meta.outputs.image_tag }}
 
-  deploy-prod:
-    name: Deploy UNI PROD to k3s HA cluster
+  deploy-home-dev:
+    name: Deploy HOME DEV to s5-dev
     needs: build-and-push-images
     runs-on:
       - self-hosted
       - Linux
       - X64
-      - uni
+      - home
       - gw
       - deploy
-    environment:
-      name: production
     concurrency:
-      group: campus-prod-release
+      group: campus-home-dev-release
       cancel-in-progress: false
-    timeout-minutes: 30
+    timeout-minutes: 25
     permissions:
       contents: read
       packages: read
     env:
-      KUBECONFIG: /home/nexoc/.kube/prod.yaml
+      KUBECONFIG: /home/nexoc/.kube/dev.yaml
       CAMPUS_SECRETS_ROOT: /home/nexoc/campus-secrets
-      RELEASE_ENV: prod
-      DEPLOY_NAMESPACE: campus-prod
+      RELEASE_ENV: home
+      DEPLOY_NAMESPACE: campus-dev
       EXPECTED_NODEPORT: "30080"
-      EXPECTED_HOST: campus-prod.10-123-127-29.sslip.io
-      CAMPUS_HTTPROUTE_HOSTNAME: campus-prod.10-123-127-29.sslip.io
+      EXPECTED_HOST: home-campus-dev.davl.at
+      SMOKE_NODE: s5-dev
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -120,39 +118,12 @@ jobs:
         run: |
           set -euo pipefail
           echo "Release tag: ${{ needs.build-and-push-images.outputs.image_tag }}"
-          echo "Target runner: uni+gw+deploy"
+          echo "Target runner: home+gw+deploy"
           echo "Target overlay: $RELEASE_ENV"
           echo "Target namespace: $DEPLOY_NAMESPACE"
           echo "Expected nodeport: $EXPECTED_NODEPORT"
           echo "Expected host: $EXPECTED_HOST"
-
-      - name: Verify production safety gate
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          case "${GITHUB_REF_NAME}" in
-            uni-v*) ;;
-            *)
-              echo "Ref '${GITHUB_REF_NAME}' is not a production tag." >&2
-              exit 1
-              ;;
-          esac
-
-          [[ "$RELEASE_ENV" == "prod" ]] || {
-            echo "RELEASE_ENV must be prod." >&2
-            exit 1
-          }
-
-          [[ "$DEPLOY_NAMESPACE" == "campus-prod" ]] || {
-            echo "DEPLOY_NAMESPACE must be campus-prod." >&2
-            exit 1
-          }
-
-          [[ "$KUBECONFIG" == "/home/nexoc/.kube/prod.yaml" ]] || {
-            echo "Unexpected KUBECONFIG path: $KUBECONFIG" >&2
-            exit 1
-          }
+          echo "Smoke node: $SMOKE_NODE"
 
       - name: Verify cluster access
         shell: bash
@@ -166,8 +137,7 @@ jobs:
           set -euo pipefail
           for path in \
             "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/db-secrets.env" \
-            "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/auth-secrets.env" \
-            "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/db-endpoint.env"
+            "$CAMPUS_SECRETS_ROOT/$RELEASE_ENV/auth-secrets.env"
           do
             [[ -f "$path" ]] || {
               echo "Missing required host secret file: $path" >&2
@@ -203,45 +173,20 @@ jobs:
             --docker-password "${pull_password}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Render PROD overlay before apply
+      - name: Apply HOME overlay
         shell: bash
         run: |
           set -euo pipefail
-          manifest="/tmp/campus-prod-rendered-${GITHUB_RUN_ID}.yaml"
-
-          CAMPUS_SECRETS_ROOT="$CAMPUS_SECRETS_ROOT" \
-          CAMPUS_HTTPROUTE_HOSTNAME="$CAMPUS_HTTPROUTE_HOSTNAME" \
-          bash deploy/scripts/apply-overlay.sh \
-            --environment "$RELEASE_ENV" \
-            --image-tag "${{ needs.build-and-push-images.outputs.image_tag }}" \
-            --render-only \
-            --manifest-out "$manifest"
-
-          grep -q "namespace: $DEPLOY_NAMESPACE" "$manifest"
-          grep -q "ghcr.io/nexoc/campus-auth:${{ needs.build-and-push-images.outputs.image_tag }}" "$manifest"
-          grep -q "ghcr.io/nexoc/campus-backend:${{ needs.build-and-push-images.outputs.image_tag }}" "$manifest"
-          grep -q "ghcr.io/nexoc/campus-nginx:${{ needs.build-and-push-images.outputs.image_tag }}" "$manifest"
-          grep -q "ghcr.io/nexoc/campus-frontend:${{ needs.build-and-push-images.outputs.image_tag }}" "$manifest"
-          grep -q "ghcr.io/nexoc/campus-importer:${{ needs.build-and-push-images.outputs.image_tag }}" "$manifest"
-          grep -q "ghcr-pull" "$manifest"
-          grep -q "nodePort: $EXPECTED_NODEPORT" "$manifest"
-          grep -q "$EXPECTED_HOST" "$manifest"
-
-          rm -f "$manifest"
-
-      - name: Apply PROD overlay
-        shell: bash
-        run: |
-          set -euo pipefail
+          kubectl delete deployment campus-test -n "$DEPLOY_NAMESPACE" --ignore-not-found
+          kubectl delete service campus-test -n "$DEPLOY_NAMESPACE" --ignore-not-found
+          kubectl delete httproute campus-test -n "$DEPLOY_NAMESPACE" --ignore-not-found
           kubectl delete job campus-importer -n "$DEPLOY_NAMESPACE" --ignore-not-found
           kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
-
-          CAMPUS_HTTPROUTE_HOSTNAME="$CAMPUS_HTTPROUTE_HOSTNAME" \
           bash deploy/scripts/apply-overlay.sh \
             --environment "$RELEASE_ENV" \
             --image-tag "${{ needs.build-and-push-images.outputs.image_tag }}"
 
-      - name: Verify PROD overlay
+      - name: Verify HOME overlay
         shell: bash
         run: |
           set -euo pipefail
@@ -249,28 +194,22 @@ jobs:
             --environment "$RELEASE_ENV" \
             --expected-nodeport "$EXPECTED_NODEPORT"
 
-      - name: Smoke UNI PROD HTTP route
+      - name: Smoke HOME DEV HTTP route
         shell: bash
         run: |
           set -euo pipefail
-          for node in s1-prod s2-prod s3-prod; do
-            for attempt in $(seq 1 30); do
-              if curl -fsS -o /dev/null --max-time 10 \
-                -H "Host: $EXPECTED_HOST" \
-                "http://$node:$EXPECTED_NODEPORT/"
-              then
-                echo "UNI PROD smoke check succeeded via $node on attempt $attempt"
-                break
-              fi
-
-              if [[ "$attempt" -eq 30 ]]; then
-                echo "UNI PROD smoke check failed for $EXPECTED_HOST via $node:$EXPECTED_NODEPORT" >&2
-                exit 1
-              fi
-
-              sleep 5
-            done
+          for attempt in $(seq 1 30); do
+            if curl -fsS -o /dev/null --max-time 10 \
+              -H "Host: $EXPECTED_HOST" \
+              "http://$SMOKE_NODE:$EXPECTED_NODEPORT/"
+            then
+              echo "HOME DEV smoke check succeeded via $SMOKE_NODE on attempt $attempt"
+              exit 0
+            fi
+            sleep 5
           done
+          echo "HOME DEV smoke check failed for $EXPECTED_HOST via $SMOKE_NODE:$EXPECTED_NODEPORT" >&2
+          exit 1
 
       - name: Show deployed resources
         shell: bash

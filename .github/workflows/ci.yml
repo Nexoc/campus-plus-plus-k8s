@@ -1,7 +1,7 @@
 name: CI Pipeline
 
 # Main is validation-only. Release images are built and deployed only by the
-# tag-driven Non-Prod Release workflow.
+# tag-driven home release workflows.
 on:
   push:
     branches: ["main"]

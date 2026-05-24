@@ -8,7 +8,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 KUBECONFIG_PATH="${KUBECONFIG:-/home/nexoc/.kube/prod.yaml}"
 EXPECTED_NODEPORT="${EXPECTED_NODEPORT:-30080}"
-EXPECTED_HOST="${EXPECTED_HOST:-campus-prod.10-123-127-29.sslip.io}"
+EXPECTED_HOST="${EXPECTED_HOST:-home-campus-prod.davl.at}"
 PROD_NAMESPACE="${PROD_NAMESPACE:-campus-prod}"
 
 cd "$REPO_ROOT"

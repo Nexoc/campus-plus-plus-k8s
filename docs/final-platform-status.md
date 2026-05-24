@@ -2,119 +2,120 @@
 
 ## Executive Summary
 
-Campus++ is currently implemented as a production-like Kubernetes and DevOps
-platform in the lab environment. The project includes application delivery,
-cluster ingress, external database integration, host automation, and central
-monitoring.
+Campus++ is now documented as a home Kubernetes lab on one physical PC with VM
+clones. The active target is home-only.
 
-The technical baseline is complete:
+The infrastructure roles stay:
 
-- DEV releases are delivered from `uni-dev-*` and `home-dev-*` tags.
-- PROD releases are delivered from `uni-v*` and `home-v*` tags with GitHub
-  environment approval.
-- DEV and PROD Kubernetes runtimes are active.
-- The external PostgreSQL dependency is reachable through a stable Kubernetes
-  alias.
-- Ansible operations and verification playbooks are available.
-- Central monitoring is installed and verified.
+```text
+gw          -> gateway / runner / ansible / edge
+s4-db       -> PostgreSQL
+s5-dev      -> dev k3s
+s6-monitoring -> Prometheus + Grafana
+s1-prod     -> prod k3s node 1
+s2-prod     -> prod k3s node 2
+s3-prod     -> prod k3s node 3
+```
+
+`uni` is removed as an active target. `prod` means the home production k3s
+cluster.
+
+Current release model:
+
+```text
+home-dev-* -> home dev -> s5-dev -> campus-dev
+home-v*    -> home prod -> s1-prod/s2-prod/s3-prod -> campus-prod
+```
 
 ## Infrastructure Roles
 
 `gw`
 
-- control host for DEV and PROD operations
-- entry point for server access
-- deployment runner host
-- location of the DEV and PROD kubeconfigs
-- host that runs Ansible, kubectl, and Helm operations
+- home control host
+- GitHub runner host: `home-gw-runner`
+- SSH/Ansible/kubectl/Helm entry point
+- home edge host
+- location of dev/prod kubeconfigs and runtime secret roots
 
 `s4-db`
 
-- external PostgreSQL VM
-- database endpoint for DEV and PROD application workloads
-- host for `prometheus-postgres-exporter`
+- PostgreSQL VM
+- database endpoint for home dev and home prod workloads
+- host for the PostgreSQL exporter
 
 `s5-dev`
 
-- DEV k3s cluster
-- target cluster for `uni-dev-*` releases
-- owner of the `campus-dev` runtime
+- single-node dev k3s cluster
+- owner of namespace `campus-dev`
+- target for `home-dev-*` releases
 
 `s6-monitoring`
 
 - central monitoring VM
-- runs Prometheus
-- runs Grafana
-- scrapes VM, database, and Kubernetes metrics
+- Prometheus host
+- Grafana host
+- scrape target collector for VMs, PostgreSQL, and k3s metrics
 
 `s1-prod`, `s2-prod`, `s3-prod`
 
-- PROD k3s HA cluster nodes
-- control-plane and etcd members
-- target nodes for `campus-prod` workloads
+- home production k3s HA cluster nodes
+- target for `home-v*` releases
+- owner of namespace `campus-prod`
 - NodePort entry targets for the production Envoy Gateway path
 
 ## CI/CD Status
 
-DEV delivery:
+Home dev delivery:
 
 ```text
-uni-dev-* tag
+home-dev-* tag
 -> GitHub Actions
--> university gw control runner
+-> home-gw-runner
 -> /home/nexoc/.kube/dev.yaml
 -> s5-dev k3s
 -> campus-dev
 -> Envoy Gateway NodePort 30080
+-> Host: home-campus-dev.davl.at
 ```
 
-PROD delivery:
+Home prod delivery:
 
 ```text
-uni-v* tag
+home-v* tag
 -> GitHub Actions
--> GitHub environment: production
+-> GitHub environment: home-production
 -> manual approval
--> university gw control runner
+-> home-gw-runner
 -> /home/nexoc/.kube/prod.yaml
--> prod k3s HA cluster
+-> s1-prod/s2-prod/s3-prod k3s HA
 -> campus-prod
 -> Envoy Gateway NodePort 30080
+-> Host: home-campus-prod.davl.at
 ```
 
-The tag-based model separates release intent from branch pushes:
+Hostnames:
 
-- `main` runs validation CI.
-- `uni-dev-*` releases to university DEV.
-- `home-dev-*` releases to home DEV.
-- `uni-v*` releases to university PROD after approval.
-- `home-v*` releases to home PROD after approval.
-
-Production hostnames:
-
-- university DEV: `campus-dev.10-123-127-29.sslip.io`
-- university PROD: `campus-prod.10-123-127-29.sslip.io`
-- university Grafana: `grafana.10-123-127-29.sslip.io`
-- home DEV: `home-campus-dev.davl.at`
-- home PROD: `home-campus-prod.davl.at`
-- home Grafana: `home-grafana.davl.at`
+```text
+home dev      home-campus-dev.davl.at
+home prod     home-campus-prod.davl.at
+home grafana  home-grafana.davl.at
+```
 
 ## Kubernetes Status
 
-DEV cluster:
+Home dev cluster:
 
 - single-node k3s on `s5-dev`
 - namespace `campus-dev`
-- Envoy Gateway / Gateway API active
-- application exposed through NodePort `30080`
+- Envoy Gateway / Gateway API entry
+- NodePort `30080`
 
-PROD cluster:
+Home prod cluster:
 
-- k3s HA cluster on `s1-prod`, `s2-prod`, and `s3-prod`
+- k3s HA on `s1-prod`, `s2-prod`, and `s3-prod`
 - namespace `campus-prod`
-- Envoy Gateway / Gateway API active
-- application exposed through NodePort `30080`
-- documented release baseline: `v0.1.1`
+- Envoy Gateway / Gateway API entry
+- NodePort `30080`
 
 Application runtime:
 
@@ -122,28 +123,23 @@ Application runtime:
 - `auth` runs in Kubernetes
 - `backend` runs in Kubernetes
 - `campus-nginx` runs in Kubernetes
-- `campus-importer` completes as a Kubernetes job
+- `campus-importer` runs as a Kubernetes job
 
 ## Database Status
 
-PostgreSQL runs outside Kubernetes on `s4-db`.
+PostgreSQL stays outside Kubernetes on `s4-db`.
 
-Application configuration keeps the database host stable:
+Stable application contract:
 
 ```text
 DB_HOST=s4-db
 ```
 
-In PROD, `s4-db` is also a Kubernetes DNS alias inside `campus-prod`. The real
-database endpoint is environment-specific runtime configuration, not a tracked
-manifest value.
-
-Runtime-only PROD database endpoint contract:
+For home prod, `s4-db` is also a Kubernetes DNS alias inside `campus-prod`.
+The real endpoint is read from:
 
 ```text
 /home/nexoc/campus-secrets/prod/db-endpoint.env
-DB_ENDPOINT_ADDRESS=...
-DB_ENDPOINT_PORT=...
 ```
 
 The deployment script generates:
@@ -151,49 +147,37 @@ The deployment script generates:
 - `Service/s4-db`
 - `EndpointSlice/s4-db`
 
-This keeps the Kubernetes contract portable while allowing the lab and a future
-environment to use different database endpoint addresses.
-
 ## Monitoring Status
 
-Central monitoring is implemented on `s6-monitoring`.
+Monitoring automation is available for `s6-monitoring`. Current home-lab
+verification should be rerun after the home-only refactor.
 
 Components:
 
-- node-exporter on all 7 VMs
+- node-exporter on all VMs
 - Prometheus on `s6-monitoring`
 - Grafana on `s6-monitoring`
 - postgres exporter on `s4-db`
-- kube-state-metrics in DEV and PROD k3s clusters
+- kube-state-metrics in dev/prod k3s clusters
 
-Expected Prometheus targets:
+Expected Grafana hostname:
 
 ```text
-7 node-exporter targets
-1 Prometheus self-target
-1 postgres-exporter target
-2 kube-state-metrics targets
-11 total targets
+home-grafana.davl.at
 ```
-
-Grafana dashboards:
-
-- Campus VM Overview
-- Campus PostgreSQL Overview
-- Campus Kubernetes Overview
-
-The central monitoring health check is green through
-`ops/playbooks/check-monitoring-stack.yml`.
 
 ## Operations And Checks
 
-Ansible inventory is runtime-specific. Tracked examples define the contract,
-while local inventories provide real environment addresses:
+Tracked inventory example:
 
 ```text
-ops/inventory/lab.example.ini
-ops/inventory/university.example.ini
-ops/inventory/*.local.ini
+ops/inventory/home.example.ini
+```
+
+Ignored runtime inventory:
+
+```text
+ops/inventory/home.local.ini
 ```
 
 Important playbooks:
@@ -204,77 +188,50 @@ Important playbooks:
 - `ops/playbooks/check-prod-cluster.yml`
 - `ops/playbooks/check-db-access.yml`
 - `ops/playbooks/verify-prod-release.yml`
-- `ops/playbooks/check-monitoring-stack.yml`
+- `ops/playbooks/check-monitoring.yml`
+- `ops/playbooks/bootstrap-monitoring.yml`
 - `ops/playbooks/install-node-exporter.yml`
 - `ops/playbooks/install-prometheus.yml`
 - `ops/playbooks/install-grafana.yml`
-- `ops/playbooks/render-postgres-exporter-env.yml`
-- `ops/playbooks/install-postgres-exporter.yml`
-- `ops/playbooks/install-kube-state-metrics.yml`
+- `ops/playbooks/check-monitoring-stack.yml`
 
-Final platform health checks:
+Home-lab checks:
 
 ```bash
 # server: gw
 cd /home/nexoc/campus-plus-plus-k8s
-ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/check-prod-cluster.yml
-ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/verify-prod-release.yml
-ansible-playbook -i ops/inventory/lab.local.ini ops/playbooks/check-monitoring-stack.yml
+ansible-playbook -i ops/inventory/home.local.ini ops/playbooks/check-prod-cluster.yml
+ansible-playbook -i ops/inventory/home.local.ini ops/playbooks/verify-prod-release.yml
+ansible-playbook -i ops/inventory/home.local.ini ops/playbooks/check-monitoring-stack.yml
 ```
 
 ## Portability Model
 
 The portable contract is based on logical hostnames and runtime files:
 
-- `gw`
-- `s4-db`
-- `s5-dev`
-- `s6-monitoring`
-- `s1-prod`
-- `s2-prod`
-- `s3-prod`
-
-Tracked Kubernetes manifests and GitHub workflows do not depend on lab-specific
-addresses as architecture contracts.
+```text
+gw
+s4-db
+s5-dev
+s6-monitoring
+s1-prod
+s2-prod
+s3-prod
+```
 
 Environment-specific values belong in:
 
 - ignored Ansible inventory files
 - host-local runtime env files
 - host-local credential files
-- kubeconfig files on the appropriate control host
-
-The same repository should move to another infrastructure by changing runtime
-inputs, not by rewriting the deployment model.
-
-## University Migration Readiness
-
-For a future university deployment, these values are expected to change:
-
-- inventory host addresses
-- scrape addresses
-- database endpoint address and port
-- runtime credential files
-- edge DNS/TLS configuration
-- kubeconfig files
-- GitHub runner registrations
-
-These should not change:
-
-- logical hostnames
-- Kubernetes overlay structure
-- `uni-dev-*`, `home-dev-*`, `uni-v*`, and `home-v*` release model
-- stable application database host `s4-db`
-- runtime database endpoint contract
-- monitoring component roles
-- Ansible playbook entry points
+- kubeconfig files on `gw`
+- GitHub runner registrations and GitHub environment settings
 
 ## Remaining Optional Improvements
 
-The current baseline is complete, but the platform can be improved with:
-
-- Alertmanager and Prometheus alert rules
-- Loki or Grafana Alloy log collection
-- RBAC-limited kubeconfigs for deployment runners
-- backup and restore drills for PostgreSQL and cluster state
-- final screenshots and architecture diagrams for portfolio presentation
+- split workflows into CI, home dev deploy, and home prod deploy
+- verify home monitoring end to end after docs/workflow cleanup
+- add RBAC-limited kubeconfigs for deployment runners
+- add Alertmanager and Prometheus alert rules
+- add Loki or Grafana Alloy log collection
+- add backup and restore drills for PostgreSQL and k3s state
