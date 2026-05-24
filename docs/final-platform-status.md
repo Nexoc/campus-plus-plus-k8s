@@ -8,13 +8,13 @@ clones. The active target is home-only.
 The infrastructure roles stay:
 
 ```text
-gw          -> gateway / runner / ansible / edge
-s4-db       -> PostgreSQL
-s5-dev      -> dev k3s
-s6-monitoring -> Prometheus + Grafana
-s1-prod     -> prod k3s node 1
-s2-prod     -> prod k3s node 2
-s3-prod     -> prod k3s node 3
+gw             192.168.56.10  gateway / runner / ansible / edge
+s4-db          192.168.56.20  PostgreSQL
+s6-monitoring  192.168.56.30  Prometheus + Grafana
+s5-dev         192.168.56.40  dev k3s
+s1-prod        192.168.56.51  prod k3s node 1
+s2-prod        192.168.56.52  prod k3s node 2
+s3-prod        192.168.56.53  prod k3s node 3
 ```
 
 `uni` is removed as an active target. `prod` means the home production k3s
@@ -95,6 +95,7 @@ home-dev-* tag
 -> campus-dev
 -> Envoy Gateway NodePort 30080
 -> Host: home-campus-dev.davl.at
+-> external HTTP 301 / HTTPS 200 verified
 ```
 
 Home prod delivery:
@@ -110,6 +111,7 @@ home-v* tag
 -> campus-prod
 -> Envoy Gateway NodePort 30080
 -> Host: home-campus-prod.davl.at
+-> external HTTP 301 / HTTPS 200 verified
 ```
 
 Hostnames:
@@ -118,6 +120,44 @@ Hostnames:
 home dev      home-campus-dev.davl.at
 home prod     home-campus-prod.davl.at
 home grafana  home-grafana.davl.at
+```
+
+## Public Edge Status
+
+DNS for `home-campus-dev.davl.at` and `home-campus-prod.davl.at` points to the
+public VPS:
+
+```text
+130.185.118.138
+```
+
+Verified external access:
+
+```text
+http://home-campus-dev.davl.at    -> 301
+https://home-campus-dev.davl.at   -> 200
+http://home-campus-prod.davl.at   -> 301
+https://home-campus-prod.davl.at  -> 200
+```
+
+VPS routing state:
+
+```text
+nginx config: /etc/nginx/sites-available/home-campus-routing.conf
+nginx backup: /root/nginx-backups/nginx-before-home-campus-2026-05-24-132601.tar.gz
+certificate: /etc/letsencrypt/live/home-campus/fullchain.pem
+certificate key path: /etc/letsencrypt/live/home-campus/privkey.pem
+certificate names: home-campus-dev.davl.at, home-campus-prod.davl.at
+certificate method: certbot certonly --webroot
+```
+
+The certificate was not obtained with `certbot --nginx`.
+
+Traffic path:
+
+```text
+internet -> DNS -> VPS nginx HTTPS -> WireGuard -> home VM network
+-> k3s NodePort 30080 -> Envoy Gateway -> Campus++ app
 ```
 
 ## Kubernetes Status
@@ -173,6 +213,8 @@ Monitoring visual verification completed on 2026-05-24.
 
 Grafana dashboards are visible and backed by live Prometheus data:
 
+- Prometheus on `s6-monitoring` is healthy
+- Grafana on `s6-monitoring` is healthy
 - `Campus VM Overview` displays node-exporter metrics for all 7 home-lab VMs
 - `Campus PostgreSQL Overview` displays postgres-exporter metrics for `s4-db`
 - `Campus Kubernetes Overview` displays kube-state-metrics data for dev and prod
@@ -252,11 +294,14 @@ Environment-specific values belong in:
 - host-local credential files
 - kubeconfig files on `gw`
 - GitHub runner registrations and GitHub environment settings
+- public DNS and VPS edge configuration
 
 ## Remaining Optional Improvements
 
-- verify home dev end to end with a fresh `home-dev-test-*` tag
-- verify home prod end to end with a fresh `home-v*` tag
+- Grafana external access is not exposed yet
+- Prometheus should not be public
+- security hardening is intentionally postponed as the final step
+- possible later: Grafana protected access, rate limits, basic auth for dev, default deny server, fail2ban, firewall review
 - add RBAC-limited kubeconfigs for deployment runners
 - add Alertmanager and Prometheus alert rules
 - add Loki or Grafana Alloy log collection

@@ -13,11 +13,11 @@ home-lab VM roles.
 
 ## Home Lab Roles
 
-- `gw`: gateway, runner host, Ansible control host, kubectl/Helm control host, edge host
-- `s4-db`: PostgreSQL VM outside Kubernetes
-- `s5-dev`: single-node dev k3s cluster
-- `s6-monitoring`: Prometheus and Grafana VM
-- `s1-prod`, `s2-prod`, `s3-prod`: home production k3s HA nodes
+- `gw` / `192.168.56.10`: gateway, runner host, Ansible control host, kubectl/Helm control host, edge host
+- `s4-db` / `192.168.56.20`: PostgreSQL VM outside Kubernetes
+- `s6-monitoring` / `192.168.56.30`: Prometheus and Grafana VM
+- `s5-dev` / `192.168.56.40`: single-node dev k3s cluster
+- `s1-prod` / `192.168.56.51`, `s2-prod` / `192.168.56.52`, `s3-prod` / `192.168.56.53`: home production k3s HA nodes
 
 IP addresses belong in ignored inventory files, DNS, or host-local runtime
 configuration. Tracked Kubernetes manifests and workflows use logical names and
@@ -67,13 +67,22 @@ home grafana  home-grafana.davl.at
 Home dev:
 
 ```text
-client -> gw -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> services -> s4-db
+internet -> DNS -> VPS nginx HTTPS -> WireGuard -> home VM network -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> services -> s4-db
 ```
 
 Home prod:
 
 ```text
-client -> gw -> s1-prod|s2-prod|s3-prod:30080 -> Envoy Gateway -> campus-prod -> services -> s4-db
+internet -> DNS -> VPS nginx HTTPS -> WireGuard -> home VM network -> s1-prod|s2-prod|s3-prod:30080 -> Envoy Gateway -> campus-prod -> services -> s4-db
+```
+
+Verified external status:
+
+```text
+http://home-campus-dev.davl.at    -> 301
+https://home-campus-dev.davl.at   -> 200
+http://home-campus-prod.davl.at   -> 301
+https://home-campus-prod.davl.at  -> 200
 ```
 
 Monitoring:

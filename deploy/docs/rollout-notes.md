@@ -142,6 +142,9 @@ A successful verification pass should confirm:
 
 ## Known Open Gaps
 
-- home prod edge hardening and TLS should be verified
+- Grafana external access is not exposed yet
+- Prometheus should not be public
+- security hardening is intentionally postponed as the final step
+- possible later: Grafana protected access, rate limits, basic auth for dev, default deny server, fail2ban, firewall review
 - RBAC-limited deployer kubeconfigs are still future work
 - Alertmanager and logs are monitoring follow-up work

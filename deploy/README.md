@@ -28,7 +28,7 @@ home lab on one physical PC with VM clones
 Home dev request path:
 
 ```text
-client -> gw -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> frontend/auth/backend -> PostgreSQL s4-db
+internet -> DNS -> VPS nginx HTTPS -> WireGuard -> home VM network -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> frontend/auth/backend -> PostgreSQL s4-db
 ```
 
 Home production release path:
@@ -182,6 +182,13 @@ Hostnames:
 - home prod: `home-campus-prod.davl.at`
 - home Grafana: `home-grafana.davl.at`
 
+External HTTPS status:
+
+- `http://home-campus-dev.davl.at` returns `301`
+- `https://home-campus-dev.davl.at` returns `200`
+- `http://home-campus-prod.davl.at` returns `301`
+- `https://home-campus-prod.davl.at` returns `200`
+
 Release image tags are exactly the Git tag that triggered the workflow.
 
 ## Verification
@@ -214,7 +221,10 @@ grep -nE "namespace: campus-prod|home-campus-prod.davl.at|nodePort: 30080|imageP
 
 ## Known Gaps
 
-- home prod edge hardening and TLS should be verified
+- Grafana external access is not exposed yet
+- Prometheus should not be public
+- security hardening is intentionally postponed as the final step
+- possible later: Grafana protected access, rate limits, basic auth for dev, default deny server, fail2ban, firewall review
 - RBAC-limited deployer kubeconfigs are future work
 - Alertmanager and logs are monitoring follow-up work
 

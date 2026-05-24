@@ -36,6 +36,7 @@ s3-prod     -> prod k3s node 3
 - k3s dev and production clusters
 - Kustomize deployment overlays under `deploy/app`
 - Envoy Gateway / Gateway API as the Kubernetes entry layer
+- public HTTPS routing through a VPS, WireGuard, and the home VM network
 - external PostgreSQL through the stable `s4-db` runtime alias
 - Ansible ops automation under `ops/`
 - central monitoring on `s6-monitoring`
@@ -76,6 +77,22 @@ home prod     home-campus-prod.davl.at
 home grafana  home-grafana.davl.at
 ```
 
+External HTTPS verification:
+
+```text
+http://home-campus-dev.davl.at    -> 301
+https://home-campus-dev.davl.at   -> 200
+http://home-campus-prod.davl.at   -> 301
+https://home-campus-prod.davl.at  -> 200
+```
+
+Public traffic path:
+
+```text
+internet -> DNS -> VPS nginx HTTPS -> WireGuard -> home VM network
+-> k3s NodePort 30080 -> Envoy Gateway -> Campus++ app
+```
+
 The portable database alias is generated as `service/s4-db` and
 `endpointslice/s4-db` in `campus-dev` and `campus-prod`. The real database
 endpoint comes from host-local runtime files on `gw`.
@@ -109,6 +126,7 @@ Platform components:
 - Kustomize for Kubernetes overlays
 - Envoy Gateway / Gateway API for Kubernetes ingress
 - nginx on `gw` for the home edge path
+- nginx on the public VPS for HTTPS termination and routing into the home lab
 - Ansible for host checks, bootstrap, Envoy install, database access, and monitoring
 - Prometheus and Grafana on `s6-monitoring`
 
@@ -276,6 +294,7 @@ campus-plus-plus/
 Primary docs:
 
 - [Home Lab Architecture](docs/home-lab-architecture.md)
+- [Kubernetes/DevOps Portfolio Status](docs/portfolio-status.md)
 - [Final Platform Status](docs/final-platform-status.md)
 - [Platform Installation Runbook](docs/platform-installation-runbook.md)
 - [Runtime Inputs](docs/runtime-inputs.md)
@@ -300,9 +319,10 @@ Product docs:
 
 ## Next Work
 
-- verify home dev through `home-dev-*`
-- verify home prod through `home-v*`
-- keep only `home-gw-runner` as the active deployment runner on `gw`
+- Grafana external access is not exposed yet
+- Prometheus should not be public
+- security hardening is intentionally postponed as the final step
+- possible later: Grafana protected access, rate limits, basic auth for dev, default deny server, fail2ban, firewall review
 - replace initial prod kubeconfig with an RBAC-limited deployer kubeconfig
 - add Prometheus alert rules and Alertmanager
 - add Loki or Grafana Alloy later
