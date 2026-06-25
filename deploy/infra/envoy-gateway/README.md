@@ -51,12 +51,13 @@ Current files:
 Install or upgrade the controller:
 
 ```bash
-# server: s5-dev
+# server: gw
 helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
   --version v1.7.2 \
   --namespace envoy-gateway-system \
   --create-namespace \
-  -f deploy/infra/envoy-gateway/values-dev.yaml
+  -f deploy/infra/envoy-gateway/values-dev.yaml \
+  --kubeconfig /home/nexoc/.kube/dev.yaml
 ```
 
 For PROD, run the same operation against the production kubeconfig from `gw`
@@ -75,8 +76,8 @@ helm upgrade --install eg oci://docker.io/envoyproxy/gateway-helm \
 Apply the shared `GatewayClass`:
 
 ```bash
-# server: s5-dev
-kubectl apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
+# server: gw
+kubectl --kubeconfig /home/nexoc/.kube/dev.yaml apply -f deploy/infra/envoy-gateway/gatewayclass.yaml
 ```
 
 ```bash
@@ -97,10 +98,10 @@ kubectl --kubeconfig /home/nexoc/.kube/prod.yaml apply -f deploy/infra/envoy-gat
 If Envoy components restart or the edge stops routing correctly, verify:
 
 ```bash
-# server: s5-dev
-kubectl get gateway,httproute,envoyproxy,clienttrafficpolicy -n campus-dev -o wide
-kubectl get all -n envoy-gateway-system -o wide
-kubectl logs -n envoy-gateway-system deployment/envoy-gateway --tail=200
+# server: gw
+kubectl --kubeconfig /home/nexoc/.kube/dev.yaml get gateway,httproute,envoyproxy,clienttrafficpolicy -n campus-dev -o wide
+kubectl --kubeconfig /home/nexoc/.kube/dev.yaml get all -n envoy-gateway-system -o wide
+kubectl --kubeconfig /home/nexoc/.kube/dev.yaml logs -n envoy-gateway-system deployment/envoy-gateway --tail=200
 ```
 
 ```bash

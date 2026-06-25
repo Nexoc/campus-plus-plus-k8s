@@ -80,7 +80,7 @@ Required home prod files:
 `db-endpoint.env` structure:
 
 ```text
-DB_ENDPOINT_ADDRESS=<db-host-or-ip>
+DB_ENDPOINT_ADDRESS=<db-ipv4>
 DB_ENDPOINT_PORT=5432
 ```
 

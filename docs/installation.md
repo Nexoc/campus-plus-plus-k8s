@@ -77,23 +77,28 @@ names, runtime scripts, playbooks, and this installation plan before deploying.
 
 ```bash
 git clone <repo-url>
-cd campus-plus-plus
+cd campus-plus-plus-k8s
 ```
 
-2. Start the local stack.
+2. Create the local `.env.dev` file.
+
+Before starting Docker Compose, `.env.dev` must exist and contain the required
+database and application environment variables for local startup.
+
+3. Start the local stack.
 
 ```bash
 docker compose --env-file .env.dev up -d --build
 ```
 
-3. Check container status.
+4. Check container status.
 
 ```bash
 docker compose ps
 curl -I http://localhost/
 ```
 
-4. Stop the local stack.
+5. Stop the local stack.
 
 ```bash
 docker compose down
@@ -251,7 +256,7 @@ JWT_EXPIRATION=<expiration-minutes>
 `db-endpoint.env`:
 
 ```text
-DB_ENDPOINT_ADDRESS=<s4-db-ip>
+DB_ENDPOINT_ADDRESS=<db-ipv4>
 DB_ENDPOINT_PORT=5432
 ```
 
@@ -524,6 +529,10 @@ Installation:
 ```bash
 bash ops/scripts/runtime/06-install-monitoring.sh
 ```
+
+`06-install-monitoring.sh` is intended for initial monitoring installation. For
+an already installed monitoring stack, use monitoring health checks instead of
+rerunning the full install script.
 
 Checks:
 
