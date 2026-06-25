@@ -52,6 +52,17 @@ Monitoring:
 - Grafana external traffic is proxied by VPS Nginx over WireGuard directly to
   `s6-monitoring:3000`; `gw` also has private access for operational checks.
 
+## Visual Diagrams
+
+The diagrams below show the dev, production, and monitoring runtime paths using
+VM roles and hostnames rather than fixed lab IP addresses.
+
+![Campus++ dev architecture](assets/arch-dev.JPG)
+
+![Campus++ production architecture](assets/arch-prod.png)
+
+![Campus++ monitoring architecture](assets/arch-grafana.png)
+
 ## Public Edge
 
 The public edge is VPS Nginx, not `gw` Nginx. The `gw` VM remains a control and

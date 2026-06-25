@@ -105,7 +105,6 @@ jobs:
 
   docker-compose:
     name: Docker Compose Smoke Test
-    if: false
     runs-on: ubuntu-latest
     needs: backend-build
 
