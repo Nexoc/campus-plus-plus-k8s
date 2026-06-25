@@ -10,17 +10,17 @@ App routing remains in the application layer:
 
 ## Role In The Architecture
 
-Current lab path:
+Current dev path:
 
-`Internet -> gw -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> services`
+`Internet -> VPS Nginx -> WireGuard -> s5-dev:30080 -> Envoy Gateway -> campus-nginx -> services`
 
 Current home path:
 
-`Home edge hostname -> NodePort 30080 -> Envoy Gateway -> campus-nginx -> services`
+`Home edge hostname -> VPS Nginx -> WireGuard -> NodePort 30080 -> Envoy Gateway -> campus-nginx -> services`
 
 Current production path:
 
-`gw edge -> prod nodes NodePort 30080 -> Envoy Gateway -> campus-nginx -> services`
+`Internet -> VPS Nginx -> WireGuard -> prod nodes NodePort 30080 -> Envoy Gateway -> campus-nginx -> services`
 
 Responsibilities:
 

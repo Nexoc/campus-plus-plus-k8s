@@ -4,6 +4,7 @@ This directory contains runtime automation for the Campus++ home lab.
 
 Canonical documentation:
 
+- [Installation](../docs/installation.md)
 - [Operations](../docs/operations.md)
 - [Monitoring](../docs/monitoring.md)
 - [Security](../docs/security.md)

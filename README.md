@@ -58,16 +58,31 @@ home lab, reaches k3s NodePort `30080`, then Envoy Gateway routes to the app.
 
 ## Screenshots
 
-Screenshots will be added later:
+Application entry point:
 
-- `docs/assets/app-home-preview.png`
-- `docs/assets/grafana-vm-overview.png`
-- `docs/assets/grafana-kubernetes-overview.png`
-- `docs/assets/grafana-postgresql-overview.png`
+![Campus++ application home screen](docs/assets/app-home-preview.png)
+
+Tag-driven release workflow:
+
+![GitHub Actions release workflow](docs/assets/github-actions-release.png)
+
+Production Kubernetes runtime:
+
+![Campus++ production pods running on k3s](docs/assets/kubernetes-prod-runtime.png)
+
+Monitoring dashboards:
+
+![Campus VM Overview dashboard](docs/assets/grafana-vm-overview.png)
+
+![Campus Kubernetes Overview dashboard](docs/assets/grafana-kubernetes-overview.png)
+
+![Campus PostgreSQL Overview dashboard](docs/assets/grafana-postgresql-overview.png)
 
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Installation](docs/installation.md)
 - [Operations](docs/operations.md)
 - [Monitoring](docs/monitoring.md)
+- [Presentation Notes](docs/presentation.md)
 - [Security](docs/security.md)

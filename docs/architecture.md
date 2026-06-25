@@ -33,6 +33,8 @@ Prod:
 - namespace: `campus-prod`
 - public host: `home-campus-prod.davl.at`
 - edge port: k3s NodePort `30080`
+- app workloads run multiple replicas, but strict pod placement and PDB rules
+  are not part of the current scope.
 
 Database:
 
@@ -47,6 +49,8 @@ Monitoring:
 - Prometheus runs on `s6-monitoring`.
 - Grafana runs on `s6-monitoring`.
 - Grafana is the only external monitoring entry point.
+- Grafana external traffic is proxied by VPS Nginx over WireGuard directly to
+  `s6-monitoring:3000`; `gw` also has private access for operational checks.
 
 ## Public Edge
 
@@ -76,6 +80,17 @@ internet
   -> home lab
   -> k3s NodePort / Envoy Gateway
   -> Campus++ app
+```
+
+Grafana monitoring path:
+
+```text
+internet
+  -> davl.at DNS
+  -> VPS Nginx / HTTPS / basic auth
+  -> WireGuard
+  -> s6-monitoring:3000
+  -> Grafana
 ```
 
 ## Diagram

@@ -51,8 +51,13 @@ this repository.
 
 ## Firewall Boundary
 
-The `s6-monitoring` firewall allows the VPS only to Grafana TCP/3000.
-Prometheus and exporters remain private.
+The `s6-monitoring` firewall allows Grafana TCP/3000 only from:
+
+- the VPS WireGuard source address used by public Nginx routing
+- the `gw` control host for private operational checks
+
+All other direct access to Grafana TCP/3000 is dropped. Prometheus and exporters
+remain private.
 
 Runtime firewall path:
 

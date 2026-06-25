@@ -30,6 +30,10 @@ Access is protected. Credentials are not stored in this repository.
 
 - Grafana is the only external monitoring entry point.
 - Grafana access is protected.
+- External Grafana traffic is routed by VPS Nginx over WireGuard directly to
+  `s6-monitoring:3000`.
+- The `s6-monitoring` firewall allows Grafana TCP/3000 only from the VPS
+  WireGuard source address and from `gw` for private operational checks.
 - Prometheus is intentionally not exposed publicly.
 - node-exporter endpoints are not exposed publicly.
 - postgres-exporter is not exposed publicly.
@@ -43,10 +47,16 @@ Access is protected. Credentials are not stored in this repository.
 - kube-state-metrics is up for dev and prod.
 - Grafana dashboards display VM, PostgreSQL, and Kubernetes metrics.
 
-## Screenshot Placeholders
+## Dashboard Screenshots
 
-Screenshots will be added later:
+Campus VM Overview:
 
-- `docs/assets/grafana-vm-overview.png`
-- `docs/assets/grafana-kubernetes-overview.png`
-- `docs/assets/grafana-postgresql-overview.png`
+![Campus VM Overview dashboard](assets/grafana-vm-overview.png)
+
+Campus Kubernetes Overview:
+
+![Campus Kubernetes Overview dashboard](assets/grafana-kubernetes-overview.png)
+
+Campus PostgreSQL Overview:
+
+![Campus PostgreSQL Overview dashboard](assets/grafana-postgresql-overview.png)

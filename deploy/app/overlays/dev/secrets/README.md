@@ -3,9 +3,11 @@
 This directory is an ignored local fallback for legacy/manual
 `deploy/app/overlays/dev` rendering.
 
-Active home dev releases use `deploy/app/overlays/home`.
+Active home dev releases use `deploy/app/overlays/home`, not this legacy
+`dev` overlay.
 
-During automated deploys, the self-hosted runner reads secrets from:
+If this legacy/manual `dev` overlay is rendered through `apply-overlay.sh` with
+`CAMPUS_SECRETS_ROOT` set, secrets are staged from:
 
 - `/home/nexoc/campus-secrets/dev/`
 

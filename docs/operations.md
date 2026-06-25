@@ -32,7 +32,17 @@ ansible all -i ops/inventory/lab.local.ini -m ping
 - VPS Nginx routes public HTTPS traffic through WireGuard into the home lab.
 - Monitoring services are active on `s6-monitoring`.
 
-## 3. Runtime Inventory
+## 3. Runtime Evidence
+
+Tag-driven GitHub Actions release workflow:
+
+![GitHub Actions release workflow](assets/github-actions-release.png)
+
+Production pods running in `campus-prod`:
+
+![Campus++ production pods running on k3s](assets/kubernetes-prod-runtime.png)
+
+## 4. Runtime Inventory
 
 Current verified runtime inventory on `gw`:
 
@@ -49,7 +59,7 @@ ops/inventory/home.example.ini
 Do not blindly create or switch to `home.local.ini`. The currently verified
 runtime inventory on `gw` is `lab.local.ini`.
 
-## 4. Runtime Files / Secrets
+## 5. Runtime Files / Secrets
 
 Required home dev files:
 
@@ -76,7 +86,7 @@ DB_ENDPOINT_PORT=5432
 
 Do not print, paste, or commit secret values.
 
-## 5. Kubeconfig Checks
+## 6. Kubeconfig Checks
 
 Expected kubeconfig paths:
 
@@ -91,7 +101,7 @@ KUBECONFIG=/home/<user>/.kube/dev.yaml kubectl get nodes -o wide
 KUBECONFIG=/home/<user>/.kube/prod.yaml kubectl get nodes -o wide
 ```
 
-## 6. Normal Deployment Flow
+## 7. Normal Deployment Flow
 
 - Dev changes go through `home-dev-*` tags.
 - Prod changes go through `home-v*` tags.
@@ -122,7 +132,7 @@ Production warning: do not apply production manually unless it is explicitly
 intended. Production changes should normally go through the `home-v*` tag
 workflow and approval path.
 
-## 7. Known Safe Checks
+## 8. Known Safe Checks
 
 These commands are read-only.
 
@@ -164,7 +174,7 @@ journalctl -u <github-runner-service> -n 80 --no-pager
 
 The runner service name depends on the GitHub repository and runner name.
 
-## 8. Commands That Modify State
+## 9. Commands That Modify State
 
 Treat these as state-changing operations:
 
@@ -178,7 +188,7 @@ Treat these as state-changing operations:
 - changing firewall rules
 - changing Grafana or Nginx authentication
 
-## 9. Dev Verification
+## 10. Dev Verification
 
 ```bash
 # server: gw
@@ -198,7 +208,7 @@ Expected:
 - HTTP returns `301`.
 - HTTPS returns `200`.
 
-## 10. Prod Verification
+## 11. Prod Verification
 
 ```bash
 # server: gw
@@ -218,7 +228,7 @@ Expected:
 - HTTP returns `301`.
 - HTTPS returns `200`.
 
-## 11. External HTTPS Verification
+## 12. External HTTPS Verification
 
 ```bash
 # server: local pc
@@ -249,7 +259,7 @@ Runtime VPS paths may be checked without printing file contents:
 /etc/letsencrypt/live/home-grafana/
 ```
 
-## 12. Runner Checks
+## 13. Runner Checks
 
 ```bash
 # server: gw
@@ -260,7 +270,7 @@ journalctl -u <github-runner-service> -n 80 --no-pager
 The active deployment runner is `home-gw-runner`. The system service name is
 runtime-specific and depends on the GitHub repository and runner name.
 
-## 13. Monitoring Checks
+## 14. Monitoring Checks
 
 ```bash
 # server: s6-monitoring
@@ -284,7 +294,7 @@ Expected:
 - PostgreSQL exporter is up for `s4-db`.
 - kube-state-metrics targets are up for dev and prod.
 
-## 14. Short Rollback / Recovery
+## 15. Short Rollback / Recovery
 
 - Check the last successful workflow and release tag.
 - Do not retag old tags.
