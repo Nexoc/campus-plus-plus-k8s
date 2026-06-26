@@ -1,5 +1,8 @@
 # Campus++
 
+
+[![CI Pipeline](https://github.com/Nexoc/campus-plus-plus-k8s/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Nexoc/campus-plus-plus-k8s/actions/workflows/ci.yml)
+
 Campus++ is a Kubernetes / DevOps portfolio project for a full-stack campus
 application running in a home lab.
 
